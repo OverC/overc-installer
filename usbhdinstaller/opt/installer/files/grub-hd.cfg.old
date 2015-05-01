@@ -1,0 +1,11 @@
+set default=0
+set timeout=5
+set root=(hd0,1)
+
+serial --unit=0 --speed=9600
+
+terminal serial
+
+menuentry "Wind River Hypervisor 1.1" {
+        multiboot (hd0,1)/images/system.elf
+}
