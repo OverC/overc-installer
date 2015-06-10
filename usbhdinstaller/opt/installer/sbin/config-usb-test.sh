@@ -9,9 +9,8 @@ INSTALLER_SBIN_DIR="/home/bruce/git/usbhdinstaller/usbhdinstaller/opt/installer/
 INSTALLER_TARGET_SBIN_DIR="/opt/installer/sbin"
 
 # ARTIFACTS_DIR="/home/bruce/poky-yocto-builder/build/tmp/deploy/images/genericx86-64"
-# ARTIFACTS_DIR="/home/bruce/overc-project/tmp/deploy/images/genericx86-64"
-ARTIFACTS_DIR="/home/bruce/overc-project/deploy/images/genericx86-64"
-# PACKAGES_DIR="/home/bruce/overc-project/deploy/rpm"
+ARTIFACTS_DIR="/home/bruce/poky-yocto-builder/build/tmp/deploy/images/genericx86-64"
+# PACKAGES_DIR="/home/bruce/poky-yocto-builder/build/tmp/deploy/rpm"
 
 INSTALL_KERNEL="${ARTIFACTS_DIR}/bzImage"
 INSTALL_ROOTFS=""
@@ -29,8 +28,7 @@ PROJECT_WRLINUX_ROOTFS=""
 PROJECT_WRLINUX_MODULES=""
 PROJECT_FILES=""
 
-HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-graphical-builder-genericx86-64.tar.bz2 \
-                  ${ARTIFACTS_DIR}/pod-builder-genericx86-64.tar.bz2"
+HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-graphical-builder-genericx86-64.tar.bz2"
 
 ## List of prerequisite files for the installer to check
 # PREREQ_FILES="${INSTALL_FILES} ${PROJECT_FILES}"

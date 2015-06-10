@@ -58,31 +58,21 @@ mount /dev/${dev}1 /z/boot
 
 ## unpack the installation
 cd /z
-cp /inst/nucleo-t-builder-initramfs-genericx86-64.cpio.gz boot/initramfs-nucleo-t-yocto-standard.img
+cp /inst/pod-builder-initramfs-genericx86-64.cpio.gz boot/initramfs-pod-yocto-standard.img
 tar --numeric-owner -xpf /inst/$rootfs
 
 chroot . /bin/bash -c "\\
 mount -t devtmpfs /dev /dev ; \\
 mount -t proc none /proc ; \\
 mkdir -p /boot/grub; \\
+echo \"/dev/${dev}1 /boot ext4 defaults 0 0\" >> /etc/fstab ; \\
 GRUB_DISABLE_LINUX_UUID=true grub-mkconfig > /boot/grub/grub.cfg ; \\
 grub-install /dev/${dev}"
 
-## TODO:
-##   - copy RPMs
-##   - Create smart channels
-##
-##
 if [ -d "/inst/packages" ]; then
     echo "Copying packages to installation as /opt/packages"
     mkdir -p opt/
     cp -r /inst/packages opt/
-
-#  smart channel -y --add all type=rpm-md baseurl=file://opt/packages/rpm/all/
-#  smart channel -y --add core2_64 type=rpm-md baseurl=file://opt/packages/rpm/core2_64/
-#  smart channel -y --add genericx86_64 type=rpm-md baseurl=file://opt/packages/rpm/genericx86_64
-#  smart channel -y --add lib32_x86 type=rpm-md baseurl=file://opt/packages/rpm/lib32_x86/
-#  smart update
 
     chroot . /bin/bash -c "\\
 smart channel -y --add all type=rpm-md baseurl=file://opt/packages/rpm/all/; \\

@@ -1,0 +1,14 @@
+ - remove Wind River references (vx, etc) and remove the deep
+   paths that are currently used.
+
+ - create a FS on the second partion, boot and pivot to it to
+   run the installer
+
+ - Ask questions up front:
+      - users
+      - ntp, etc
+ 
+   Generate a script that is run as part of the install to do
+   that simple configuration
+
+ - 
