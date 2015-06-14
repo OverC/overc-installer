@@ -12,6 +12,8 @@ if [ -n "$1" ]; then
     dev="$1"
 fi
 
+## TODO: use df -kh to get the device automatically!
+
 echo "Mounting install partition (${dev}2)..."
 mount /dev/${dev}2 /mnt
 echo "Linking install partition to /inst"

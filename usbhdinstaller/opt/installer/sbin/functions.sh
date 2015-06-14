@@ -322,11 +322,10 @@ create_partition()
 	fi
 
 
-# XXX: TODO: use parted to mklabel msdos on the device (if NBD)
-	
+# XXX: TODO: use parted to mklabel msdos on the device (if NBD)	
 	debugmsg ${DEBUG_INFO} "Creating partition ${device}${partnum}"
 # XXX
-echo /sbin/parted -s /dev/${device} "mkpart primary ${fstype} ${part_start} ${part_end}"
+	# echo /sbin/parted -s /dev/${device} "mkpart primary ${fstype} ${part_start} ${part_end}"
 	/sbin/parted -s /dev/${device} "mkpart primary ${fstype} ${part_start} ${part_end}" > /dev/null 2>&1
 	
 	if [ $? -ne 0 ]
@@ -477,10 +476,18 @@ install_grub()
 	local device="$1"
 	local mountpoint="$2"
 
+	# if we are installing to a nbd device, assume that we are working in
+	# a virtual environment, and use "vda" as the boot device
+	echo ${device} | grep -q nbd
+	if [ $? -eq 0 ]; then
+	    p2="vda2"
+	else
+	    p2="${device}2"
+	fi
+
 	debugmsg ${DEBUG_INFO} "Installing the GRUB bootloader"
 
 	${CMD_GRUB_INSTALL} --root-directory=${mountpoint} --no-floppy --recheck /dev/${device} # > /dev/null 2>&1
-
 	if [ $? -ne 0 ]
 	then
 		debugmsg ${DEBUG_CRIT} "ERROR: Installation of grub failed on /dev/${dev}"
@@ -499,6 +506,7 @@ install_grub()
 		local initramfs_name=`basename ${INSTALL_INITRAMFS}`
 		sed "s|%INSTALL_KERNEL%|${kernel_name}|" -i ${mountpoint}/boot/grub/grub.cfg
 		sed "s|%INSTALL_INITRAMFS%|${initramfs_name}|" -i ${mountpoint}/boot/grub/grub.cfg
+		sed "s|%INSTALLER_PARTITION%|${p2}|" -i ${mountpoint}/boot/grub/grub.cfg
 	else
 		debugmsg ${DEBUG_CRIT} "ERROR: Could not update grub configuration with install kernel"
 		return 1

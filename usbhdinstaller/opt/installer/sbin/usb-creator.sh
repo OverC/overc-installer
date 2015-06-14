@@ -136,7 +136,12 @@ install_summary()
     done
     echo "   packages: "
     echo "             $package_count packages available from: ${PACKAGES_DIR}"
+    echo "   containers: "
+    for i in ${HDINSTALL_CONTAINERS}; do
+        echo "             `basename ${i}`"
+    done
     echo ""
+
 }
 
 custom_install_rules()
@@ -171,7 +176,7 @@ custom_install_rules()
 	cp ${INSTALLER_SCRIPTS_DIR}/* "${mnt_boot}/.scripts/"
 
 	if [ -n "${INSTALL_ROOTFS}" ]; then
-	    debugmsg ${DEBUG_INFO} "Extracting root filesystem "
+	    debugmsg ${DEBUG_INFO} "Extracting root filesystem (${INSTALL_ROOTFS})"
 	    extract_tarball "${INSTALL_ROOTFS}" "${mnt_rootfs}"
 	    assert_return $?
 	else
@@ -236,6 +241,15 @@ custom_install_rules()
 	    debugmsg ${DEBUG_INFO} "Copying RPMs to install media"
 	    recursive_mkdir ${mnt_rootfs}/${INSTALL_IMAGE_DIR}/packages
 	    cp -r ${PACKAGES_DIR} ${mnt_rootfs}/${INSTALL_IMAGE_DIR}/packages
+	fi
+
+	# containers
+	if [ -n "${HDINSTALL_CONTAINERS}" ]; then
+	    debugmsg ${DEBUG_INFO} "Copying Containers to install media"
+	    recursive_mkdir ${mnt_rootfs}/${INSTALL_IMAGE_DIR}/containers
+	    for c in ${HDINSTALL_CONTAINERS}; do
+		cp ${c} ${mnt_rootfs}/${INSTALL_IMAGE_DIR}/containers/
+	    done
 	fi
 
 	if [ -n "${PROJECT_WRLINUX_MODULES}" ]; then

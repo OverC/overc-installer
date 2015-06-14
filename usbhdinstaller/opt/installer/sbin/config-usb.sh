@@ -9,12 +9,12 @@ INSTALLER_SBIN_DIR="/home/bruce/git/usbhdinstaller/usbhdinstaller/opt/installer/
 INSTALLER_TARGET_SBIN_DIR="/opt/installer/sbin"
 
 # ARTIFACTS_DIR="/home/bruce/poky-yocto-builder/build/tmp/deploy/images/genericx86-64"
-# ARTIFACTS_DIR="/home/bruce/overc-project/tmp/deploy/images/genericx86-64"
-ARTIFACTS_DIR="/home/bruce/overc-project/deploy/images/genericx86-64"
+ARTIFACTS_DIR="/home/bruce/overc-project/tmp/deploy/images/genericx86-64"
+# ARTIFACTS_DIR="/home/bruce/overc-project/deploy/images/genericx86-64"
 # PACKAGES_DIR="/home/bruce/overc-project/deploy/rpm"
 
 INSTALL_KERNEL="${ARTIFACTS_DIR}/bzImage"
-INSTALL_ROOTFS=""
+INSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-essential-genericx86-64.tar.bz2"
 INSTALL_MODULES=""
 INSTALL_INITRAMFS="${ARTIFACTS_DIR}/pod-builder-initramfs-genericx86-64.cpio.gz"
 

@@ -1,0 +1,744 @@
+#!/bin/bash
+
+function print_cmd_help {
+	case "${1}" in
+		add)
+			cat << EOF
+add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num]
+
+Adds a new container which doesn't already exist.
+EOF
+			;;
+		delete)
+			cat << EOF
+delete -n <container name>
+
+Completely removes a container including all versions of it
+EOF
+			;;
+		clean)
+			cat << EOF
+clean -n <container name>
+
+Removes any container versions which are not current and do
+not show up in the rollback history.
+EOF
+			;;
+		histdel)
+			cat << EOF
+histdel -n <container name> -i <history index> [-r]
+
+Removes an entry from the history which is the rollback list for the
+container.  If -r is given, it also removes that container version.
+EOF
+			;;
+		histlist)
+			cat << EOF
+histlist -n <container name>
+
+Displays the history list for the container in rollback order.
+EOF
+			;;
+		list)
+			cat << EOF
+list
+
+Displays a list of all containers and versions.
+Special characters at the beginning of the line designate container
+characteristics:
+0 = in domain0
+a = set to autostart
+h = in the rollback history
+@ = the current version
+r = running
+EOF
+			;;
+		rollback)
+			cat << EOF
+rollback -n <container name> [-r]
+
+Switches the current container version to be the one at the top of
+the history rollback list.  On success, the entry is removed
+from the history list.  If -r is given, the previous container version that
+was just switched out, is completely removed from the system.
+EOF
+			;;
+		snapshot)
+			cat << EOF
+snapshot -n <container name>
+
+Takes a snapshot of the current container version and places that on
+the top of the rollback history list.  If you take a snapshot before doing
+something risky or experimental to the current container, you can
+easily rollback.
+EOF
+			;;
+		upgrade)
+			cat << EOF
+upgrade -n <container name> -f <rootfs tarball> [-a] [-g group] [-r] [-t num]
+
+Unpacks a new version of an existing container, and switches the current
+to be it.  If the container is running, you will be asked if you want
+to stop, switch, then restart it.  Upgrades will not happen if the
+container is running, so if you don't confirm stopping it, the upgrade is
+aborted.  If -r is not given, then the old version is placed at the top
+of the history rollback list.  If -r is given, the old version is
+removed from the system and is not available to rollback to.  Use -r
+with caution.
+EOF
+			;;
+		*)
+			echo "Error: Unrecognized command ${1}"
+			print_help
+			;;
+	esac
+
+}
+
+function print_help {
+	cat << EOF
+Syntax:  overc-cctl [command] [options]
+
+If supplied options to a command are not applicable, they are
+simply ignored.  In case of conflicting options, last one overrides previous.
+
+Commands:
+
+EOF
+	for i in add delete clean histdel histlist list rollback snapshot upgrade; do
+		print_cmd_help ${i}
+		for j in {0..79}; do echo -n "-"; done
+		echo
+	done
+	cat << EOF
+Options summary:
+-n [arg] : container name
+-f [arg] : tarball containing rootfs in bz2 format
+-g [arg] : container group.  default is "parked".
+-t [arg] : number of lxc ttys, connect with lxc-console.  default is 6
+-a       : set container to autostart
+-0       : short form for -n dom0 -g domain0 -a -t 1
+-h       : print help
+-r       : remove container completely from the system
+-i       : history index
+
+Special container names:
+dom0     : the domain0 container.  This brings the normal high level
+           functionality to the system, typically at runlevel 5.  A
+           normal system consists of a reduced host image running
+           natively, with one container running called dom0.
+           The dom0 container is autostarted at boot time
+	   and runs in group domain0.  dom0 has no lxc console, and only
+	   one lxc tty, since dom0 will run X on the host tty2.  Make
+	   sure that a getty is not running on tty2 on the host.
+
+Special group names:
+domain0  : There should only be one container in this group, dom0.  At
+           host startup, any group domain0 container with autostart set,
+           will be started automatically by the host.  The domain0 group is
+           always launched first at host startup.
+onboot   : Any containers in this group will be automatically launched at
+           host startup, if they have autostart set.  Similar to the domain0
+           group, but unrestricted in terms of membership and running after
+           domain0.
+parked   : Any container created without a group specified will use this
+           group.  It is not considered for launching at host startup.
+EOF
+}
+
+function remove_from_inittab {
+	if [ ! -e ${pathtocontainer}/rootfs/etc/inittab ]; then
+		# Must be a systemd setup
+		# Just return until we know how to modify the systemd equiv
+		return 0
+	fi
+	sed -n '''/^'${1}':/!p''' ${pathtocontainer}/rootfs/etc/inittab >new-inittab
+	cp new-inittab ${pathtocontainer}/rootfs/etc/inittab
+	rm new-inittab
+}
+
+function create_lxc_config {
+	cat << EOF >${pathtocontainer}/config
+lxc.utsname = ${cn}
+lxc.rootfs = ${lxcbase}/${cn}/rootfs
+lxc.autodev = 1
+lxc.kmsg = 0
+lxc.tty = ${tty_num}
+lxc.pts = 1024
+lxc.mount = ${lxcbase}/${cn}/fstab
+lxc.network.type = veth
+lxc.network.link = br0
+lxc.network.name = eth0
+lxc.hook.autodev = ${lxcbase}/${cn}/autodev
+lxc.mount.entry = devpts ${lxcbase}/${cn}/rootfs/dev/pts devpts defaults 0 0
+lxc.mount.entry = proc ${lxcbase}/${cn}/rootfs/proc    proc defaults 0 0
+lxc.mount.entry = sysfs ${lxcbase}/${cn}/rootfs/sys     sysfs defaults 0 0
+lxc.group = ${group}
+lxc.start.auto = ${autostart}
+EOF
+	if [ ${domain0} == 1 ]; then
+		# Domain 0 wants to drive X onto a real console
+		echo "lxc.console = none" >>${pathtocontainer}/config
+	fi
+}
+
+function create_lxc_fstab {
+	# Make sure we have mountable directories on the host
+	mkdir -p ${bindmntbase}/all
+	mkdir -p ${bindmntbase}/${cn}
+
+	# Create the fstab
+	cat << EOF >${pathtocontainer}/fstab
+${bindmntbase}/all	${lxcbase}/${cn}/rootfs${bindmntbase}/all	none ro,bind,create=dir
+${bindmntbase}/${cn}	${lxcbase}/${cn}/rootfs${bindmntbase}/local	none rw,bind,create=dir
+EOF
+}
+
+function create_autodev_script {
+	cat << EOF >${pathtocontainer}/autodev
+#!/bin/bash
+
+if [ ! -e \$LXC_ROOTFS_MOUNT ] ; then
+	exit 1
+fi
+
+blacklist="console|core|fd|full|hugepages|initctl|log|lp0|lp1|lp2|lp3|mqueue|null|pts|random|shm|stderr|stdin|stdout|tty|tty1|tty2|tty3|urandom|zero"
+
+# Populate the dev directory, avoiding anything in the blacklist
+cd /dev ; cp -ua \`ls | egrep -v -e "^(\$blacklist)\\\$"\` \$LXC_ROOTFS_MOUNT/dev
+EOF
+	chmod 755 ${pathtocontainer}/autodev
+}
+
+function deploy_new_container {
+
+	# Record the origin of the rootfs
+	echo ${rootfs_fn} >${pathtocontainer}/rootfs.origin
+	# Grab the root shadow entry so we can login
+	sed -n '/^root:/p' /etc/shadow >new-shadow
+	sed -n '/^root:/!p' ${pathtocontainer}/rootfs/etc/shadow >>new-shadow
+	cp new-shadow ${pathtocontainer}/rootfs/etc/shadow
+	rm new-shadow
+
+	# Make mount points
+	DEV=${pathtocontainer}/rootfs/dev
+	mkdir -p $DEV/pts
+	mkdir -p $DEV/shm
+
+	# Remove some of the gettys from inittab
+	remove_from_inittab S0
+	if [ ${domain0} == 1 ]; then
+		# tty1 is for lxc-console
+		# tty2 is for X
+		remove_from_inittab 2
+		remove_from_inittab 3
+		remove_from_inittab 4
+		remove_from_inittab 5
+		remove_from_inittab 6
+	fi
+
+	#Set container hostname to reduce confusion when we login
+	host_name=`cat /etc/hostname`
+	echo ${host_name}-${cn} >${pathtocontainer}/rootfs/etc/hostname
+
+	create_lxc_fstab
+
+	create_lxc_config
+
+	create_autodev_script
+}
+
+function get_container_attributes {
+	autostart=0
+	domain0=0
+	current=0
+	inhist=0
+	name=${1%/*}
+	vers=${1##*/}
+	grep -q -e "lxc.start.auto[[:blank:]]*=[[:blank:]]*1" ${lxcbase}/${containers}/${1}/config
+	if [ $? == 0 ]; then
+		autostart=1
+	fi
+	grep -q -e "lxc.group[[:blank:]]*=[[:blank:]]*domain0" ${lxcbase}/${containers}/${1}/config
+	if [ $? == 0 ]; then
+		domain0=1
+	fi
+	ls -l ${lxcbase} | grep -q "${1}"
+	if [ $? == 0 ]; then
+		current=1
+	fi
+	ls -l ${lxcbase}/${meta}/${name}/history 2>/dev/null | grep -q "${1}"
+	if [ $? == 0 ]; then
+		inhist=1
+	fi
+	check_active ${name}
+}
+
+function get_cont_list {
+	cd ${lxcbase}/${containers}
+	if [ "$( ls )" == "" ]; then
+		echo "No containers found"
+		exit 0
+	fi
+	contlist=$( ls -1dr */* )
+	cd - >/dev/null
+}
+
+function list_containers {
+	get_cont_list
+	for i in ${contlist}; do
+		get_container_attributes ${i}
+		if [ ${domain0} == 1 ]; then
+			echo -n "0"
+		else
+			echo -n "-"
+		fi
+		if [ ${autostart} == 1 ]; then
+			echo -n "a"
+		else
+			echo -n "-"
+		fi
+		if [ ${inhist} == 1 ]; then
+			echo -n "h"
+		else
+			echo -n "-"
+		fi
+		if [ ${current} == 1 ]; then
+			echo -n "@"
+			if [ ${active} == 1 ]; then
+				echo -n "r"
+			else
+				echo -n "-"
+			fi
+		else
+			echo -n "--"
+		fi
+		echo -n "  ${i}  "
+		echo `date -d @${vers}`
+	done
+}
+
+function clean_containers {
+	get_cont_list
+	for i in ${contlist}; do
+		get_container_attributes ${i}
+		if [ ${current} == 0 ] && [ ${inhist} == 0 ]; then
+			btrfs subvolume delete -C ${lxcbase}/${containers}/${i}
+		fi
+	done
+}
+
+function add_container {
+	check_cn
+	if [ "${rootfs_fn}" == "" ]; then
+		echo "Error: rootfs tar file not specified"
+		print_cmd_help add
+		exit 1
+	fi
+	if [ ! -f ${rootfs_fn} ]; then
+		echo "Error: rootfs tar file ${rootfs_fn} not found"
+		exit 1
+	fi
+
+	case "${1}" in
+	new)
+		if [ -L ${lxcbase}/${cn} ]; then
+			echo "Error: container ${cn} already exists"
+			exit 1
+		fi
+		;;
+	upgrade)
+		if [ ! -L ${lxcbase}/${cn} ]; then
+			echo "Error: container ${cn} doesn't exist"
+			exit 1
+		fi
+		;;
+	*)
+		echo "Error: unknown command ${1} to add_container"
+		echo "This is an internal script error"
+		exit 1
+		;;
+	esac
+
+	if [ ${domain0} == 1 ]; then
+		group="domain0"
+		tty_num=1
+	fi
+	if [ "${group}" == "" ]; then
+		group="parked"
+	fi
+	echo "Adding container" ${cn} "using rootfs" ${rootfs_fn}
+
+	volname=`date +%s.%N`
+	mkdir -p ${lxcbase}/${containers}/${cn}
+	pathtocontainer=${lxcbase}/${containers}/${cn}/${volname}
+	if [ ${btrfs} == 1 ]; then
+		btrfs subvolume create ${pathtocontainer}
+	else
+		mkdir -p ${pathtocontainer}
+	fi
+	mkdir -p ${pathtocontainer}/rootfs
+	echo -n "Extracting rootfs....."
+	tar --numeric-owner -xjf ${rootfs_fn} -C ${pathtocontainer}/rootfs
+	if [ $? != 0 ]; then
+		echo "failed!"
+		echo "Error: rootfs file extraction failed"
+		exit 1
+	fi
+	echo "succeeded"
+	echo "Deploying new container ${cn}"
+	deploy_new_container
+	# Final action, create the softlink to it
+	# But first, if it's an upgrade, record the old one
+	# in history for rollback purposes
+	if [ ${1} == "upgrade" ]; then
+		get_container_history
+		mkdir -p ${pathtohistory}
+		switch_container ${volname} addhist
+	else
+		ln -srTf ${pathtocontainer} ${lxcbase}/${cn}
+	fi
+}
+
+function get_container_history {
+	pathtohistory=${lxcbase}/${meta}/${cn}/history
+	if [ ! -d ${pathtohistory} ]; then
+		histlinks=""
+		hist_num=-1
+		return 0
+	fi
+	histlinks=$( ls -r ${pathtohistory} )
+	for k in ${histlinks}; do
+		hist_num=${k}
+		return 0
+	done
+	hist_num=-1
+}
+
+function snapshot_container {
+	check_cn
+	if [ ${btrfs} == 1 ]; then
+		volname=`date +%s.%N`
+		pathtocontainer=${lxcbase}/${containers}/${cn}/${volname}
+		btrfs subvolume snapshot ${lxcbase}/${cn} ${pathtocontainer}
+		#Insert snapshot into history making it latest rollback candidate
+		get_container_history
+		next=$(( ${hist_num} + 1 ))
+		ln -sfrTL ${pathtocontainer} ${pathtohistory}/${next}
+	else
+		echo "Container snapshot only supported on btrfs filesystem"
+	fi
+}
+
+function switch_container {
+	if [ ! -L ${lxcbase}/${cn} ]; then
+		echo "Error: no link named ${cn} in ${lxcbase}"
+		exit 1
+	fi
+	current=`ls -l ${lxcbase}/${cn}`
+	current=${current##*/}
+	if [ ${1} == ${current} ]; then
+		# Already pointing to that container
+		return 1
+	fi
+	check_active ${cn}
+	if [ ${active} == 1 ]; then
+		echo "Container ${cn} is active"
+		echo -n "Stop, switch, then start it? (y/n) "
+		read result
+		if [ "${result}" == "y" ]; then
+			stop_container
+		else
+			echo "Aborting"
+			exit 1
+		fi
+	fi
+	if [ "${2}" == "addhist" ] && [ ${removecont} == 0 ]; then
+		next=$(( ${hist_num} + 1 ))
+		echo "Adding history entry ${next}"
+		ln -sfrTL ${lxcbase}/${cn} ${pathtohistory}/${next}
+	fi
+	pathtocontainer=${lxcbase}/${containers}/${cn}/${1}
+	previous=$( readlink -f ${lxcbase}/${cn} )
+	ln -sfTrL ${pathtocontainer} ${lxcbase}/${cn}
+	if [ ${removecont} == 1 ]; then
+		btrfs subvolume delete -C ${previous}
+	fi
+	if [ "${2}" == "delhist" ]; then
+		hist_index=${hist_num}
+		removecont=0
+		echo "Removing history entry ${hist_index}"
+		delete_history
+	fi
+	if [ ${active} == 1 ]; then
+		echo -n "Starting container ${cn} ... "
+		lxc-start -n ${cn} -d
+		echo "done"
+	fi
+}
+
+function stop_container {
+	echo -n "Stopping container ${cn} .... "
+	lxc-stop -n ${cn}
+	echo "done"
+}
+
+function delete_container {
+	check_cn
+	check_active ${cn}
+	if [ ${active} == 1 ]; then
+		echo "Container ${cn} is active, will stop it then delete all instances."
+		echo -n "Proceed (y/n)? "
+		read result
+		if [ "${result}" == "y" ]; then
+			stop_container
+		else
+			echo "Aborting"
+			exit 1
+		fi
+	else
+		echo "Will delete all instances of container ${cn}."
+		echo -n "Proceed (y/n)? "
+		read result
+		if [ "${result}" != "y" ]; then
+			echo "Aborting"
+			exit 1
+		fi
+	fi
+	echo "Removing containers"
+	cd ${lxcbase}/${containers}/${cn}
+	btrfs subvolume delete -C *
+	cd - >/dev/null
+	rm -rf ${lxcbase}/${containers}/${cn} >/dev/null 2>&1
+	echo "Removing container history and other meta data"
+	rm -rf ${lxcbase}/${meta}/${cn} >/dev/null 2>&1
+	echo "Removing active link"
+	rm ${lxcbase}/${cn} >/dev/null 2>&1
+}
+
+function rollback_container {
+	check_cn
+	if [ ${btrfs} == 0 ]; then
+		echo "Error: can only rollback btrfs filesystem"
+		exit 1
+	fi
+	if [ ! -L ${lxcbase}/${cn} ]; then
+		echo "Error: no link named ${cn} in ${lxcbase}"
+		exit 1
+	fi
+	current=`ls -l ${lxcbase}/${cn}`
+	current=${current##*/}
+	# Get rollback candidates sorted by most recent first
+	get_container_history
+	if [ ${hist_num} == -1 ]; then
+		echo "No history for container ${cn} to rollback to"
+		exit 1
+	fi
+	if [ ! -L ${pathtohistory}/${hist_num} ]; then
+		echo "Top of history isn't a link."
+		echo "Removing top of history.  Please try again for next one in list."
+		rm ${pathtohistory}/${hist_num}
+		exit 1
+	fi
+	rbcandidate=$( readlink -f ${pathtohistory}/${hist_num} )
+	if [ ! -d ${rbcandidate} ]; then
+		echo "Top of history link is broken."
+		echo "Removing top of history.  Please try again for next one in list."
+		rm ${pathtohistory}/${hist_num}
+		exit 1
+	fi
+	contver=${rbcandidate##*/}
+	if [ ${contver} == ${current} ]; then
+		echo "Already on top of history for container ${cn}"
+		echo "Perhaps you meant to upgrade instead of rollback?"
+		echo "If you need to rollback then manually remove top of history."
+		echo "Aborting."
+		exit 1
+	fi
+	echo "Will rollback to: ${contver}" `date -d @${contver}`
+	echo -n "Proceed? (y/n) "
+	read result
+	if [ "${result}" == "y" ]; then
+		switch_container ${contver} delhist
+		exit 0
+	fi
+	echo "No snapshot selected, aborting"
+	exit 1
+}
+
+function list_history {
+	check_cn
+	get_container_history
+	for k in ${histlinks}; do
+		echo -n "${k} -> "
+		fulldest=$( readlink ${pathtohistory}/${k} )
+		dest=${fulldest##*/}
+		echo -n "${dest} "
+		echo `date -d @${dest}`
+	done
+}
+
+function check_cn {
+	if [ "${cn}" == "" ]; then
+		echo "Error: container name not specified"
+		echo "Use -n <name> or -0 for dom0"
+		exit 1
+	fi
+}
+
+function check_active {
+	activeconts=$( lxc-ls --active )
+	active=0
+	for j in ${activeconts}; do
+		if [ ${j} == ${1} ]; then
+			active=1
+			break
+		fi
+	done
+}
+
+function delete_history {
+	check_cn
+	if [ "${hist_index}" == "" ]; then
+		echo "Error: history index not specified"
+		print_cmd_help histdel
+		exit 1
+	fi
+	get_container_history
+	if [ ! -L ${pathtohistory}/${hist_index} ]; then
+		echo "Error: history index ${hist_index} doesn't exist"
+		exit 1
+	fi
+	if [ ${removecont} == 1 ]; then
+		btrfs subvolume delete -C ${pathtohistory}/${hist_index}
+	fi
+	rm ${pathtohistory}/${hist_index}
+}
+
+# Mainline starts here
+
+# See if we are running in a container
+grep -q lxc /proc/1/cgroup
+if [ $? == 0 ]; then
+	echo "This tool is meant to be run on the host, not in a container"
+	echo "Aborting"
+	exit 1
+fi
+lxcbase=${LXCBASE}
+if [ -z "${lxcbase}" ]; then
+    lxcbase=/var/lib/lxc
+fi
+bindmntbase=/opt/container
+containers=overc-containers
+meta=overc-meta
+domain0=0
+autostart=0
+removecont=0
+tty_num=6
+cmdhelp=0
+
+# See if we're using btrfs
+mountpt=`grep ${lxcbase} /proc/mounts`
+btrfs=0
+if [ $? == 0 ]; then
+	fstype=`echo $mountpt | cut -f 3 -d ' '`
+	if [ "${fstype}" == "btrfs" ]; then
+		btrfs=1
+	else
+		btrfs=0
+	fi
+fi
+
+command=${1}
+shift 1
+
+while getopts "?ha0n:f:g:i:rt:" opt; do
+	case $opt in
+	0)
+		domain0=1
+		autostart=1
+		cn="dom0"
+		;;
+	a)
+		autostart=1
+		;;
+	f)
+		rootfs_fn=$OPTARG
+		;;
+	g)
+		group=$OPTARG
+		;;
+	h)
+		cmdhelp=1
+		;;
+	i)
+		hist_index=$OPTARG
+		;;
+	n)
+		cn=$OPTARG
+		;;
+	r)
+		removecont=1
+		;;
+	t)
+		tty_num=$OPTARG
+		if [ "${tty_num}" -eq "${tty_num}" ] 2>/dev/null; then
+			continue
+		else
+			echo "Error: -t requires a number as argument"
+			exit 1
+		fi
+		;;
+	?)
+		print_help
+		exit 0
+		;;
+	esac
+done
+if [ ${cmdhelp} == 1 ]; then
+	print_cmd_help ${command}
+	exit 0
+fi
+case "${command}" in
+	add)
+		add_container new
+		;;
+	delete)
+		delete_container
+		;;
+	clean)
+		clean_containers
+		;;
+	help)
+		print_help
+		exit 0
+		;;
+	histdel)
+		delete_history
+		exit 0
+		;;
+	histlist)
+		list_history
+		exit 0
+		;;
+	list)
+		list_containers
+		exit 0
+		;;
+	rollback)
+		rollback_container
+		exit 0
+		;;
+	snapshot)
+		snapshot_container
+		exit 0
+		;;
+	upgrade)
+		add_container upgrade
+		exit 0
+		;;
+	*)
+		echo "Error: Unrecognized command ${command}"
+		print_help
+		;;
+esac
