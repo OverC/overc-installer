@@ -1,10 +1,15 @@
 #!/bin/bash
 
+BASEDIR=$(readlink -f $(dirname $BASH_SOURCE))
+IMAGESDIR="${BASEDIR}/../images"
+CONTAINERSDIR="${BASEDIR}/../images/containers"
+PACKAGESDIR="${BASEDIR}/../packages"
+
 usage()
 {
 cat << EOF
 
-  simple-install.sh <rootfs> <device>
+  pod-install.sh <rootfs> <device>
 
 EOF
 }
@@ -32,9 +37,14 @@ done
 rootfs=$1
 dev=$2
 
-if [ ! -f "$rootfs" ]; then
-    echo "ERROR: install rootfs ($rootfs) not found"
-    exit 1
+if [ -e "$rootfs" ]; then
+    rootfs=`readlink -f $rootfs`
+else
+    if [ ! -f "${IMAGESDIR}/$rootfs" ]; then
+	echo "ERROR: install rootfs ($rootfs) not found"
+	exit 1
+    fi
+    rootfs="${IMAGESDIR}/$rootfs"
 fi
 
 # remove /dev/ if specified
@@ -45,21 +55,22 @@ dev="`echo $dev | sed 's|/dev/||'`"
 #  1: boot
 #  2: swap
 #  3: root
-fdisk /dev/${dev} < fdisk-a.txt
+fdisk /dev/${dev} < ${BASEDIR}/fdisk-a.txt
 
 ## create filesystems
 mkswap /dev/${dev}2
 mkfs.ext4 -v /dev/${dev}1
 mkfs.ext4 -v /dev/${dev}3
-mkdir /z
+
+mkdir -p /z
 mount /dev/${dev}3 /z
 mkdir /z/boot
 mount /dev/${dev}1 /z/boot
 
 ## unpack the installation
 cd /z
-cp /inst/pod-builder-initramfs-genericx86-64.cpio.gz boot/initramfs-pod-yocto-standard.img
-tar --numeric-owner -xpf /inst/$rootfs
+cp /${IMAGESDIR}/pod-builder-initramfs-genericx86-64.cpio.gz boot/initramfs-pod-yocto-standard.img
+tar --numeric-owner -xpf $rootfs
 
 final_dev=${dev}
 if [ "${dev}" = "vdb" ]; then
@@ -79,16 +90,14 @@ if [ "${dev}" = "vdb" ]; then
     sed -i "s/${dev}/${final_dev}/" /z/boot/grub/grub.cfg
 fi
 
-if [ -d "/inst/containers/" ]; then
+if [ -d "${CONTAINERSDIR}" ]; then
     echo "Copying containers to installation"
     mkdir -p /z/tmp
-    for c in `ls /inst/containers/`; do
+    for c in `ls ${CONTAINERSDIR}`; do
 	# containers names are "prefix-<container name>-<... suffixes >
 	cname=`basename $c | cut -f2 -d'-'`
-	# mkdir -p /z/var/lib/lxc/${cname}
-	# tar jxf /inst/containers/$c -C /z/var/lib/lxc/${cname}
-	cp /inst/containers/$c /z/tmp/
-	cp /inst/overc-cctl /z/tmp/
+	cp ${CONTAINERSDIR}/$c /z/tmp/
+	cp ${BASEDIR}/overc-cctl /z/tmp/
 
 	# actually install the container
 	if [ "${cname}" == "dom0" ] || [ "${cname}" == "dom1" ]; then
@@ -96,16 +105,16 @@ if [ -d "/inst/containers/" ]; then
 	else
 	    chroot . /bin/bash -c "/tmp/overc-cctl add -t 1 -n $cname -f /tmp/$c"
 	fi
-	# turn on autostart
-	chroot . /bin/bash -c "systemctl enable lxc"
     done
-    
+
+    #turn on autostart
+    chroot . /bin/bash -c "systemctl enable lxc"    
 fi
 
-if [ -d "/inst/packages" ]; then
+if [ -d "${PACKAGESDIR}" ]; then
     echo "Copying packages to installation as /opt/packages"
     mkdir -p opt/
-    cp -r /inst/packages opt/
+    cp -r ${PACKAGESDIR} opt/
 
     chroot . /bin/bash -c "\\
 smart channel -y --add all type=rpm-md baseurl=file://opt/packages/rpm/all/; \\

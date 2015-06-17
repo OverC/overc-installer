@@ -1,4 +1,4 @@
-source ${BASEDIR}/config-usb.sh
+source ${CONFIG_DIR}/config-usb.sh
 
 HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-essential-genericx86-64.tar.bz2"
 

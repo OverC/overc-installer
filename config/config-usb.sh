@@ -2,11 +2,12 @@
 # Define some configuration variables
 
 ## Installer file locations
-INSTALLER_FILES_DIR="/home/bruce/git/usbhdinstaller/usbhdinstaller/opt/installer/files"
-INSTALLER_TARGET_FILES_DIR="/opt/installer/files"
-INSTALLER_SCRIPTS_DIR="/home/bruce/git/usbhdinstaller/usbhdinstaller/opt/installer/scripts"
-INSTALLER_SBIN_DIR="/home/bruce/git/usbhdinstaller/usbhdinstaller/opt/installer/sbin"
-INSTALLER_TARGET_SBIN_DIR="/opt/installer/sbin"
+# INSTALLER_FILES_DIR="/home/bruce/git/usbhdinstaller/usbhdinstaller/opt/installer/files"
+# INSTALLER_TARGET_FILES_DIR="/opt/installer/files"
+# INSTALLER_SBIN_DIR="/home/bruce/git/usbhdinstaller/usbhdinstaller/opt/installer/sbin"
+# INSTALLER_TARGET_SBIN_DIR="/opt/installer/sbin"
+
+INITRAMFS_EXTRAS="/home/bruce/git/usbhdinstaller/scripts/setup.sh"
 
 # ARTIFACTS_DIR="/home/bruce/poky-yocto-builder/build/tmp/deploy/images/genericx86-64"
 ARTIFACTS_DIR="/home/bruce/overc-project/tmp/deploy/images/genericx86-64"
@@ -18,22 +19,16 @@ INSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-essential-genericx86-64.tar.bz2"
 INSTALL_MODULES=""
 INSTALL_INITRAMFS="${ARTIFACTS_DIR}/pod-builder-initramfs-genericx86-64.cpio.gz"
 
-INSTALL_GRUBHDCFG="${INSTALLER_FILES_DIR}/grub-hd.cfg"
-INSTALL_GRUBUSBCFG="${INSTALLER_FILES_DIR}/grub-usb.cfg"
-INSTALL_GRUBCFG="${INSTALL_GRUBUSBCFG}"
-INSTALL_IMAGE_DIR="/inst/"
+INSTALL_GRUBHDCFG="grub-hd.cfg"
+INSTALL_GRUBUSBCFG="grub-usb.cfg"
+INSTALL_GRUBCFG="${INSTALLER_FILES_DIR}/${INSTALL_GRUBUSBCFG}"
 
 INSTALL_FILES="${INSTALL_KERNEL} ${INSTALL_ROOTFS} ${INSTALL_MODULES} ${INSTALL_GRUBCFG}"
-
-PROJECT_WRLINUX_ROOTFS=""
-PROJECT_WRLINUX_MODULES=""
-PROJECT_FILES=""
 
 HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-graphical-builder-genericx86-64.tar.bz2 \
                   ${ARTIFACTS_DIR}/pod-builder-genericx86-64.tar.bz2"
 
 ## List of prerequisite files for the installer to check
-# PREREQ_FILES="${INSTALL_FILES} ${PROJECT_FILES}"
 PREREQ_FILES="${INSTALL_FILES}"
 
 BOARD_NAME="Generic x86"

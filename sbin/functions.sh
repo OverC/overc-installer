@@ -203,23 +203,26 @@ validate_usbstorage()
         local usbstorage_device=$1
 	local rc=1
 
-        if [ -z ${usbstorage_device} ] || ! [ -e ${usbstorage_device} ]
-        then
+        if [ -z ${usbstorage_device} ] || ! [ -e ${usbstorage_device} ]; then
                 debugmsg ${DEBUG_CRIT} "ERROR: Please specify a valid block device"
                 return 1
         fi
 
         local sysfs_path=$(dirname $usbstorage_device)/$(readlink $usbstorage_device)
         local parent=$(dirname ${sysfs_path})
-        while true
-        do
-                if [ "x${parent}" == "x/" ]
-                then
+
+	echo $parent | grep -q virtual
+	if [ $? -eq 0 ]; then
+	    # this is a virtual block device, return ok
+	    return 0
+	fi
+
+        while true; do
+                if [ "x${parent}" == "x/" ]; then
                         break
                 fi
 
-                if [ -e ${parent}/driver ]
-                then
+                if [ -e ${parent}/driver ]; then
                         local driver_path=$(readlink ${parent}/driver)
                         local driver=$(basename ${driver_path})
 			local scsi_device="sd"
@@ -231,8 +234,7 @@ validate_usbstorage()
                 local parent=$(dirname ${parent})
         done
 
-        if [ "x${driver}" == "xusb-storage" ]
-        then
+        if [ "x${driver}" == "xusb-storage" ]; then
                 rc=0
 		echo $(basename ${usbstorage_device})
         else
@@ -321,11 +323,8 @@ create_partition()
 		debugmsg ${DEBUG_CRIT} "ERROR: Input parameters not provided"
 	fi
 
-
-# XXX: TODO: use parted to mklabel msdos on the device (if NBD)	
+	# XXX: TODO: use parted to mklabel msdos on the device (if NBD)	
 	debugmsg ${DEBUG_INFO} "Creating partition ${device}${partnum}"
-# XXX
-	# echo /sbin/parted -s /dev/${device} "mkpart primary ${fstype} ${part_start} ${part_end}"
 	/sbin/parted -s /dev/${device} "mkpart primary ${fstype} ${part_start} ${part_end}" > /dev/null 2>&1
 	
 	if [ $? -ne 0 ]
@@ -334,7 +333,6 @@ create_partition()
 		return 1
 	fi
 
-# XXX
 	while !([ -e /dev/${device}${partnum} ] || [ -e /dev/${device}p${partnum} ])
 	do
 		sleep 1

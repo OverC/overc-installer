@@ -6,8 +6,7 @@ BASEDIR=$(dirname $BASH_SOURCE)
 : ${FUNCTIONS_FILE="$BASEDIR/functions.sh"}
 
 ## Load configuration file
-if ! [ -e $CONFIG_FILE ]
-then
+if ! [ -e $CONFIG_FILE ]; then
 	echo "ERROR: Could not find configuration file (${CONFIG_FILE})"
 	exit 1
 fi
@@ -15,8 +14,7 @@ fi
 source $CONFIG_FILE
 
 ## Load functions file
-if ! [ -e $FUNCTIONS_FILE ]
-then
+if ! [ -e $FUNCTIONS_FILE ]; then
 	echo "ERROR: Could not find function definitions (${FUNCTIONS_FILE})"
 	exit 1
 fi
