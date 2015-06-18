@@ -20,10 +20,11 @@ cat << EOF
 
   usb-creator.sh [--config <config script>] [<artifacts dir>] <block device>
 
-  Create a bootable USB device based on the configuration found in:
-    $BASEDIR/config-usb.sh
-  or the command line specified configuration script. See the builtin
-  example config-usb.sh for what must be in a config script.
+  Create a bootable USB device based on the configuration found in
+  ~/.overc/config-usb.sh, or the command line specified configuration
+  script. 
+
+  See the builtin example config-usb.sh.sample for what must be in a config script.
 
   examples:
     
@@ -68,20 +69,47 @@ INSTALLER_SBIN_DIR="${BASEDIR}/../sbin"
 # installers that will go on the usb stick, and install to the HD
 INSTALLERS_DIR="${BASEDIR}/../installers"
 # configuration for this script
-CONFIG_DIR="${BASEDIR}/../config"
+CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
+
+# command line parameters can be:
+#   <artifacts dir>
+#   <block device>
+if [ -z "$1" ]; then
+    debugmsg ${DEBUG_CRIT} "Please specify device"
+    false
+    assert $?
+else   
+    # if the first parameter is a directory, it is an artifacts dir,
+    # otherwise, it is a block device
+    if [ -d "$1" ]; then
+	ARTIFACTS_DIR="$1"
+	shift
+    fi
+    USBSTORAGE_DEVICE=/sys/block/$(basename "$1")
+fi
 
 ## Load configuration file
-if ! [ -e $CONFIG_FILE ]
-then
-    if [ -e ${CONFIG_DIR}/$CONFIG_FILE ]; then
-	CONFIG_FILE="${CONFIG_DIR}/$CONFIG_FILE"
-    else
+CONFIGS_TO_SOURCE="${CONFIG_FILE}"
+if ! [ -e $CONFIG_FILE ]; then
+    CONFIGS_TO_SOURCE=""
+    for d in ${CONFIG_DIRS}; do
+	if [ -e "${d}/${CONFIG_FILE}" ]; then
+	    CONFIGS_TO_SOURCE="${CONFIGS_TO_SOURCE} ${d}/$CONFIG_FILE"
+	fi
+    done
+
+    if [ -z "${CONFIGS_TO_SOURCE}" ]; then
 	echo "ERROR: Could not find configuration file (${CONFIG_FILE})"
 	exit 1
     fi
 fi
 
-source $CONFIG_FILE
+old_pwd=`pwd`
+for d in ${CONFIGS_TO_SOURCE}; do
+    cd `dirname $d`
+    source ${CONFIGS_TO_SOURCE}
+done
+cd $old_pwd
 
 # Locations on the USB bootable drive fr installer configuration
 if [ -z "${INSTALLER_TARGET_DIR}" ]; then
@@ -104,23 +132,6 @@ source $FUNCTIONS_FILE
 
 trap_cmd='trap_handler $?'
 trap "${trap_cmd}" EXIT
-
-# command line parameters can be:
-#   <artifacts dir>
-#   <block device>
-if [ -z "$1" ]; then
-    debugmsg ${DEBUG_CRIT} "Please specify device"
-    false
-    assert $?
-else   
-    # if the first parameter is a directory, it is an artifacts dir,
-    # otherwise, it is a block device
-    if [ -d "$1" ]; then
-	ARTIFACTS_DIR="$1"
-	shift
-    fi
-    USBSTORAGE_DEVICE=/sys/block/$(basename "$1")
-fi
 
 if [ -n ${USBSTORAGE_DEVICE} ]; then
     dev=$(validate_usbstorage "${USBSTORAGE_DEVICE}")
