@@ -117,6 +117,7 @@ Options summary:
 -g [arg] : container group.  default is "parked".
 -t [arg] : number of lxc ttys, connect with lxc-console.  default is 6
 -a       : set container to autostart
+-d       : make container discoverable via avahi
 -0       : short form for -n dom0 -g domain0 -a -t 1
 -h       : print help
 -r       : remove container completely from the system
@@ -246,6 +247,15 @@ function deploy_new_container {
 	create_lxc_config
 
 	create_autodev_script
+
+	if [ ${discoverable} == 1 ]; then
+		if [ -e "${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf" ]; then
+			sed -i "s/^.*host\-name=.*/host-name=${cn}/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
+			sed -i "s/^.*rlimit\-nproc=.*/# rlimit-nproc=3/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
+		else
+			echo "WARNING: container is discoverable, but avahi not found"
+	        fi
+	fi
 }
 
 function get_container_attributes {
@@ -633,6 +643,7 @@ containers=overc-containers
 meta=overc-meta
 domain0=0
 autostart=0
+discoverable=0
 removecont=0
 tty_num=6
 cmdhelp=0
@@ -652,7 +663,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?ha0n:f:g:i:rt:" opt; do
+while getopts "?dha0n:f:g:i:rt:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -661,6 +672,9 @@ while getopts "?ha0n:f:g:i:rt:" opt; do
 		;;
 	a)
 		autostart=1
+		;;
+	d)
+		discoverable=1
 		;;
 	f)
 		rootfs_fn=$OPTARG
