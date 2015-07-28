@@ -100,10 +100,12 @@ if [ -d "${CONTAINERSDIR}" ]; then
 	cp ${BASEDIR}/overc-cctl /z/tmp/
 
 	# actually install the container
-	if [ "${cname}" == "dom0" ] || [ "${cname}" == "dom1" ]; then
-	    chroot . /bin/bash -c "/tmp/overc-cctl add -a -g onboot -t 1 -n $cname -f /tmp/$c"
+	if [ "${cname}" == "dom0" ]; then
+	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -a -g onboot -t 0 -n $cname -f /tmp/$c"
+        elif [ "${cname}" == "dom1" ]; then
+	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -g peer -t 0 -n $cname -f /tmp/$c"
 	else
-	    chroot . /bin/bash -c "/tmp/overc-cctl add -t 1 -n $cname -f /tmp/$c"
+	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -g peer -t 0 -n $cname -f /tmp/$c"
 	fi
 	# turn on autostart
 	chroot . /bin/bash -c "systemctl enable lxc"

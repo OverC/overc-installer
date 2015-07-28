@@ -165,7 +165,7 @@ lxc.rootfs = ${lxcbase}/${cn}/rootfs
 lxc.autodev = 1
 lxc.kmsg = 0
 lxc.tty = ${tty_num}
-lxc.pts = 1024
+lxc.pts = 0
 lxc.mount = ${lxcbase}/${cn}/fstab
 lxc.network.type = veth
 lxc.network.link = br0
@@ -193,6 +193,19 @@ function create_lxc_fstab {
 ${bindmntbase}/all	${lxcbase}/${cn}/rootfs${bindmntbase}/all	none ro,bind,create=dir
 ${bindmntbase}/${cn}	${lxcbase}/${cn}/rootfs${bindmntbase}/local	none rw,bind,create=dir
 EOF
+
+	# special dom0 mounts (so nested containers can be launched)
+	if [ "${cn}" == "dom0" ]; then
+	    echo "${lxcbase} ${lxcbase}/${cn}/rootfs/${lxcbase} none bind 0 0" >> ${pathtocontainer}/fstab
+	    echo "/proc/ ${lxcbase}/${cn}/rootfs/host/proc/ none rw,bind,create=dir 0 0" >> ${pathtocontainer}/fstab
+	else
+	    # if we aren't dom0, then we'll be launched by dom0, so we need to have our
+	    # directory created there (for the local container directory), or that nested container
+	    # launch will fail
+	    if [ -d /var/lib/lxc/dom0/rootfs/ ]; then
+		mkdir -p ${lxcbase}/dom0/rootfs/${bindmntbase}/${cn}
+	    fi
+	fi
 }
 
 function create_autodev_script {
