@@ -303,7 +303,7 @@ remove_partitions()
 	local count=0
 	local attempts=3
 
-	while partitions=$(/sbin/parted -s /dev/${device} print | grep '^ *[0-9]')
+	while partitions=$(/sbin/parted -s /dev/${device} print 2>/dev/null | grep '^ *[0-9]')
 	do
 		for i in $(echo $partitions | awk '{print $1}')
 		do
@@ -335,8 +335,12 @@ create_partition()
 		debugmsg ${DEBUG_CRIT} "ERROR: Input parameters not provided"
 	fi
 
-	# XXX: TODO: use parted to mklabel msdos on the device (if NBD)	
 	debugmsg ${DEBUG_INFO} "Creating partition ${device}${partnum}"
+	# use parted to mklabel msdos if no partition table yet exists on the device
+	unknown_part_table=$(parted /dev/nbd0 print 2>/dev/null | grep 'Partition Table' | grep -c unknown)
+	if [ $unknown_part_table -eq 1 ]; then
+	    /sbin/parted -s /dev/${device} "mklabel msdos" > /dev/null 2>&1
+	fi
 	/sbin/parted -s /dev/${device} "mkpart primary ${fstype} ${part_start} ${part_end}" > /dev/null 2>&1
 	
 	if [ $? -ne 0 ]
