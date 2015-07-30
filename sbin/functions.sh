@@ -383,6 +383,9 @@ create_filesystem()
 	elif [ "x${filesystem}" == "xext3" ]
 	then
 		makefs="mkfs.ext3 -L ${label}"
+	elif [ "x${filesystem}" == "xext4" ]
+	then
+		makefs="mkfs.ext4 -L ${label}"
 	elif [ "x${filesystem}" == "xfat16" ]
 	then
 		makefs="mkfs.msdos -F 16 -n ${label}"
@@ -499,6 +502,21 @@ install_grub()
 	    p2="${device}2"
 	fi
 
+	debugmsg ${DEBUG_INFO} "Checking GRUB consistency"
+
+	GRUB_VER=$( ${CMD_GRUB_INSTALL} --version | awk -F '.'  '{ print $1}' | awk -F ' ' '{print $NF}' )
+	# See if our grub config is a legacy menu.lst file
+	echo ${INSTALL_GRUBCFG} | grep -q menu
+	MENU_GRUB_CFG=$?
+	if [ ${MENU_GRUB_CFG} -ne 0 ] && [ ${GRUB_VER} == "0" ]; then
+		debugmsg ${DEBUG_CRIT} "ERROR: GRUB version is legacy but cfg file is not menu.lst style"
+		return 1
+	fi
+	if [ ${MENU_GRUB_CFG} -eq 0 ] && [ ${GRUB_VER} != "0" ]; then
+		debugmsg ${DEBUG_CRIT} "ERROR: GRUB config file is menu.lst style but GRUB version is 2"
+		return 1
+	fi
+
 	debugmsg ${DEBUG_INFO} "Installing the GRUB bootloader"
 
 	${CMD_GRUB_INSTALL} --root-directory=${mountpoint} --no-floppy --recheck /dev/${device} # > /dev/null 2>&1
@@ -508,7 +526,14 @@ install_grub()
 		return 1
 	fi
 
-	cp ${INSTALL_GRUBCFG} ${mountpoint}/boot/grub/grub.cfg
+	if [ ${MENU_GRUB_CFG} -ne 0 ]; then
+		GRUB_CFG_NAME="grub.cfg"
+	else
+		GRUB_CFG_NAME="menu.lst"
+	fi
+
+	cp ${INSTALL_GRUBCFG} ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
+
 	if [ $? -ne 0 ]
 	then
 		debugmsg ${DEBUG_CRIT} "ERROR: Could not copy grub configuration file to ${mountpoint}/boot/grub/"
@@ -518,9 +543,10 @@ install_grub()
 	if [ -n "${INSTALL_KERNEL}" ]; then
 		local kernel_name=`basename ${INSTALL_KERNEL}`
 		local initramfs_name=`basename ${INSTALL_INITRAMFS}`
-		sed "s|%INSTALL_KERNEL%|${kernel_name}|" -i ${mountpoint}/boot/grub/grub.cfg
-		sed "s|%INSTALL_INITRAMFS%|${initramfs_name}|" -i ${mountpoint}/boot/grub/grub.cfg
-		sed "s|%INSTALLER_PARTITION%|${p2}|" -i ${mountpoint}/boot/grub/grub.cfg
+		sed "s|%INSTALL_KERNEL%|${kernel_name}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
+		sed "s|%INSTALL_INITRAMFS%|${initramfs_name}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
+		sed "s|%INSTALLER_PARTITION%|${p2}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
+		sed "s|%ROOTFS_LABEL%|${ROOTFS_LABEL}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
 	else
 		debugmsg ${DEBUG_CRIT} "ERROR: Could not update grub configuration with install kernel"
 		return 1

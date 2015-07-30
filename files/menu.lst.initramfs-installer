@@ -1,0 +1,6 @@
+default		0
+timeout		5
+
+title		OverC Installer
+kernel		/images/bzImage rootdelay=5 root=LABEL=%ROOTFS_LABEL%
+initrd		/images/%INSTALL_INITRAMFS%
