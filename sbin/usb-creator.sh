@@ -99,8 +99,14 @@ if ! [ -e $CONFIG_FILE ]; then
     done
 
     if [ -z "${CONFIGS_TO_SOURCE}" ]; then
-	echo "ERROR: Could not find configuration file (${CONFIG_FILE})"
+	echo "ERROR: Could not find configuration file (${CONFIG_FILE})."
+	echo "Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
 	exit 1
+    fi
+else
+    # Convert to abs path
+    if [[ "$CONFIG_FILE" != /* ]]; then
+        CONFIGS_TO_SOURCE="$(pwd)/${CONFIGS_TO_SOURCE}"
     fi
 fi
 
