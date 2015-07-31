@@ -337,7 +337,7 @@ create_partition()
 
 	debugmsg ${DEBUG_INFO} "Creating partition ${device}${partnum}"
 	# use parted to mklabel msdos if no partition table yet exists on the device
-	unknown_part_table=$(parted /dev/nbd0 print 2>/dev/null | grep 'Partition Table' | grep -c unknown)
+	unknown_part_table=$(parted /dev/${device} print 2>/dev/null | grep 'Partition Table' | grep -c unknown)
 	if [ $unknown_part_table -eq 1 ]; then
 	    /sbin/parted -s /dev/${device} "mklabel msdos" > /dev/null 2>&1
 	fi
