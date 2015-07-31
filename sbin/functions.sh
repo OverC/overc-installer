@@ -519,7 +519,15 @@ install_grub()
 
 	debugmsg ${DEBUG_INFO} "Installing the GRUB bootloader"
 
-	${CMD_GRUB_INSTALL} --root-directory=${mountpoint} --no-floppy --recheck /dev/${device} # > /dev/null 2>&1
+	# --recheck doesn't function with loopback and nbd devices for grub legacy, write our own device.map
+	# additionally we have to use the 'grub name' with these devices or grub-install will fail
+	if [ ${GRUB_VER} == "0" ] && ( [[ ${device} = *nbd* ]] || [[ ${device} = *loop* ]] ); then
+	    mkdir -p ${mountpoint}/boot/grub
+	    echo "(hd0) /dev/${device}" > ${mountpoint}/boot/grub/device.map
+	    ${CMD_GRUB_INSTALL} --root-directory=${mountpoint} --no-floppy hd0 # > /dev/null 2>&1
+	else
+	    ${CMD_GRUB_INSTALL} --root-directory=${mountpoint} --no-floppy --recheck /dev/${device} # > /dev/null 2>&1
+	fi
 	if [ $? -ne 0 ]
 	then
 		debugmsg ${DEBUG_CRIT} "ERROR: Installation of grub failed on /dev/${dev}"
