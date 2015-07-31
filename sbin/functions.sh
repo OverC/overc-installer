@@ -183,10 +183,13 @@ display_introduction()
 {
 	echo "$INSTALLER_INTRODUCTION"
 
-	sleep 2
-	confirm_install
+	if [ ! -v CONFIRM_INSTALL ] || [ ${CONFIRM_INSTALL} -eq 1 ]; then
+		sleep 2
+		confirm_install
+		return $?
+	fi
 	
-	return $?
+	return 0
 }
 
 display_finalmsg()
