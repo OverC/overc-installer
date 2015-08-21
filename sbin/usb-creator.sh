@@ -309,6 +309,17 @@ custom_install_rules()
 	    fi
 	fi
 
+	# puppet modules etc.
+	if [ -v INSTALL_PUPPET_DIR ]; then
+	    if [ -d ${INSTALLER_FILES_DIR}/${INSTALL_PUPPET_DIR} ]; then
+		debugmsg ${DEBUG_INFO} "Copying Puppet files to install media"
+		recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/puppet
+		cp -r ${INSTALLER_FILES_DIR}/${INSTALL_PUPPET_DIR}/* ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/puppet/
+	    else
+		debugmsg ${DEBUG_INFO} "INSTALL_PUPPET_DIR set but directory doesn't exist."
+	    fi
+	fi
+
 	return 0
 }
 

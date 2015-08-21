@@ -23,6 +23,10 @@ INSTALL_FILES="${INSTALL_KERNEL} ${INSTALL_ROOTFS} ${INSTALL_MODULES} ${INSTALL_
 HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-graphical-builder-genericx86-64.tar.bz2 \
                   ${ARTIFACTS_DIR}/pod-builder-genericx86-64.tar.bz2"
 
+
+# Uncomment to specify path to init.pp
+#INSTALL_PUPPET_DIR="puppet"
+
 ## List of prerequisite files for the installer to check
 PREREQ_FILES="${INSTALL_FILES}"
 

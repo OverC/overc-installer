@@ -4,6 +4,7 @@ BASEDIR=$(readlink -f $(dirname $BASH_SOURCE))
 IMAGESDIR="${BASEDIR}/../images"
 CONTAINERSDIR="${BASEDIR}/../images/containers"
 PACKAGESDIR="${BASEDIR}/../packages"
+PUPPETDIR="${BASEDIR}/../files/puppet"
 
 usage()
 {
@@ -123,6 +124,20 @@ smart channel -y --add genericx86_64 type=rpm-md baseurl=file://opt/packages/rpm
 smart channel -y --add lib32_x86 type=rpm-md baseurl=file://opt/packages/rpm/lib32_x86/; \\
 smart update"
 
+fi
+
+if [ -d ${PUPPETDIR} ]; then
+    echo "Running puppet"
+    cd /z
+    cp -r ${PUPPETDIR} tmp/.
+
+    chroot . /bin/bash -c " \\
+if [ $(which puppet 2> /dev/null) ]; then \\
+    puppet apply /tmp/puppet/init.pp ; \\
+else \\
+    echo \"Puppet not found on rootfs. Not applying puppet configuration.\" ; \\
+fi ; \\
+"
 fi
 
 # cleanup
