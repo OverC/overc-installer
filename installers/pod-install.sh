@@ -103,9 +103,9 @@ if [ -d "${CONTAINERSDIR}" ]; then
 	if [ "${cname}" == "dom0" ]; then
 	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -a -g onboot -t 0 -n $cname -f /tmp/$c"
         elif [ "${cname}" == "dom1" ]; then
-	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -g peer -t 0 -n $cname -f /tmp/$c"
+	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$c"
 	else
-	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -g peer -t 0 -n $cname -f /tmp/$c"
+	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$c"
 	fi
 	# turn on autostart
 	chroot . /bin/bash -c "systemctl enable lxc"

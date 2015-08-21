@@ -117,6 +117,7 @@ Options summary:
 -g [arg] : container group.  default is "parked".
 -t [arg] : number of lxc ttys, connect with lxc-console.  default is 6
 -a       : set container to autostart
+-p       : set container to peer start
 -d       : make container discoverable via avahi
 -0       : short form for -n dom0 -g domain0 -a -t 1
 -h       : print help
@@ -176,6 +177,7 @@ lxc.mount.entry = proc ${lxcbase}/${cn}/rootfs/proc    proc defaults 0 0
 lxc.mount.entry = sysfs ${lxcbase}/${cn}/rootfs/sys     sysfs defaults 0 0
 lxc.group = ${group}
 lxc.start.auto = ${autostart}
+wr.start.auto = ${peerstart}
 EOF
 	if [ ${domain0} == 1 ]; then
 		# Domain 0 wants to drive X onto a real console
@@ -656,6 +658,7 @@ containers=overc-containers
 meta=overc-meta
 domain0=0
 autostart=0
+peerstart=0
 discoverable=0
 removecont=0
 tty_num=6
@@ -676,7 +679,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?dha0n:f:g:i:rt:" opt; do
+while getopts "?dhap0n:f:g:i:rt:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -685,6 +688,9 @@ while getopts "?dha0n:f:g:i:rt:" opt; do
 		;;
 	a)
 		autostart=1
+		;;
+	p)
+		peerstart=1
 		;;
 	d)
 		discoverable=1
