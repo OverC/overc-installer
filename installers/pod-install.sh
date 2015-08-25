@@ -15,6 +15,36 @@ cat << EOF
 EOF
 }
 
+function extract_container_name
+{
+    # Parms: $1 = filename
+    #
+    # Container file names typically look like:
+    # a-b-c-...-z-some-arch.tar.bz
+    # where z is typically dom{0,1,e,E} etc.
+    # We want to pull z out of the file name and use
+    # it for the container name.
+    # There has to be at least a dom0 container, so we
+    # look for it and use it as a template for extracting
+    # z out of the filename.
+    local disposable_suffix
+    local dom0_name
+    local z_part
+
+    # Use dom0 as the template for discovering the
+    # disposable suffix eg. -some-arch.tar.bz
+    dom0_name=$( ls $CONTAINERSDIR/*-dom0-* )
+    if [ -z "$dom0_name" ]; then
+        echo "ERROR: cannot find the dom0 container image"
+        exit 1
+    fi
+    # Anything after dom0 in the filename is considered to be the suffix
+    disposable_suffix=$( echo $dom0_name | awk 'BEGIN { FS="dom0"; } { print $NF; }' )
+    # Strip away the suffix first, then anything after the last '-' is the container name
+    z_part=$( echo ${1%$disposable_suffix} | awk 'BEGIN { FS="-"; } { print $NF; }' )
+    echo ${z_part}
+}
+
 if [ -z "$1" ]; then
     usage
     exit
@@ -70,7 +100,7 @@ mount /dev/${dev}1 /z/boot
 
 ## unpack the installation
 cd /z
-cp /${IMAGESDIR}/pod-builder-initramfs-genericx86-64.cpio.gz boot/initramfs-pod-yocto-standard.img
+cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/initramfs-pod-yocto-standard.img
 tar --numeric-owner -xpf $rootfs
 
 final_dev=${dev}
@@ -96,7 +126,13 @@ if [ -d "${CONTAINERSDIR}" ]; then
     mkdir -p /z/tmp
     for c in `ls ${CONTAINERSDIR}`; do
 	# containers names are "prefix-<container name>-<... suffixes >
-	cname=`basename $c | cut -f2 -d'-'`
+	cname=$( extract_container_name $c )
+	echo ${cname} | grep -qi error
+	if [ $? == 0 ]; then
+	    # We got an error instead of the cname.  Show the user.
+	    echo ${cname}
+	    exit 1
+	fi
 	cp ${CONTAINERSDIR}/$c /z/tmp/
 	cp ${BASEDIR}/overc-cctl /z/tmp/
 
