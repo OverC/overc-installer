@@ -544,7 +544,6 @@ install_grub()
 	fi
 
 	cp ${INSTALL_GRUBCFG} ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
-
 	if [ $? -ne 0 ]
 	then
 		debugmsg ${DEBUG_CRIT} "ERROR: Could not copy grub configuration file to ${mountpoint}/boot/grub/"

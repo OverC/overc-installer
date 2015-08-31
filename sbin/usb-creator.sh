@@ -117,6 +117,18 @@ for d in ${CONFIGS_TO_SOURCE}; do
 done
 cd $old_pwd
 
+# Find the grub configuration
+for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
+    if [ -e "${d}/${INSTALL_GRUBUSBCFG}" ] &&
+       [ -z "${INSTALL_GRUBCFG}" ]; then
+	INSTALL_GRUBCFG=${d}/${INSTALL_GRUBUSBCFG}
+    fi
+done
+if [ -z "${INSTALL_GRUBUSBCFG}" ]; then
+    echo "ERROR: usb grub configuration ${INSTALL_GRUBUSBCFG} not found"
+    exit 1
+fi
+
 # Locations on the USB bootable drive fr installer configuration
 if [ -z "${INSTALLER_TARGET_DIR}" ]; then
     INSTALLER_TARGET_DIR="/opt/installer"
@@ -217,7 +229,7 @@ custom_install_rules()
 	fi
 
 	## Copy kernel and files to filesystem 
-        ## Note: we always make sure to ## install the initramfs as
+	## Note: we always make sure to install the initramfs as
 	##       INSTALL_INITRAMFS, since other routines read that global variable,
 	##       and align things like grub to that name.
 	debugmsg ${DEBUG_INFO} "Copying kernel image"
@@ -264,7 +276,13 @@ custom_install_rules()
 	assert_return $?
 
 	## Copy the hard drive GRUB configuration
-	cp ${INSTALLER_FILES_DIR}/${INSTALL_GRUBHDCFG} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG}
+	for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
+	    if [ -e ${d}/${INSTALL_GRUBHDCFG} ] &&
+	       [ ! -e ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG} ]; then
+		debugmsg ${DEBUG_CRIT} "INFO: found grub hd configuration ${d}/${INSTALL_GRUBHDCFG}"
+		cp ${d}/${INSTALL_GRUBHDCFG} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG}
+	    fi
+	done
 
 	## And the installer kernel + initramfs
 	cp "${INSTALL_KERNEL}" "${INSTALL_INITRAMFS}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
