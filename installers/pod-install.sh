@@ -107,8 +107,6 @@ if [ -d "${CONTAINERSDIR}" ]; then
 	else
 	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$c"
 	fi
-	# turn on autostart
-	chroot . /bin/bash -c "systemctl enable lxc"
     done
     
 fi
