@@ -198,7 +198,11 @@ EOF
 
 	# special dom0 mounts (so nested containers can be launched)
 	if [ "${cn}" == "dom0" ]; then
+	    # make /var/lib/lxc/* available to dom0
 	    echo "${lxcbase} ${lxcbase}/${cn}/rootfs/${lxcbase} none bind 0 0" >> ${pathtocontainer}/fstab
+	    # make / be available as /essential/
+	    echo "/ /var/lib/lxc/${cn}/rootfs/essential/ none rw,bind,create=dir 0 0" >> ${pathtocontainer}/fstab
+	    # proc for namespace access to essential (required for nested containers)
 	    echo "/proc/ ${lxcbase}/${cn}/rootfs/host/proc/ none rw,bind,create=dir 0 0" >> ${pathtocontainer}/fstab
 	else
 	    # if we aren't dom0, then we'll be launched by dom0, so we need to have our
