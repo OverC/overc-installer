@@ -235,11 +235,6 @@ function deploy_new_container {
 
 	# Record the origin of the rootfs
 	echo ${rootfs_fn} >${pathtocontainer}/rootfs.origin
-	# Grab the root shadow entry so we can login
-	sed -n '/^root:/p' /etc/shadow >new-shadow
-	sed -n '/^root:/!p' ${pathtocontainer}/rootfs/etc/shadow >>new-shadow
-	cp new-shadow ${pathtocontainer}/rootfs/etc/shadow
-	rm new-shadow
 
 	# Make mount points
 	DEV=${pathtocontainer}/rootfs/dev
@@ -250,7 +245,7 @@ function deploy_new_container {
 	remove_from_inittab S0
 	if [ ${domain0} == 1 ]; then
 		# tty1 is for lxc-console
-		# tty2 is for X
+		# tty7 is for X
 		remove_from_inittab 2
 		remove_from_inittab 3
 		remove_from_inittab 4
