@@ -12,6 +12,8 @@ cat << EOF
 
   pod-install.sh <rootfs> <device>
 
+    -b: use btrfs
+
 EOF
 }
 
@@ -50,6 +52,7 @@ if [ -z "$1" ]; then
     exit
 fi
 
+btrfs=0
 while [ $# -gt 0 ]; do
     case "$1" in
     --config) 
@@ -57,6 +60,8 @@ while [ $# -gt 0 ]; do
 	    shift
             ;;
     -v) verbose=t
+            ;;
+    -b) btrfs=1
             ;;
          *) break
             ;;
@@ -91,17 +96,50 @@ fdisk /dev/${dev} < ${BASEDIR}/fdisk-a.txt
 ## create filesystems
 mkswap /dev/${dev}2
 mkfs.ext4 -v /dev/${dev}1
-mkfs.ext4 -v /dev/${dev}3
+if [ $btrfs -eq 0 ]; then
+	mkfs.ext4 -v /dev/${dev}3
+else
+	mkfs.btrfs -f /dev/${dev}3
+fi
 
 mkdir -p /z
 mount /dev/${dev}3 /z
-mkdir /z/boot
-mount /dev/${dev}1 /z/boot
+
+
+if [ $btrfs -eq 0 ]; then
+	mkdir /z/boot
+	mount /dev/${dev}1 /z/boot
+else
+	# create a subvolume
+	btrfs subvolume create /z/rootfs
+
+	mkdir /z/rootfs/boot
+	mount /dev/${dev}1 /z/rootfs/boot
+fi
+
 
 ## unpack the installation
-cd /z
+if [ $btrfs -eq 0 ]; then
+	cd /z
+else
+	cd /z/rootfs
+fi
 cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/initramfs-pod-yocto-standard.img
 tar --numeric-owner -xpf $rootfs
+
+if [ $btrfs -eq 1 ]; then
+	# get the subvolume id of /mnt/rootfs using:
+	subvol=`btrfs subvolume list /z/rootfs | awk '{print $2;}'`
+	# set default volume when mounted
+	btrfs subvolume set-default $subvol /z/rootfs
+
+	cd /
+	umount /z/rootfs/boot
+	umount /z/
+	mount -o subvolid=${subvol} /dev/${dev}3 /z
+	mount /dev/${dev}1 /z/boot
+	cd /z/
+fi
 
 final_dev=${dev}
 if [ "${dev}" = "vdb" ]; then

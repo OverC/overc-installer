@@ -123,6 +123,7 @@ Options summary:
 -h       : print help
 -r       : remove container completely from the system
 -i       : history index
+-F       : force option - ie disable prompts
 
 Special container names:
 dom0     : the domain0 container.  This brings the normal high level
@@ -234,11 +235,6 @@ function deploy_new_container {
 
 	# Record the origin of the rootfs
 	echo ${rootfs_fn} >${pathtocontainer}/rootfs.origin
-	# Grab the root shadow entry so we can login
-	sed -n '/^root:/p' /etc/shadow >new-shadow
-	sed -n '/^root:/!p' ${pathtocontainer}/rootfs/etc/shadow >>new-shadow
-	cp new-shadow ${pathtocontainer}/rootfs/etc/shadow
-	rm new-shadow
 
 	# Make mount points
 	DEV=${pathtocontainer}/rootfs/dev
@@ -249,7 +245,7 @@ function deploy_new_container {
 	remove_from_inittab S0
 	if [ ${domain0} == 1 ]; then
 		# tty1 is for lxc-console
-		# tty2 is for X
+		# tty7 is for X
 		remove_from_inittab 2
 		remove_from_inittab 3
 		remove_from_inittab 4
@@ -475,8 +471,13 @@ function switch_container {
 	check_active ${cn}
 	if [ ${active} == 1 ]; then
 		echo "Container ${cn} is active"
-		echo -n "Stop, switch, then start it? (y/n) "
-		read result
+		if [ $force -eq 1 ]; then
+			echo "Force enabled, stopping container"
+			result="y"
+		else
+			echo -n "Stop, switch, then start it? (y/n) "
+			read result
+		fi
 		if [ "${result}" == "y" ]; then
 			stop_container
 		else
@@ -519,8 +520,13 @@ function delete_container {
 	check_active ${cn}
 	if [ ${active} == 1 ]; then
 		echo "Container ${cn} is active, will stop it then delete all instances."
-		echo -n "Proceed (y/n)? "
-		read result
+		if [ $force -eq 1 ]; then
+			echo "Force enabled, stopping container"
+			result="y"
+		else
+			echo -n "Proceed (y/n)? "
+			read result
+		fi
 		if [ "${result}" == "y" ]; then
 			stop_container
 		else
@@ -528,12 +534,14 @@ function delete_container {
 			exit 1
 		fi
 	else
-		echo "Will delete all instances of container ${cn}."
-		echo -n "Proceed (y/n)? "
-		read result
-		if [ "${result}" != "y" ]; then
-			echo "Aborting"
-			exit 1
+		if [ $force -eq 0 ]; then
+			echo "Will delete all instances of container ${cn}."
+			echo -n "Proceed (y/n)? "
+			read result
+			if [ "${result}" != "y" ]; then
+				echo "Aborting"
+				exit 1
+			fi
 		fi
 	fi
 	echo "Removing containers"
@@ -587,8 +595,12 @@ function rollback_container {
 		exit 1
 	fi
 	echo "Will rollback to: ${contver}" `date -d @${contver}`
-	echo -n "Proceed? (y/n) "
-	read result
+	if [ $force -eq 1 ]; then
+		result="y"
+	else
+		echo -n "Proceed? (y/n) "
+		read result
+	fi
 	if [ "${result}" == "y" ]; then
 		switch_container ${contver} delhist
 		exit 0
@@ -648,13 +660,6 @@ function delete_history {
 
 # Mainline starts here
 
-# See if we are running in a container
-grep -q lxc /proc/1/cgroup
-if [ $? == 0 ]; then
-	echo "This tool is meant to be run on the host, not in a container"
-	echo "Aborting"
-	exit 1
-fi
 lxcbase=${LXCBASE}
 if [ -z "${lxcbase}" ]; then
     lxcbase=/var/lib/lxc
@@ -669,6 +674,7 @@ discoverable=0
 removecont=0
 tty_num=6
 cmdhelp=0
+force=0
 
 # See if we're using btrfs
 mountpt=`grep ${lxcbase} /proc/mounts`
@@ -685,7 +691,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?dhap0n:f:g:i:rt:" opt; do
+while getopts "?Fdhap0n:f:g:i:rt:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -727,6 +733,9 @@ while getopts "?dhap0n:f:g:i:rt:" opt; do
 			echo "Error: -t requires a number as argument"
 			exit 1
 		fi
+		;;
+	F)
+		force=1
 		;;
 	?)
 		print_help
