@@ -162,7 +162,11 @@ fi
 if [ -d "${CONTAINERSDIR}" ]; then
     echo "Copying containers to installation"
     mkdir -p /z/tmp
-    for c in `ls ${CONTAINERSDIR}`; do
+    # Because peer container deployment needs to write into the rootfs
+    # space of dom0, we must ensure that dom0, if there, gets deployed first.
+    # To accomplish that, we have to make sure that dom0 ends up at
+    # the beginning of the ls list.
+    for c in $(ls ${CONTAINERSDIR} | grep '\-dom0\-' ; ls ${CONTAINERSDIR} | grep -v '\-dom0\-' ); do
 	# containers names are "prefix-<container name>-<... suffixes >
 	cname=$( extract_container_name $c )
 	echo ${cname} | grep -qi error
