@@ -4,7 +4,7 @@ function print_cmd_help {
 	case "${1}" in
 		add)
 			cat << EOF
-add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num]
+add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-S tty console dev]
 
 Adds a new container which doesn't already exist.
 EOF
@@ -124,6 +124,8 @@ Options summary:
 -r       : remove container completely from the system
 -i       : history index
 -F       : force option - ie disable prompts
+-s       : container controlling tty console
+-S [arg] : tty console device.  default is ttyS0
 
 Special container names:
 dom0     : the domain0 container.  This brings the normal high level
@@ -272,6 +274,25 @@ function deploy_new_container {
 		else
 			echo "WARNING: container is discoverable, but avahi not found"
 	        fi
+	fi
+
+	if [ ${havettyconsole} == 1  ]; then
+		# If container /dev is mounted by tmpfs (when lxc.autodev=1) then
+		# systemd fails to start dev-ttyXXXX.device service and this causes
+		# serial-getty@ttyXXXX.service fails to start.  Workaround for now
+		# is to remove the dependency to dev-%i.device service.
+		sed -i "s:After=dev-%i.device :After=:g" ${pathtocontainer}/rootfs/lib/systemd/system/serial-getty@.service
+		# Enable the container service serial-getty@${ttyconsoledev}.service
+		chroot ${pathtocontainer}/rootfs /bin/bash \
+			-c "mount -t proc none /proc && /bin/systemctl unmask serial-getty@${ttyconsoledev}.service && umount /proc"
+		chroot ${pathtocontainer}/rootfs /bin/bash \
+			-c "mount -t proc none /proc && /bin/systemctl enable serial-getty@${ttyconsoledev}.service && umount /proc"
+		# Mask out the essential service serial-getty@${ttyconsoledev}.service
+		ln -sf /dev/null /etc/systemd/system/serial-getty@${ttyconsoledev}.service
+	else
+		# Mask out the container service serial-getty@${ttyconsoledev}.service
+		chroot ${pathtocontainer}/rootfs /bin/bash \
+			-c "mount -t proc none /proc && /bin/systemctl mask serial-getty@${ttyconsoledev}.service && umount /proc"
 	fi
 }
 
@@ -675,6 +696,8 @@ removecont=0
 tty_num=6
 cmdhelp=0
 force=0
+ttyconsoledev="ttyS0"
+havettyconsole=0
 
 # See if we're using btrfs
 mountpt=`grep ${lxcbase} /proc/mounts`
@@ -691,7 +714,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?Fdhap0n:f:g:i:rt:" opt; do
+while getopts "?Fdhap0n:f:g:i:rt:sS:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -736,6 +759,12 @@ while getopts "?Fdhap0n:f:g:i:rt:" opt; do
 		;;
 	F)
 		force=1
+		;;
+	s)
+		havettyconsole=1
+		;;
+	S)
+		ttyconsoledev=$OPTARG
 		;;
 	?)
 		print_help

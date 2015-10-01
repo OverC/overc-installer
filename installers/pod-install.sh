@@ -13,6 +13,9 @@ cat << EOF
   pod-install.sh <rootfs> <device>
 
     -b: use btrfs
+    --finaldev: boot from this block dev. Default is vda
+    --ttyconsoledev: set dev used for tty console
+    --ttyconsolecn: set container name for providing agetty
 
 EOF
 }
@@ -53,6 +56,8 @@ if [ -z "$1" ]; then
 fi
 
 btrfs=0
+ttyconsolecn=""
+ttyconsoledev="ttyS0"
 while [ $# -gt 0 ]; do
     case "$1" in
     --config) 
@@ -62,6 +67,15 @@ while [ $# -gt 0 ]; do
     -v) verbose=t
             ;;
     -b) btrfs=1
+            ;;
+    --finaldev) final_dev="$2"
+            shift
+            ;;
+    --ttyconsoledev) ttyconsoledev="$2"
+            shift
+            ;;
+    --ttyconsolecn) ttyconsolecn="$2"
+            shift
             ;;
          *) break
             ;;
@@ -141,9 +155,11 @@ if [ $btrfs -eq 1 ]; then
 	cd /z/
 fi
 
-final_dev=${dev}
-if [ "${dev}" = "vdb" ]; then
-    final_dev="vda"
+if [ -z ${final_dev} ]; then
+	final_dev=${dev}
+	if [ "${dev}" = "vdb" ]; then
+		final_dev="vda"
+	fi
 fi
 
 chroot . /bin/bash -c "\\
@@ -178,13 +194,18 @@ if [ -d "${CONTAINERSDIR}" ]; then
 	cp ${CONTAINERSDIR}/$c /z/tmp/
 	cp ${BASEDIR}/overc-cctl /z/tmp/
 
+    ttyconsole_opt="-S ${ttyconsoledev}"
+    if [ "${ttyconsolecn}" == "${cname}" ]; then
+        ttyconsole_opt="-s ${havettyconsole_opt}"
+    fi
+
 	# actually install the container
 	if [ "${cname}" == "dom0" ]; then
-	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -a -g onboot -t 0 -n $cname -f /tmp/$c"
+	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -a -g onboot -t 0 -n $cname -f /tmp/$c ${ttyconsole_opt}"
         elif [ "${cname}" == "dom1" ]; then
-	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$c"
+	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$c ${ttyconsole_opt}"
 	else
-	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$c"
+	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$c ${ttyconsole_opt}"
 	fi
     done
     
