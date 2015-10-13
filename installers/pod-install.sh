@@ -105,15 +105,24 @@ dev="`echo $dev | sed 's|/dev/||'`"
 #  1: boot
 #  2: swap
 #  3: root
-fdisk /dev/${dev} < ${BASEDIR}/fdisk-a.txt
+#  4. lxc
+
+BOOTLABEL="OVERCBOOT"
+SWAPLABEL="SWAP"
+ROOTLABEL="OVERCROOTFS"
+LXCLABEL="OVERCCN"
+
+fdisk /dev/${dev} < ${BASEDIR}/fdisk-4-partition-layout.txt 
 
 ## create filesystems
-mkswap /dev/${dev}2
-mkfs.ext4 -v /dev/${dev}1
+mkswap -L $SWAPLABEL /dev/${dev}2
+mkfs.ext4 -v -L $BOOTLABEL /dev/${dev}1
 if [ $btrfs -eq 0 ]; then
-	mkfs.ext4 -v /dev/${dev}3
+	mkfs.ext4 -v -L $ROOTLABEL /dev/${dev}3
+	mkfs.ext4 -v -L $LXCLABEL /dev/${dev}4
 else
-	mkfs.btrfs -f /dev/${dev}3
+	mkfs.btrfs -f -L $ROOTLABEL /dev/${dev}3
+	mkfs.btrfs -f -L $LXCLABEL /dev/${dev}4
 fi
 
 mkdir -p /z
@@ -166,7 +175,9 @@ chroot . /bin/bash -c "\\
 mount -t devtmpfs none /dev ; \\
 mount -t proc none /proc ; \\
 mkdir -p /boot/grub; \\
-echo \"/dev/${final_dev}1 /boot ext4 defaults 0 0\" >> /etc/fstab ; \\
+echo \"LABEL=$SWAPLABEL none swap sw 0 0\" >> /etc/fstab ; \\
+echo \"LABEL=$BOOTLABEL /boot auto defaults 0 0\" >> /etc/fstab ; \\
+echo \"LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0\" >> /etc/fstab ; \\
 GRUB_DISABLE_LINUX_UUID=true grub-mkconfig > /boot/grub/grub.cfg ; \\
 grub-install /dev/${dev}"
 
@@ -177,6 +188,11 @@ fi
 
 if [ -d "${CONTAINERSDIR}" ]; then
     echo "Copying containers to installation"
+    if [ ! -d /z/var/lib/lxc ]; then
+        mkdir -p /z/var/lib/lxc
+    fi
+    mount /dev/${dev}4 /z/var/lib/lxc
+
     mkdir -p /z/tmp
     # Because peer container deployment needs to write into the rootfs
     # space of dom0, we must ensure that dom0, if there, gets deployed first.
@@ -208,6 +224,8 @@ if [ -d "${CONTAINERSDIR}" ]; then
 	    chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$c ${ttyconsole_opt}"
 	fi
     done
+
+    umount /z/var/lib/lxc
     
 fi
 

@@ -205,6 +205,8 @@ EOF
 	    echo "${lxcbase} ${lxcbase}/${cn}/rootfs/${lxcbase} none bind 0 0" >> ${pathtocontainer}/fstab
 	    # make / be available as /essential/
 	    echo "/ /var/lib/lxc/${cn}/rootfs/essential/ none rw,bind,create=dir 0 0" >> ${pathtocontainer}/fstab
+	    # make /boot be available as to dom0 since the essential system's update/upgrade is done in dom0
+	    echo "/boot /var/lib/lxc/${cn}/rootfs/boot/ none rw,bind 0 0" >> ${pathtocontainer}/fstab
 	    # proc for namespace access to essential (required for nested containers)
 	    echo "/proc/ ${lxcbase}/${cn}/rootfs/host/proc/ none rw,bind,create=dir 0 0" >> ${pathtocontainer}/fstab
 	else
