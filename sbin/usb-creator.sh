@@ -284,6 +284,12 @@ custom_install_rules()
 	    fi
 	done
 
+	## Copy the efi grub
+	if [ -e ${INSTALL_EFIBOOT} ]; then
+		debugmsg ${DEBUG_CRIT} "INFO: copy efi boot grub"
+		cp "${INSTALL_EFIBOOT}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
+	fi
+
 	## And the installer kernel + initramfs
 	cp "${INSTALL_KERNEL}" "${INSTALL_INITRAMFS}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
 

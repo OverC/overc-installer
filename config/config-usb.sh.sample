@@ -13,6 +13,8 @@ INSTALL_KERNEL="${ARTIFACTS_DIR}/bzImage"
 INSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-essential-genericx86-64.tar.bz2"
 INSTALL_MODULES=""
 INSTALL_INITRAMFS="${ARTIFACTS_DIR}/pod-builder-initramfs-genericx86-64.cpio.gz"
+INSTALL_EFIBOOT="${ARTIFACTS_DIR}/bootx64.efi"
+
 
 INSTALL_GRUBHDCFG="grub-hd.cfg"
 INSTALL_GRUBUSBCFG="grub-usb.cfg"

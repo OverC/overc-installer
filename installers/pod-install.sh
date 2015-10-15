@@ -116,7 +116,7 @@ fdisk /dev/${dev} < ${BASEDIR}/fdisk-4-partition-layout.txt
 
 ## create filesystems
 mkswap -L $SWAPLABEL /dev/${dev}2
-mkfs.ext4 -v -L $BOOTLABEL /dev/${dev}1
+mkfs.vfat -n $BOOTLABEL /dev/${dev}1
 if [ $btrfs -eq 0 ]; then
 	mkfs.ext4 -v -L $ROOTLABEL /dev/${dev}3
 	mkfs.ext4 -v -L $LXCLABEL /dev/${dev}4
@@ -147,8 +147,23 @@ if [ $btrfs -eq 0 ]; then
 else
 	cd /z/rootfs
 fi
-cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/initramfs-pod-yocto-standard.img
+
+## vfat filesystem doesn't support soft link, here umount boot partition and
+## then copy kernel image to boot partition
+umount boot 
 tar --numeric-owner -xpf $rootfs
+
+mount /dev/${dev}1 mnt
+chroot . /bin/bash -c "\\
+	cp /boot/bzImage* /mnt; \\
+"
+umount ./mnt
+mount /dev/${dev}1 boot
+
+kernel=`basename boot/bzImage-*`
+kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
+initrd="initrd-${kernel_version}.gz"
+cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/${initrd}
 
 if [ $btrfs -eq 1 ]; then
 	# get the subvolume id of /mnt/rootfs using:
@@ -185,6 +200,28 @@ grub-install /dev/${dev}"
 if [ "${dev}" = "vdb" ]; then
     sed -i "s/${dev}/${final_dev}/" /z/boot/grub/grub.cfg
 fi
+
+if [ -e /${IMAGESDIR}/boot*.efi ]; then
+       mkdir -p boot/EFI/BOOT
+       cp /${IMAGESDIR}/boot*.efi boot/EFI/BOOT
+       # remove those sections that are supported by uefi grub,
+       # such as if/else statement and functions and only keep
+       # grub menuentry section.
+       cat /z/boot/grub/grub.cfg | sed -n '/### BEGIN \/etc\/grub.d\/10_linux ###/,/### END \/etc\/grub.d\/10_linux ###/p' >boot/EFI/BOOT/grub.cfg
+       sed -i "s/bzImage-${kernel_version}/bzImage/" boot/EFI/BOOT/grub.cfg
+       sed -i '/load_/d' boot/EFI/BOOT/grub.cfg
+       sed -i '/insmod/d' boot/EFI/BOOT/grub.cfg
+       sed -i '/if \[/,/fi *$/d' boot/EFI/BOOT/grub.cfg
+       sed -i '/echo/d' boot/EFI/BOOT/grub.cfg
+
+       echo `basename boot/EFI/BOOT/boot*.efi` >boot/startup.nsh
+else
+       cp ${BASEDIR}/startup.nsh boot/
+       sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" boot/startup.nsh
+       sed -i "s/%INITRD%/${initrd}/" boot/startup.nsh
+       sed -i "s/%BZIMAGE%/bzImage/" boot/startup.nsh
+fi
+chmod +x boot/startup.nsh
 
 if [ -d "${CONTAINERSDIR}" ]; then
     echo "Copying containers to installation"

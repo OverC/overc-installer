@@ -561,7 +561,22 @@ install_grub()
 		debugmsg ${DEBUG_CRIT} "ERROR: Could not update grub configuration with install kernel"
 		return 1
 	fi
-	    
+	
+	#install efi boot
+	debugmsg ${DEBUG_INFO} "Installing the EFI bootloader"
+	mkdir -p ${mountpoint}/EFI/BOOT/
+	if [ -e $INSTALL_EFIBOOT ]; then
+		cp $INSTALL_EFIBOOT ${mountpoint}/EFI/BOOT/
+		cp ${mountpoint}/boot/grub/${GRUB_CFG_NAME} ${mountpoint}/EFI/BOOT/
+		echo `basename $INSTALL_EFIBOOT` >${mountpoint}/startup.nsh
+	else
+		cp ${BASEDIR}/startup.nsh ${mountpoint}/
+		sed -i "s/%ROOTLABEL%/${ROOTFS_LABEL}/" ${mountpoint}/startup.nsh
+		sed -i "s/%INITRD%/\/images\/${initramfs_name}/" ${mountpoint}/startup.nsh
+		sed -i "s/%BZIMAGE%/\\\images\\\bzImage/" ${mountpoint}/startup.nsh
+	fi
+	chmod +x ${mountpoint}/startup.nsh
+ 
 	return 0
 }
 
