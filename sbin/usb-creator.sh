@@ -285,7 +285,7 @@ custom_install_rules()
 	done
 
 	## Copy the efi grub
-	if [ -e ${INSTALL_EFIBOOT} ]; then
+	if [ -n "${INSTALL_EFIBOOT}" ]; then
 		debugmsg ${DEBUG_CRIT} "INFO: copy efi boot grub"
 		cp "${INSTALL_EFIBOOT}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
 	fi

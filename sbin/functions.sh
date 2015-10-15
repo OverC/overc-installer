@@ -563,9 +563,10 @@ install_grub()
 	fi
 	
 	#install efi boot
-	debugmsg ${DEBUG_INFO} "Installing the EFI bootloader"
-	mkdir -p ${mountpoint}/EFI/BOOT/
-	if [ -e $INSTALL_EFIBOOT ]; then
+
+	if [ -n "${INSTALL_EFIBOOT}" ]; then
+		debugmsg ${DEBUG_INFO} "Installing the EFI bootloader"
+		mkdir -p ${mountpoint}/EFI/BOOT/
 		cp $INSTALL_EFIBOOT ${mountpoint}/EFI/BOOT/
 		cp ${mountpoint}/boot/grub/${GRUB_CFG_NAME} ${mountpoint}/EFI/BOOT/
 		echo `basename $INSTALL_EFIBOOT` >${mountpoint}/startup.nsh
@@ -576,7 +577,7 @@ install_grub()
 		sed -i "s/%BZIMAGE%/\\\images\\\bzImage/" ${mountpoint}/startup.nsh
 	fi
 	chmod +x ${mountpoint}/startup.nsh
- 
+
 	return 0
 }
 
