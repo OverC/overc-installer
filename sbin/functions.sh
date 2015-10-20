@@ -8,6 +8,22 @@
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 #  See the GNU General Public License for more details.
 
+# arg1: name of function to override
+# arg2: new name of function (still callable). If not passed $1_old is used
+override_function()
+{
+    orig=$1
+    save_name=$2
+    if [ -z "$save_name" ]; then
+	save_name=$1_old
+    fi
+
+    local ORIG_FUNC=$(declare -f $orig)
+    if [ -n "${ORIG_FUNC}" ]; then
+	local NEWNAME_FUNC="$save_name${ORIG_FUNC#$orig}"
+	eval "$NEWNAME_FUNC"
+    fi
+}
 
 
 ######################################################################
@@ -490,6 +506,7 @@ umount_partitions()
 
 	return 0
 }
+
 install_dtb()
 {
 	local mountpoint="$1"
@@ -506,30 +523,7 @@ install_dtb()
 
 install_bootloader()
 {
-	local device="$1"
-	local mountpoint="$2"
-	local bootloader="$3"
-	local boardname="$4"
-
-	if ! [ -e "$bootloader" ]; then
-		debugmsg ${DEBUG_CRIT} "INFO: didn't find bootloader file $bootloader"
-		return 0
-	fi
-
-	### Please add supported arm boards here for install bootloader.
-	case $boardname in
-		"xilinx-zynq")
-			install $bootloader $mountpoint/
-			;;
-		"fsl-ls10xx")
-			#put the bootloader into the locaton from 8th section of boot device.
-			BS=512
-			SEEK=8
-			dd if=$bootloader of=/dev/$device bs=$BS seek=$SEEK conv=notrunc oflag=sync
-			;;
-		"*")
-			debugmsg ${DEBUG_CRIT} "INFO: $boardname is not supported to install bootloader"
-	esac
+    echo "install_bootloader: default function, add implementation via: override_function"
 }
 
 install_grub()
@@ -751,8 +745,8 @@ installer_main()
 		install_dtb "${mnt1}" "${INSTALL_DTB}"
 		install_bootloader "${dev}" "${mnt1}" "${INSTALL_BOOTLOADER}" "${BOARD_NAME}"
 	fi
-	declare -f custom_install_rules > /dev/null 2>&1
 
+	declare -f custom_install_rules > /dev/null 2>&1
 	if [ $? -ne 0 ]
 	then
 		debugmsg ${DEBUG_INFO} "ERROR: Could not determine how to install files"

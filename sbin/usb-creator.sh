@@ -143,8 +143,17 @@ then
 	echo "ERROR: Could not find function definitions (${FUNCTIONS_FILE})"
 	exit 1
 fi
-
 source $FUNCTIONS_FILE
+
+# find board specific function files, and make them locally available
+for d in ${CONFIG_DIRS} $BASEDIR; do
+    if [ -e "${d}/functions-${BOARD_NAME}.sh" ]; then
+	# make sure to copy it
+	FUNCTIONS_TO_COPY="${FUNCTIONS_TO_COPY} ${d}/functions-${BOARD_NAME}.sh"
+	# And source it for potential use here
+	source "${d}/functions-${BOARD_NAME}.sh"
+    fi
+done
 
 ## Set up trap handler
 
@@ -266,6 +275,22 @@ custom_install_rules()
 	if [ $? -ne 0 ]; then
 		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy installer files"
 		return 1
+	fi
+
+	# and any extended functions/callbacks
+	if [ -n "${FUNCTIONS_TO_COPY}" ]; then
+	    debugmsg ${DEBUG_INFO} "Copying target installer functions: ${FUNCTIONS_TO_COPY}"
+OLDIFS=$IFS
+IFS='
+'
+	    for f in ${FUNCTIONS_TO_COPY}; do
+		# remove any leading spaces
+		a=`echo $f | sed 's/^ *//g'`
+		if [ -e "${a}" ]; then
+		    cp -f "${a}" ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
+		fi
+	    done
+IFS=$OLDIFS
 	fi
 
 	## Copy files from local workspace to USB drive

@@ -15,25 +15,37 @@ DEBUG_VERBOSE=7
 
 # Set your default debug level
 : ${DEBUG_DEFAULT:=${DEBUG_INFO}}
+: ${FUNCTIONS_FILE="$BASEDIR/functions.sh"}
 
 # Dynamic debug level
 DEBUG_LEVEL=${DEBUG_DEFAULT}
 : ${TRACE:=0}
-: ${FUNCTIONS_FILE="$BASEDIR/functions.sh"}
 
 #get the target's architecture, x86 or not x86?
 export X86_ARCH=true
 if [ $(uname -p 2>/dev/null | grep -ic x86) != '1' ]; then
        export X86_ARCH=false
 fi
-## Load functions file
-if ! [ -e $FUNCTIONS_FILE ]
-then
-        echo "ERROR: Could not find function definitions (${FUNCTIONS_FILE})"
-        exit 1
-fi
 
+## Load function file(s)
+if ! [ -e $FUNCTIONS_FILE ]; then
+    echo "ERROR: Could not find function definitions (${FUNCTIONS_FILE})"
+    exit 1
+fi
 source $FUNCTIONS_FILE
+
+OLDIFS=$IFS
+IFS='
+'
+for f in `ls $BASEDIR/functions-*.sh`; do
+    if ! [ -e "${f}" ]; then
+        echo "ERROR: Could not find function definitions (${f})"
+        exit 1
+    fi
+
+    source ${f}
+done
+IFS=$OLDIFS
 
 usage()
 {
