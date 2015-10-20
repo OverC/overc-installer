@@ -483,6 +483,9 @@ function snapshot_container {
 		#Insert snapshot into history making it latest rollback candidate
 		get_container_history
 		next=$(( ${hist_num} + 1 ))
+		if [ ! -d ${pathtohistory} ]; then
+			mkdir -p ${pathtohistory}
+		fi
 		ln -sfrTL ${pathtocontainer} ${pathtohistory}/${next}
 	else
 		echo "Container snapshot only supported on btrfs filesystem"
