@@ -24,7 +24,14 @@ DEBUG_LEVEL=${DEBUG_DEFAULT}
 #get the target's architecture, x86 or not x86?
 export X86_ARCH=true
 if [ $(uname -p 2>/dev/null | grep -ic x86) != '1' ]; then
-       export X86_ARCH=false
+    # if the processor type isn't x86, set x86 to false
+    export X86_ARCH=false
+
+    # but! some emulated platforms (i.e. qemu) report unknown, so we 
+    # double check, and set ourselves back to x86 if unkown is reported
+    if [ $(uname -p 2>/dev/null | grep -ic unknown) = '1' ]; then
+	export X86_ARCH=true
+    fi
 fi
 
 ## Load function file(s)
