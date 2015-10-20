@@ -275,19 +275,34 @@ custom_install_rules()
 	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
 	assert_return $?
 
-	## Copy the hard drive GRUB configuration
-	for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
-	    if [ -e ${d}/${INSTALL_GRUBHDCFG} ] &&
-	       [ ! -e ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG} ]; then
-		debugmsg ${DEBUG_CRIT} "INFO: found grub hd configuration ${d}/${INSTALL_GRUBHDCFG}"
-		cp ${d}/${INSTALL_GRUBHDCFG} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG}
-	    fi
-	done
+	if ${X86_ARCH}; then
+		## Copy the hard drive GRUB configuration
+		for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
+			if [ -e ${d}/${INSTALL_GRUBHDCFG} ] &&
+			[ ! -e ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG} ]; then
+				debugmsg ${DEBUG_CRIT} "INFO: found grub hd configuration ${d}/${INSTALL_GRUBHDCFG}"
+				cp ${d}/${INSTALL_GRUBHDCFG} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG}
+	    		fi
+		done
 
-	## Copy the efi grub
-	if [ -n "${INSTALL_EFIBOOT}" ]; then
-		debugmsg ${DEBUG_CRIT} "INFO: copy efi boot grub"
-		cp "${INSTALL_EFIBOOT}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
+		## Copy the efi grub
+		if [ -e "${INSTALL_EFIBOOT}" ]; then
+			debugmsg ${DEBUG_CRIT} "INFO: copy efi boot grub"
+			cp "${INSTALL_EFIBOOT}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
+		fi
+	fi
+	if ! ${X86_ARCH}; then
+		if [ -e "${INSTALL_BOOTLOADER}" -a "X${BOARD_NAME}" != "X" ]; then
+			debugmsg ${DEBUG_CRIT} "INFO: copy bootloader"
+			cp "${INSTALL_BOOTLOADER}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}/${BOARD_NAME}_boot.bin
+		fi
+		if [ -e "${INSTALL_DTB}" ]; then
+			debugmsg ${DEBUG_CRIT} "INFO: copy dtb"
+			cp "${INSTALL_DTB}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}/dtb
+		else
+			debugmsg ${DEBUG_CRIT} "ERROR: Didn't find dtb ${INSTALL_DTB}"
+			return 1
+		fi
 	fi
 
 	## And the installer kernel + initramfs

@@ -6,6 +6,35 @@ CONTAINERSDIR="${BASEDIR}/../images/containers"
 PACKAGESDIR="${BASEDIR}/../packages"
 PUPPETDIR="${BASEDIR}/../files/puppet"
 
+# Debug Levels - fixed values
+DEBUG_SILENT=0
+DEBUG_CRIT=1
+DEBUG_WARN=2
+DEBUG_INFO=4
+DEBUG_VERBOSE=7
+
+# Set your default debug level
+: ${DEBUG_DEFAULT:=${DEBUG_INFO}}
+
+# Dynamic debug level
+DEBUG_LEVEL=${DEBUG_DEFAULT}
+: ${TRACE:=0}
+: ${FUNCTIONS_FILE="$BASEDIR/functions.sh"}
+
+#get the target's architecture, x86 or not x86?
+export X86_ARCH=true
+if [ $(uname -p 2>/dev/null | grep -ic x86) != '1' ]; then
+       export X86_ARCH=false
+fi
+## Load functions file
+if ! [ -e $FUNCTIONS_FILE ]
+then
+        echo "ERROR: Could not find function definitions (${FUNCTIONS_FILE})"
+        exit 1
+fi
+
+source $FUNCTIONS_FILE
+
 usage()
 {
 cat << EOF
@@ -186,42 +215,50 @@ if [ -z ${final_dev} ]; then
 	fi
 fi
 
-chroot . /bin/bash -c "\\
-mount -t devtmpfs none /dev ; \\
-mount -t proc none /proc ; \\
-mkdir -p /boot/grub; \\
-echo \"LABEL=$SWAPLABEL none swap sw 0 0\" >> /etc/fstab ; \\
-echo \"LABEL=$BOOTLABEL /boot auto defaults 0 0\" >> /etc/fstab ; \\
-echo \"LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0\" >> /etc/fstab ; \\
-GRUB_DISABLE_LINUX_UUID=true grub-mkconfig > /boot/grub/grub.cfg ; \\
-grub-install /dev/${dev}"
+if ${X86_ARCH}; then
+	chroot . /bin/bash -c "\\
+	mount -t devtmpfs none /dev ; \\
+	mount -t proc none /proc ; \\
+	mkdir -p /boot/grub; \\
+	echo \"LABEL=$SWAPLABEL none swap sw 0 0\" >> /etc/fstab ; \\
+	echo \"LABEL=$BOOTLABEL /boot auto defaults 0 0\" >> /etc/fstab ; \\
+	echo \"LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0\" >> /etc/fstab ; \\
+	GRUB_DISABLE_LINUX_UUID=true grub-mkconfig > /boot/grub/grub.cfg ; \\
+	grub-install /dev/${dev}"
 
-# fixups for virtual installs
-if [ "${dev}" = "vdb" ]; then
-    sed -i "s/${dev}/${final_dev}/" /z/boot/grub/grub.cfg
+	# fixups for virtual installs
+	if [ "${dev}" = "vdb" ]; then
+    		sed -i "s/${dev}/${final_dev}/" /z/boot/grub/grub.cfg
+	fi
+
+	if [ -e /${IMAGESDIR}/boot*.efi ]; then
+		mkdir -p boot/EFI/BOOT
+		cp /${IMAGESDIR}/boot*.efi boot/EFI/BOOT
+		# remove those sections that are supported by uefi grub,
+		# such as if/else statement and functions and only keep
+		# grub menuentry section.
+		cat /z/boot/grub/grub.cfg | sed -n '/### BEGIN \/etc\/grub.d\/10_linux ###/,/### END \/etc\/grub.d\/10_linux ###/p' >boot/EFI/BOOT/grub.cfg
+		sed -i "s/bzImage-${kernel_version}/bzImage/" boot/EFI/BOOT/grub.cfg
+		sed -i '/load_/d' boot/EFI/BOOT/grub.cfg
+		sed -i '/insmod/d' boot/EFI/BOOT/grub.cfg
+		sed -i '/if \[/,/fi *$/d' boot/EFI/BOOT/grub.cfg
+		sed -i '/echo/d' boot/EFI/BOOT/grub.cfg
+
+		echo `basename boot/EFI/BOOT/boot*.efi` >boot/startup.nsh
+		chmod +x boot/startup.nsh
+	else
+		install -m 0755 ${BASEDIR}/startup.nsh boot/
+		sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" boot/startup.nsh
+		sed -i "s/%INITRD%/${initrd}/" boot/startup.nsh
+		sed -i "s/%BZIMAGE%/bzImage/" boot/startup.nsh
+	fi
+else # arm architecture
+	install_dtb "./boot" "${IMAGESDIR}/dtb"
+	if [ -e ${IMAGESDIR}/*_boot.bin ]; then
+		BOARD_NAME=`basename ${IMAGESDIR}/*_boot.bin | sed 's/_boot\.bin//'`
+		install_bootloader "${dev}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
+	fi
 fi
-
-if [ -e /${IMAGESDIR}/boot*.efi ]; then
-       mkdir -p boot/EFI/BOOT
-       cp /${IMAGESDIR}/boot*.efi boot/EFI/BOOT
-       # remove those sections that are supported by uefi grub,
-       # such as if/else statement and functions and only keep
-       # grub menuentry section.
-       cat /z/boot/grub/grub.cfg | sed -n '/### BEGIN \/etc\/grub.d\/10_linux ###/,/### END \/etc\/grub.d\/10_linux ###/p' >boot/EFI/BOOT/grub.cfg
-       sed -i "s/bzImage-${kernel_version}/bzImage/" boot/EFI/BOOT/grub.cfg
-       sed -i '/load_/d' boot/EFI/BOOT/grub.cfg
-       sed -i '/insmod/d' boot/EFI/BOOT/grub.cfg
-       sed -i '/if \[/,/fi *$/d' boot/EFI/BOOT/grub.cfg
-       sed -i '/echo/d' boot/EFI/BOOT/grub.cfg
-
-       echo `basename boot/EFI/BOOT/boot*.efi` >boot/startup.nsh
-else
-       cp ${BASEDIR}/startup.nsh boot/
-       sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" boot/startup.nsh
-       sed -i "s/%INITRD%/${initrd}/" boot/startup.nsh
-       sed -i "s/%BZIMAGE%/bzImage/" boot/startup.nsh
-fi
-chmod +x boot/startup.nsh
 
 if [ -d "${CONTAINERSDIR}" ]; then
     echo "Copying containers to installation"

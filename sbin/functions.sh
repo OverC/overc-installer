@@ -490,6 +490,47 @@ umount_partitions()
 
 	return 0
 }
+install_dtb()
+{
+	local mountpoint="$1"
+	local dtb="$2"
+	## Copy the dtb file
+	if [ -e "$dtb" ]; then
+		debugmsg ${DEBUG_CRIT} "INFO: found dtb "
+		cp $dtb ${mountpoint}/dtb
+	else
+		debugmsg ${DEBUG_CRIT} "ERROR: cannot find dtb file $dtb"
+		return 1
+	fi
+}
+
+install_bootloader()
+{
+	local device="$1"
+	local mountpoint="$2"
+	local bootloader="$3"
+	local boardname="$4"
+
+	if ! [ -e "$bootloader" ]; then
+		debugmsg ${DEBUG_CRIT} "INFO: didn't find bootloader file $bootloader"
+		return 0
+	fi
+
+	### Please add supported arm boards here for install bootloader.
+	case $boardname in
+		"xilinx-zynq")
+			install $bootloader $mountpoint/
+			;;
+		"fsl-ls10xx")
+			#put the bootloader into the locaton from 8th section of boot device.
+			BS=512
+			SEEK=8
+			dd if=$bootloader of=/dev/$device bs=$BS seek=$SEEK conv=notrunc oflag=sync
+			;;
+		"*")
+			debugmsg ${DEBUG_CRIT} "INFO: $boardname is not supported to install bootloader"
+	esac
+}
 
 install_grub()
 {
@@ -701,11 +742,15 @@ installer_main()
 	
 	mnt2=$(tmp_mount "${p2}")
 	assert $?
-	
-	## Install Bootloader
-	install_grub "${dev}" "${mnt1}"
-	assert $?
 
+	## Install Bootloader	
+	if ${X86_ARCH}; then
+		install_grub "${dev}" "${mnt1}"
+		assert $?
+	else	# arm architecture
+		install_dtb "${mnt1}" "${INSTALL_DTB}"
+		install_bootloader "${dev}" "${mnt1}" "${INSTALL_BOOTLOADER}" "${BOARD_NAME}"
+	fi
 	declare -f custom_install_rules > /dev/null 2>&1
 
 	if [ $? -ne 0 ]

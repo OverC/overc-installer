@@ -15,7 +15,6 @@ INSTALL_MODULES=""
 INSTALL_INITRAMFS="${ARTIFACTS_DIR}/pod-builder-initramfs-genericx86-64.cpio.gz"
 INSTALL_EFIBOOT="${ARTIFACTS_DIR}/bootx64.efi"
 
-
 INSTALL_GRUBHDCFG="grub-hd.cfg"
 INSTALL_GRUBUSBCFG="grub-usb.cfg"
 INSTALL_GRUBCFG="${INSTALLER_FILES_DIR}/${INSTALL_GRUBUSBCFG}"
@@ -31,7 +30,6 @@ HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-graphical-builder-genericx86-64.tar.bz2 \
 
 ## List of prerequisite files for the installer to check
 PREREQ_FILES="${INSTALL_FILES}"
-
 BOARD_NAME="Generic x86"
 EVAL_NAME="Evaluation - OverC"
 
@@ -80,3 +78,23 @@ DEBUG_VERBOSE=7
 DEBUG_LEVEL=${DEBUG_DEFAULT}
 
 : ${TRACE:=0}
+
+CONFIG_FILE_ARM="config-usb-arm.sh"
+export X86_ARCH=true
+#get the target's architecture, x86 or not x86?
+file -L $INSTALL_KERNEL | grep -i x86 >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+       export X86_ARCH=false
+fi
+
+export X86_ARCH=false
+
+if ! $X86_ARCH; then
+	if ! [ -e "$CONFIG_FILE_ARM" ]; then
+		echo "ERROR: Could not find confgiration file (${CONFIG_FILE_ARM}) for ARM architecture."
+		exit 1
+	else
+		source $CONFIG_FILE_ARM
+	fi
+fi
+
