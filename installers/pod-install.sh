@@ -171,6 +171,11 @@ LXCLABEL="OVERCCN"
 
 fdisk /dev/${dev} < ${BASEDIR}/fdisk-4-partition-layout.txt 
 
+dev_old=$dev
+if [ $(echo $dev | grep -c 'mmcblk') ==  "1" ]; then
+       dev="${dev}p"
+fi
+
 ## create filesystems
 mkswap -L $SWAPLABEL /dev/${dev}2
 mkfs.vfat -n $BOOTLABEL /dev/${dev}1
@@ -237,8 +242,8 @@ if [ $btrfs -eq 1 ]; then
 fi
 
 if [ -z ${final_dev} ]; then
-	final_dev=${dev}
-	if [ "${dev}" = "vdb" ]; then
+	final_dev=${dev_old}
+	if [ "${dev_old}" = "vdb" ]; then
 		final_dev="vda"
 	fi
 fi
@@ -252,11 +257,11 @@ if ${X86_ARCH}; then
 	echo \"LABEL=$BOOTLABEL /boot auto defaults 0 0\" >> /etc/fstab ; \\
 	echo \"LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0\" >> /etc/fstab ; \\
 	GRUB_DISABLE_LINUX_UUID=true grub-mkconfig > /boot/grub/grub.cfg ; \\
-	grub-install /dev/${dev}"
+	grub-install /dev/${dev_old}"
 
 	# fixups for virtual installs
-	if [ "${dev}" = "vdb" ]; then
-    		sed -i "s/${dev}/${final_dev}/" /z/boot/grub/grub.cfg
+	if [ "${dev_old}" = "vdb" ]; then
+    		sed -i "s/${dev_old}/${final_dev}/" /z/boot/grub/grub.cfg
 	fi
 
 	if [ -e /${IMAGESDIR}/boot*.efi ]; then
@@ -284,7 +289,7 @@ else # arm architecture
 	install_dtb "./boot" "${IMAGESDIR}/dtb"
 	if [ -e ${IMAGESDIR}/*_boot.bin ]; then
 		BOARD_NAME=`basename ${IMAGESDIR}/*_boot.bin | sed 's/_boot\.bin//'`
-		install_bootloader "${dev}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
+		install_bootloader "${dev_old}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
 	fi
 fi
 
