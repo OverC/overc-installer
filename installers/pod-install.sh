@@ -142,7 +142,7 @@ done
 
 ## typical qemu disk is vdb
 rootfs=$1
-dev=$2
+raw_dev=$2
 
 if [ -e "$rootfs" ]; then
     rootfs=`readlink -f $rootfs`
@@ -155,7 +155,7 @@ else
 fi
 
 # remove /dev/ if specified
-dev="`echo $dev | sed 's|/dev/||'`"
+raw_dev="`echo ${raw_dev} | sed 's|/dev/||'`"
 
 # create partitions
 # 
@@ -169,37 +169,44 @@ SWAPLABEL="SWAP"
 ROOTLABEL="OVERCROOTFS"
 LXCLABEL="OVERCCN"
 
-fdisk /dev/${dev} < ${BASEDIR}/fdisk-4-partition-layout.txt 
+# We partition the raw device as passed to the script. This is
+# nuke and pave .. so be careful!
+fdisk /dev/${raw_dev} < ${BASEDIR}/fdisk-4-partition-layout.txt 
 
-dev_old=$dev
-if [ $(echo $dev | grep -c 'mmcblk') ==  "1" ]; then
-       dev="${dev}p"
+# For filesystem creation, we need the partitions. But some devices
+# name them differently than a hard disk (i.e mmcblk or nbd) and 
+# have 'p' in the partion names. In that case, we need to create a
+# separate device with the 'p' and then use it for filesystem 
+# creation.
+fs_dev=${raw_dev}
+if [ $(echo $raw_dev | grep -c 'mmcblk') ==  "1" ]; then
+       fs_dev="${raw_dev}p"
 fi
 
 ## create filesystems
-mkswap -L $SWAPLABEL /dev/${dev}2
-mkfs.vfat -n $BOOTLABEL /dev/${dev}1
+mkswap -L $SWAPLABEL /dev/${fs_dev}2
+mkfs.vfat -n $BOOTLABEL /dev/${fs_dev}1
 if [ $btrfs -eq 0 ]; then
-	mkfs.ext4 -v -L $ROOTLABEL /dev/${dev}3
-	mkfs.ext4 -v -L $LXCLABEL /dev/${dev}4
+	mkfs.ext4 -v -L $ROOTLABEL /dev/${fs_dev}3
+	mkfs.ext4 -v -L $LXCLABEL /dev/${fs_dev}4
 else
-	mkfs.btrfs -f -L $ROOTLABEL /dev/${dev}3
-	mkfs.btrfs -f -L $LXCLABEL /dev/${dev}4
+	mkfs.btrfs -f -L $ROOTLABEL /dev/${fs_dev}3
+	mkfs.btrfs -f -L $LXCLABEL /dev/${fs_dev}4
 fi
 
 mkdir -p /z
-mount /dev/${dev}3 /z
+mount /dev/${fs_dev}3 /z
 
 
 if [ $btrfs -eq 0 ]; then
 	mkdir /z/boot
-	mount /dev/${dev}1 /z/boot
+	mount /dev/${fs_dev}1 /z/boot
 else
 	# create a subvolume
 	btrfs subvolume create /z/rootfs
 
 	mkdir /z/rootfs/boot
-	mount /dev/${dev}1 /z/rootfs/boot
+	mount /dev/${fs_dev}1 /z/rootfs/boot
 fi
 
 
@@ -215,12 +222,12 @@ fi
 umount boot 
 tar --numeric-owner -xpf $rootfs
 
-mount /dev/${dev}1 mnt
+mount /dev/${fs_dev}1 mnt
 chroot . /bin/bash -c "\\
 	cp /boot/bzImage* /mnt; \\
 "
 umount ./mnt
-mount /dev/${dev}1 boot
+mount /dev/${fs_dev}1 boot
 
 kernel=`basename boot/bzImage-*`
 kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
@@ -236,14 +243,19 @@ if [ $btrfs -eq 1 ]; then
 	cd /
 	umount /z/rootfs/boot
 	umount /z/
-	mount -o subvolid=${subvol} /dev/${dev}3 /z
-	mount /dev/${dev}1 /z/boot
+	mount -o subvolid=${subvol} /dev/${fs_dev}3 /z
+	mount /dev/${fs_dev}1 /z/boot
 	cd /z/
 fi
 
+# A fixup for virtual installs. If we've booted off a usb device
+# our device will be 'vdb', but since qemu can't re-order bootable
+# devices, vdb goes away when a reboot happens and you want to boot
+# the install. In that case, vdb becomes vda. So we switch it below
+# here to avoid fixups during first boot.
 if [ -z ${final_dev} ]; then
-	final_dev=${dev_old}
-	if [ "${dev_old}" = "vdb" ]; then
+	final_dev=${raw_dev}
+	if [ "${raw_dev}" = "vdb" ]; then
 		final_dev="vda"
 	fi
 fi
@@ -257,11 +269,11 @@ if ${X86_ARCH}; then
 	echo \"LABEL=$BOOTLABEL /boot auto defaults 0 0\" >> /etc/fstab ; \\
 	echo \"LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0\" >> /etc/fstab ; \\
 	GRUB_DISABLE_LINUX_UUID=true grub-mkconfig > /boot/grub/grub.cfg ; \\
-	grub-install /dev/${dev_old}"
+	grub-install /dev/${raw_dev}"
 
 	# fixups for virtual installs
-	if [ "${dev_old}" = "vdb" ]; then
-    		sed -i "s/${dev_old}/${final_dev}/" /z/boot/grub/grub.cfg
+	if [ "${raw_dev}" = "vdb" ]; then
+		sed -i "s/${raw_dev}/${final_dev}/" /z/boot/grub/grub.cfg
 	fi
 
 	if [ -e /${IMAGESDIR}/boot*.efi ]; then
@@ -289,7 +301,7 @@ else # arm architecture
 	install_dtb "./boot" "${IMAGESDIR}/dtb"
 	if [ -e ${IMAGESDIR}/*_boot.bin ]; then
 		BOARD_NAME=`basename ${IMAGESDIR}/*_boot.bin | sed 's/_boot\.bin//'`
-		install_bootloader "${dev_old}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
+		install_bootloader "${raw_dev}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
 	fi
 fi
 
@@ -298,7 +310,7 @@ if [ -d "${CONTAINERSDIR}" ]; then
     if [ ! -d /z/var/lib/lxc ]; then
         mkdir -p /z/var/lib/lxc
     fi
-    mount /dev/${dev}4 /z/var/lib/lxc
+    mount /dev/${fs_dev}4 /z/var/lib/lxc
 
     mkdir -p /z/tmp
     # Because peer container deployment needs to write into the rootfs
