@@ -69,7 +69,7 @@ usage()
 {
 cat << EOF
 
-  cubeit <base image> <device>
+  cubeit-installer <base image> <device>
 
     -b: use btrfs
     --finaldev: boot from this block dev. Default is vda
