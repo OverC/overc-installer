@@ -1,0 +1,458 @@
+#!/bin/bash
+
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+
+BASEDIR=$(readlink -f $(dirname $BASH_SOURCE))
+IMAGESDIR="${BASEDIR}/../images"
+CONTAINERSDIR="${BASEDIR}/../images/containers"
+PACKAGESDIR="${BASEDIR}/../packages"
+PUPPETDIR="${BASEDIR}/../files/puppet"
+SBINDIR="${BASEDIR}/../sbin"
+CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
+
+# Debug Levels - fixed values
+DEBUG_SILENT=0
+DEBUG_CRIT=1
+DEBUG_WARN=2
+DEBUG_INFO=4
+DEBUG_VERBOSE=7
+
+# Set your default debug level
+: ${DEBUG_DEFAULT:=${DEBUG_INFO}}
+: ${FUNCTIONS_FILE="$SBINDIR/functions.sh"}
+
+# Dynamic debug level
+DEBUG_LEVEL=${DEBUG_DEFAULT}
+: ${TRACE:=0}
+
+#get the target's architecture, x86 or not x86?
+export X86_ARCH=true
+if [ $(uname -p 2>/dev/null | grep -ic x86) != '1' ]; then
+    # if the processor type isn't x86, set x86 to false
+    export X86_ARCH=false
+
+    # but! some emulated platforms (i.e. qemu) report unknown, so we 
+    # double check, and set ourselves back to x86 if unkown is reported
+    if [ $(uname -p 2>/dev/null | grep -ic unknown) = '1' ]; then
+	export X86_ARCH=true
+    fi
+fi
+
+## Load function file(s)
+if ! [ -e $FUNCTIONS_FILE ]; then
+    debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find function definitions (${FUNCTIONS_FILE})"
+    exit 1
+fi
+source $FUNCTIONS_FILE
+
+OLDIFS=$IFS
+IFS='
+'
+for f in `ls $SBINDIR/functions-*.sh`; do
+    if ! [ -e "${f}" ]; then
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find function definitions (${f})"
+        exit 1
+    fi
+
+    source ${f}
+done
+IFS=$OLDIFS
+
+usage()
+{
+cat << EOF
+
+  cubeit <base image> <device>
+
+    -b: use btrfs
+    --finaldev: boot from this block dev. Default is vda
+    --ttyconsoledev: set dev used for tty console
+    --ttyconsolecn: set container name for providing agetty
+
+EOF
+}
+
+if [ -z "$1" ]; then
+    usage
+    exit
+fi
+
+btrfs=0
+ttyconsolecn=""
+ttyconsoledev="ttyS0"
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --config) 
+            CONFIG_FILE="$2"
+	    shift
+            ;;
+    --image)
+            IMAGE="$2"
+	    shift
+            ;;
+    --artifacts)
+            ARTIFACTS_DIR="$2"
+	    shift
+            ;;
+    -v) verbose=t
+            ;;
+    -b) btrfs=1
+            ;;
+    --finaldev) final_dev="$2"
+            shift
+            ;;
+    --ttyconsoledev) ttyconsoledev="$2"
+            shift
+            ;;
+    --ttyconsolecn) ttyconsolecn="$2"
+            shift
+            ;;
+         *) break
+            ;;
+    esac
+    shift
+done
+
+CONFIGS_TO_SOURCE="${CONFIG_FILE}"
+if [ -n "${CONFIGS_TO_SOURCE}" ]; then
+    if ! [ -e $CONFIG_FILE ]; then
+	CONFIGS_TO_SOURCE=""
+	for d in ${CONFIG_DIRS}; do
+	    if [ -e "${d}/${CONFIG_FILE}" ]; then
+		CONFIGS_TO_SOURCE="${CONFIGS_TO_SOURCE} ${d}/$CONFIG_FILE"
+	    fi
+	done
+
+	if [ -z "${CONFIGS_TO_SOURCE}" ]; then
+	    debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find configuration file (${CONFIG_FILE})."
+	    exit 1
+	fi
+    else
+	# Convert to abs path
+	if [[ "$CONFIG_FILE" != /* ]]; then
+            CONFIGS_TO_SOURCE="$(pwd)/${CONFIGS_TO_SOURCE}"
+	fi
+    fi
+fi
+
+old_pwd=`pwd`
+for d in ${CONFIGS_TO_SOURCE}; do
+    cd `dirname $d`
+    source ${CONFIGS_TO_SOURCE}
+done
+cd $old_pwd
+
+if [ ! -d "${IMAGESDIR}" ]; then
+    if [ -n "${ARTIFACTS_DIR}" ]; then
+	IMAGESDIR=${ARTIFACTS_DIR}
+    else
+	debugmsg ${DEBUG_CRIT} "[ERROR]: images dir (${IMAGESDIR}) not found"
+	exit 1
+    fi
+fi
+
+# if there's a valid containers directory, we'll install everything
+# found there. Otherwise, we'll use HDINSTALL_CONTAINERS
+if [ -d "${CONTAINERSDIR}" ]; then    
+    for c in $(ls ${CONTAINERSDIR} | grep '\-dom0\-' ; ls ${CONTAINERSDIR} | grep -v '\-dom0\-' ); do
+	HDINSTALL_CONTAINERS="$HDINSTALL_CONTAINERS `readlink -f ${CONTAINERSDIR}/$c`"
+    done
+fi
+
+## typical qemu disk is vdb
+rootfs=$1
+raw_dev=$2
+
+if [ -e "$rootfs" ]; then
+    rootfs=`readlink -f $rootfs`
+else
+    if [ ! -f "${IMAGESDIR}/$rootfs" ]; then
+	debugmsg ${DEBUG_CRIT} "[ERROR]: install rootfs ($rootfs) not found"
+	exit 1
+    fi
+    rootfs="${IMAGESDIR}/$rootfs"
+fi
+
+# remove /dev/ if specified
+raw_dev="`echo ${raw_dev} | sed 's|/dev/||'`"
+
+# create partitions
+# 
+#  1: boot
+#  2: swap
+#  3: root
+#  4. lxc
+
+BOOTLABEL="OVERCBOOT"
+SWAPLABEL="SWAP"
+ROOTLABEL="OVERCROOTFS"
+LXCLABEL="OVERCCN"
+
+debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (fdisk-4-partition-layout)"
+debugmsg ${DEBUG_INFO} "          1) boot"
+debugmsg ${DEBUG_INFO} "          2) swap"
+debugmsg ${DEBUG_INFO} "          3) root"
+debugmsg ${DEBUG_INFO} "          4) container (lxc)"
+# We partition the raw device as passed to the script. This is
+# nuke and pave .. so be careful!
+fdisk /dev/${raw_dev} < ${SBINDIR}/fdisk-4-partition-layout.txt >/dev/null 2>&1
+
+# For filesystem creation, we need the partitions. But some devices
+# name them differently than a hard disk (i.e mmcblk or nbd) and 
+# have 'p' in the partion names. In that case, we need to create a
+# separate device with the 'p' and then use it for filesystem 
+# creation.
+fs_dev=${raw_dev}
+if [ $(echo $raw_dev | grep -c 'mmcblk') ==  "1" ]; then
+       fs_dev="${raw_dev}p"
+fi
+if [ $(echo $raw_dev | grep -c 'nbd') ==  "1" ]; then
+       fs_dev="${raw_dev}p"
+fi
+if [ $(echo $raw_dev | grep -c 'loop') ==  "1" ]; then
+       fs_dev="mapper/${raw_dev}p"
+       # pick up the partiions in the mapper
+       kpartx -a /dev/${raw_dev}
+fi
+
+## create filesystems
+debugmsg ${DEBUG_INFO} "[INFO]: creating filesystems"
+debugmsg ${DEBUG_INFO} "[INFO]: creating swap"
+mkswap -L $SWAPLABEL /dev/${fs_dev}2
+
+debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
+mkfs.vfat -n $BOOTLABEL /dev/${fs_dev}1
+if [ $btrfs -eq 0 ]; then
+    debugmsg ${DEBUG_INFO} "[INFO]: creating / (ext4)"
+    mkfs.ext4 -v -L $ROOTLABEL /dev/${fs_dev}3
+    mkfs.ext4 -v -L $LXCLABEL /dev/${fs_dev}4
+else
+    debugmsg ${DEBUG_INFO} "[INFO]: creating / (btrfs)"
+    mkfs.btrfs -f -L $ROOTLABEL /dev/${fs_dev}3
+    mkfs.btrfs -f -L $LXCLABEL /dev/${fs_dev}4
+fi
+
+mkdir -p /z
+mount /dev/${fs_dev}3 /z
+
+if [ $btrfs -eq 0 ]; then
+	mkdir /z/boot
+	mount /dev/${fs_dev}1 /z/boot
+else
+	# create a subvolume
+	btrfs subvolume create /z/rootfs
+
+	mkdir /z/rootfs/boot
+	mount /dev/${fs_dev}1 /z/rootfs/boot
+fi
+
+## unpack the installation
+if [ $btrfs -eq 0 ]; then
+	cd /z
+else
+	cd /z/rootfs
+fi
+
+## vfat filesystem doesn't support soft link, here umount boot partition and
+## then copy kernel image to boot partition
+umount boot 
+
+# we are either in /z or /z/rootfs
+debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
+tar --numeric-owner -xpf $rootfs
+
+mount /dev/${fs_dev}1 mnt
+
+# we need a chroot, since the symlink is absolute between bzImage and
+# the versioned bzImage
+chroot . /bin/bash -c "cp /boot/bzImage* /mnt"
+umount ./mnt
+mount /dev/${fs_dev}1 /z/boot
+
+debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs"
+kernel=`basename boot/bzImage-*`
+kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
+initrd="initrd-${kernel_version}.gz"
+
+# create both a initrd-<version> and initrd
+cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/${initrd} 
+cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/initrd
+if [ $btrfs -eq 1 ]; then
+	# get the subvolume id of /mnt/rootfs using:
+	subvol=`btrfs subvolume list /z/rootfs | awk '{print $2;}'`
+	# set default volume when mounted
+	btrfs subvolume set-default $subvol /z/rootfs
+
+	cd /
+	umount /z/rootfs/boot
+	umount /z/
+	mount -o subvolid=${subvol} /dev/${fs_dev}3 /z
+	mount /dev/${fs_dev}1 /z/boot
+	cd /z/
+fi
+
+# A fixup for virtual installs. If we've booted off a usb device
+# our device will be 'vdb', but since qemu can't re-order bootable
+# devices, vdb goes away when a reboot happens and you want to boot
+# the install. In that case, vdb becomes vda. So we switch it below
+# here to avoid fixups during first boot.
+if [ -z ${final_dev} ]; then
+    final_dev=${raw_dev}
+    if [ "${raw_dev}" = "vdb" ]; then
+	final_dev="vda"
+    fi
+fi
+
+if ${X86_ARCH}; then
+    debugmsg ${DEBUG_INFO} "[INFO]: installing grub (grub-install --force --root-directory /z /dev/${raw_dev})"
+    grub-install --force --root-directory /z /dev/${raw_dev} 
+#>/dev/null 2>&1
+
+    cat <<EOF >/z/boot/grub/grub.cfg
+set default="0"
+
+serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1
+terminal_input console serial
+terminal_output console serial
+set timeout=5
+
+menuentry 'OverC' {
+	insmod gzio
+	insmod ext2
+	insmod fat
+	search --no-floppy --label OVERCBOOT --set=root 
+	echo	'Loading Linux ...'
+	linux	/bzImage root=LABEL=OVERCROOTFS ro  
+	echo	'Loading initial ramdisk ...'
+	initrd	/initrd
+}
+EOF
+
+    echo "LABEL=$SWAPLABEL none swap sw 0 0" >> etc/fstab
+    echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> etc/fstab
+    echo "LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0" >> etc/fstab
+
+    debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
+    # fixups for virtual installs
+    if [ "${raw_dev}" = "vdb" ]; then
+	sed -i "s/${raw_dev}/${final_dev}/" /z/boot/grub/grub.cfg
+    fi
+
+    if [ -e /${IMAGESDIR}/boot*.efi ]; then
+	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI"
+	mkdir -p boot/EFI/BOOT
+	cp /${IMAGESDIR}/boot*.efi boot/EFI/BOOT
+	# remove those sections that are supported by uefi grub,
+	# such as if/else statement and functions and only keep
+	# grub menuentry section.
+	cat /z/boot/grub/grub.cfg | sed -n '/### BEGIN \/etc\/grub.d\/10_linux ###/,/### END \/etc\/grub.d\/10_linux ###/p' >boot/EFI/BOOT/grub.cfg
+	sed -i "s/bzImage-${kernel_version}/bzImage/" boot/EFI/BOOT/grub.cfg
+	sed -i '/load_/d' boot/EFI/BOOT/grub.cfg
+	sed -i '/insmod/d' boot/EFI/BOOT/grub.cfg
+	sed -i '/if \[/,/fi *$/d' boot/EFI/BOOT/grub.cfg
+	sed -i '/echo/d' boot/EFI/BOOT/grub.cfg
+	    
+	echo `basename boot/EFI/BOOT/boot*.efi` >boot/startup.nsh
+	chmod +x boot/startup.nsh
+    else
+	install -m 0755 ${SBINDIR}/startup.nsh boot/
+	sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" boot/startup.nsh
+	sed -i "s/%INITRD%/${initrd}/" boot/startup.nsh
+	sed -i "s/%BZIMAGE%/bzImage/" boot/startup.nsh
+    fi
+else # arm architecture
+    install_dtb "./boot" "${IMAGESDIR}/dtb"
+    if [ -e ${IMAGESDIR}/*_boot.bin ]; then
+	BOARD_NAME=`basename ${IMAGESDIR}/*_boot.bin | sed 's/_boot\.bin//'`
+	install_bootloader "${raw_dev}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
+    fi
+fi
+
+if [ -n "${HDINSTALL_CONTAINERS}" ]; then
+    debugmsg ${DEBUG_INFO} "[INFO]: installing containers"
+    if [ ! -d /z/var/lib/lxc ]; then
+        mkdir -p /z/var/lib/lxc
+    fi
+    mount /dev/${fs_dev}4 /z/var/lib/lxc
+    mount -t devtmpfs none /z/dev
+    mount -t proc none /z/proc 
+
+    mkdir -p /z/tmp
+
+    for c in ${HDINSTALL_CONTAINERS}; do
+	debugmsg ${DEBUG_INFO} "[INFO]: installing $c"
+
+	# containers names are "prefix-<container name>-<... suffixes >
+	container_src=`basename $c`
+	cname=`echo $container_src | cut -d'-' -f2`
+	cp $c /z/tmp/
+	cp ${SBINDIR}/overc-cctl /z/tmp/
+	
+	ttyconsole_opt="-S ${ttyconsoledev}"
+	if [ "${ttyconsolecn}" == "${cname}" ]; then
+            ttyconsole_opt="-s ${havettyconsole_opt}"
+	fi
+
+	# actually install the container
+	case $container_src in
+	    *-dom0-*)
+		chroot . /bin/bash -c "/tmp/overc-cctl add -d -a -g onboot -t 0 -n $cname -f /tmp/$container_src ${ttyconsole_opt}"
+		;;
+	    *-dom1-*)
+		chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$container_src ${ttyconsole_opt}"
+		;;
+	    *)
+		chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$container_src ${ttyconsole_opt}"
+		;;
+	esac
+    done
+
+    umount /z/var/lib/lxc
+fi
+
+if [ -d "${PACKAGESDIR}" ]; then
+    debugmsg ${DEBUG_INFO} "[INFO]: Copying packages to installation as /opt/packages"
+    mkdir -p opt/
+    cp -r ${PACKAGESDIR} opt/
+
+    chroot . /bin/bash -c "\\
+smart channel -y --add all type=rpm-md baseurl=file://opt/packages/rpm/all/; \\
+smart channel -y --add core2_64 type=rpm-md baseurl=file://opt/packages/rpm/core2_64/; \\
+smart channel -y --add genericx86_64 type=rpm-md baseurl=file://opt/packages/rpm/genericx86_64; \\
+smart channel -y --add lib32_x86 type=rpm-md baseurl=file://opt/packages/rpm/lib32_x86/; \\
+smart update"
+
+fi
+
+if [ -d ${PUPPETDIR} ]; then
+    debugmsg ${DEBUG_INFO} "[INFO]: Running puppet"
+    cd /z
+    cp -r ${PUPPETDIR} tmp/.
+
+    chroot . /bin/bash -c " \\
+if [ $(which puppet 2> /dev/null) ]; then \\
+    puppet apply /tmp/puppet/init.pp ; \\
+else \\
+    echo \"Puppet not found on rootfs. Not applying puppet configuration.\" ; \\
+fi ; \\
+"
+fi
+
+debugmsg ${DEBUG_INFO} "[INFO]: performing cleanup"
+# cleanup
+cd /
+umount /z/boot
+umount /z/dev
+umount /z/proc
+umount /z
+
+# don't run this on a host!!
+# sync ; sync ; echo 3> /proc/sys/vm/drop_caches
+# echo o > /proc/sysrq-trigger

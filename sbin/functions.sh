@@ -213,6 +213,24 @@ display_finalmsg()
 	echo "$INSTALLER_COMPLETE"
 }
 
+
+verify_utility()
+{
+    local utility_name=$1
+
+    # type is faster than 'which' and is a builtin
+    type ${utility_name} >/dev/null 2>&1
+    return $?
+}
+
+verify_root_user()
+{
+    if [ "$EUID" -ne 0 ]; then
+	return 1
+    fi
+    return 0
+}
+
 verify_prerequisite_files()
 {
 	local all_files_found=0
@@ -649,6 +667,42 @@ install_kernel()
 	fi
 
 	return 0
+}
+
+function extract_container_name
+{
+    # Parms: $1 = filename
+    #
+    # Container file names typically look like:
+    # a-b-c-...-z-some-arch.tar.bz
+    # where z is typically dom{0,1,e,E} etc.
+    # We want to pull z out of the file name and use
+    # it for the container name.
+    # There has to be at least a dom0 container, so we
+    # look for it and use it as a template for extracting
+    # z out of the filename.
+    local disposable_suffix
+    local dom0_name
+    local z_part
+
+    # Use dom0 as the template for discovering the
+    # disposable suffix eg. -some-arch.tar.bz
+    dom0_name=$( ls $CONTAINERSDIR/*-dom0-* )
+    if [ -z "$dom0_name" ]; then
+        echo "ERROR: cannot find the dom0 container image"
+        exit 1
+    fi
+    # Anything after dom0 in the filename is considered to be the suffix
+    disposable_suffix=$( echo $dom0_name | awk 'BEGIN { FS="dom0"; } { print $NF; }' )
+    # Strip away the suffix first, then anything after the last '-' is the container name
+    z_part=$( echo ${1%$disposable_suffix} | awk 'BEGIN { FS="-"; } { print $NF; }' )
+    echo ${z_part}
+}
+
+install_container()
+{
+    target_dir=$1
+    chroot . /bin/bash -c "/tmp/overc-cctl add -d -a -g onboot -t 0 -n $cname -f /tmp/$c ${ttyconsole_opt}"
 }
 
 extract_tarball()

@@ -18,24 +18,54 @@ usage()
 {
 cat << EOF
 
-  usb-creator.sh [--config <config script>] [<artifacts dir>] <block device>
+  cubeit [--config <config script>] [--force] --artifacts [<artifacts dir>] <target>
 
-  Create a bootable USB device based on the configuration found in
-  ~/.overc/config-usb.sh, or the command line specified configuration
-  script. 
+  cubeit is capable of creating a "cube capable" installer + paylaod, or image.
+
+  Default configuration is: ~/.overc/config-usb.sh, or the command line
+  specified configuration script.
 
   See the builtin example config-usb.sh.sample for what must be in a config script.
 
+  options:
+
+     --config <script>: use the specified configuration script found in ~/.overc/
+     --force: force overwrite any output files or images
+     --artifacts: directory where the binary inputs for image generation are found.
+		  The configuration script indicates what specific images will be used
+
+  cubeit is capable of creating images, or installers + payloads, with the value of
+  <target> indicating which type of image to create.
+
+     <target>: The output of the script.
+
+	  - /dev/<x>: A physical USB device, or a network block device. This generates
+		      a bootable USB installer that is capable of installing OverC onto
+		      a device.
+
+		      If a bootable installer image is required, specific a network block
+		      device (that has been properly configured to point to a image file)
+		      and this application will generate an image that can be later copied
+		      to a USB device (versus being directly written).
+
+	  - <path>/<foo>.img: Generate a bootable image. In this mode the installer is
+			      directly run to generate an image that is capable of being
+			      written or flashed to a device and directly booted .. or
+                              directly booted via qemu.
+
   examples:
-    
+
       # network block device
-      $ usb-creator.sh /dev/nbd0
+      $ cubeit --artifacts-dir `pwd` /dev/nbd0
 
       # usb drive as sdc
-      $ usb-creator.sh /dev/sdc
+      $ cubeit --artifacts-dir `pwd` /dev/sdc
 
       # network block device
-      $ usb-creator.sh --config /tmp/my_usb_config.sh /dev/nbd0
+      $ cubeit --artifacts-dir `pwd` --config /tmp/my_usb_config.sh /dev/nbd0
+
+      # image
+      $ cubeit --force --config config-live.sh --artifacts `pwd` /tmp/overc.img
 
 EOF
 }
@@ -45,14 +75,28 @@ if [ -z "$1" ]; then
     exit
 fi
 
+NBD=
+LOOP=t
+INSTALLER_IMAGE=t
 while [ $# -gt 0 ]; do
     case "$1" in
     --config) 
             CONFIG_FILE="$2"
 	    shift
             ;;
+    --artifacts)
+            ARTIFACTS_DIR="$2"
+	    shift
+            ;;
+    --installer)
+	    # create an installer, not a final image (this is the default)
+            INSTALLER_IMAGE=t
+            ;;
     -o)     outpath=$2
             shift
+            ;;
+    --force)
+	    FORCE=t
             ;;
     -v) verbose=t
             ;;
@@ -71,42 +115,56 @@ INSTALLERS_DIR="${BASEDIR}/../installers"
 # configuration for this script
 CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
 
+if [ -n "$ARTIFACTS_DIR" ]; then
+    if [ ! -d "$ARTIFACTS_DIR" ]; then
+	echo "[INFO]: Artifacts dir $ARTIFACTS_DIR does not exist"
+    fi
+fi
+
 # command line parameters can be:
-#   <artifacts dir>
-#   <block device>
-if [ -z "$1" ]; then
-    debugmsg ${DEBUG_CRIT} "Please specify device"
+#   <target> (device, directory or file)
+target=$1
+if [ -z "$target" ]; then
+    debugmsg ${DEBUG_CRIT} "Please specify a target"
     false
     assert $?
-else   
-    # if the first parameter is a directory, it is an artifacts dir,
-    # otherwise, it is a block device
-    if [ -d "$1" ]; then
-	ARTIFACTS_DIR="$1"
-	shift
+else
+    if [ -e "/sys/block/$(basename "$target")" ]; then
+	TARGET_TYPE=block
+    elif [ -d $target ]; then
+	TARGET_TYPE=dir
+    elif [ -e $target ]; then
+	TARGET_TYPE=image
+    else
+	TARGET_TYPE=image
     fi
-    USBSTORAGE_DEVICE=/sys/block/$(basename "$1")
+fi
+
+if [ "$TARGET_TYPE" = "block" ]; then
+    USBSTORAGE_DEVICE=/sys/block/$(basename "$target")
 fi
 
 ## Load configuration file
 CONFIGS_TO_SOURCE="${CONFIG_FILE}"
-if ! [ -e $CONFIG_FILE ]; then
-    CONFIGS_TO_SOURCE=""
-    for d in ${CONFIG_DIRS}; do
-	if [ -e "${d}/${CONFIG_FILE}" ]; then
-	    CONFIGS_TO_SOURCE="${CONFIGS_TO_SOURCE} ${d}/$CONFIG_FILE"
-	fi
-    done
+if [ -n "${CONFIG_FILE}" ]; then
+    if ! [ -e $CONFIG_FILE ]; then
+	CONFIGS_TO_SOURCE=""
+	for d in ${CONFIG_DIRS}; do
+	    if [ -e "${d}/${CONFIG_FILE}" ]; then
+		CONFIGS_TO_SOURCE="${CONFIGS_TO_SOURCE} ${d}/$CONFIG_FILE"
+	    fi
+	done
 
-    if [ -z "${CONFIGS_TO_SOURCE}" ]; then
-	echo "ERROR: Could not find configuration file (${CONFIG_FILE})."
-	echo "Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
-	exit 1
-    fi
-else
-    # Convert to abs path
-    if [[ "$CONFIG_FILE" != /* ]]; then
-        CONFIGS_TO_SOURCE="$(pwd)/${CONFIGS_TO_SOURCE}"
+	if [ -z "${CONFIGS_TO_SOURCE}" ]; then
+	    echo "ERROR: Could not find configuration file (${CONFIG_FILE})."
+	    echo "Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
+	    exit 1
+	fi
+    else
+	# Convert to abs path
+	if [[ "$CONFIG_FILE" != /* ]]; then
+            CONFIGS_TO_SOURCE="$(pwd)/${CONFIGS_TO_SOURCE}"
+	fi
     fi
 fi
 
@@ -160,28 +218,45 @@ done
 trap_cmd='trap_handler $?'
 trap "${trap_cmd}" EXIT
 
-if [ -n ${USBSTORAGE_DEVICE} ]; then
-    dev=$(validate_usbstorage "${USBSTORAGE_DEVICE}")
-    if [ -z "$dev" ]; then
-	# is it NBD ?
-	echo "${USBSTORAGE_DEVICE}" | grep -q "nbd"
-	if [ $? -eq 0 ]; then
-	    dev=`basename "${USBSTORAGE_DEVICE}"`
+case $TARGET_TYPE in
+    block)
+	if [ -n ${USBSTORAGE_DEVICE} ]; then
+	    dev=$(validate_usbstorage "${USBSTORAGE_DEVICE}")
+	    if [ -z "$dev" ]; then
+		# is it NBD ?
+		echo "${USBSTORAGE_DEVICE}" | grep -q "nbd"
+		if [ $? -eq 0 ]; then
+		    dev=`basename "${USBSTORAGE_DEVICE}"`
+		fi
+	    fi
+	    INSTALLER_BANNER=${USBSTORAGE_BANNER}
+	    INSTALLER_INTRODUCTION=${USBSTORAGE_INTRODUCTION}
+	else
+	    debugmsg ${DEBUG_CRIT} "No storage device provided"
+	    false
+	    assert $?
 	fi
-    fi
-    INSTALLER_BANNER=${USBSTORAGE_BANNER}
-    INSTALLER_INTRODUCTION=${USBSTORAGE_INTRODUCTION}
-else
-    debugmsg ${DEBUG_CRIT} "No storage device provided"
-    false
-    assert $?
-fi
 
-if [ -z $dev ]; then
-	debugmsg ${DEBUG_CRIT} "ERROR: Failed to detect device"
-	false
-	assert $?
-fi
+	if [ -z $dev ]; then
+	    debugmsg ${DEBUG_CRIT} "ERROR: Failed to detect device"
+	    false
+	    assert $?
+	fi
+	;;
+    dir)
+	# TODO: not currently implemented
+	;;
+    image)
+	if [ -e $target ]; then
+	    if [ -z "$FORCE" ]; then
+		debugmsg ${DEBUG_CRIT} "Image ($target) already exists. Remove it and restart"
+		false
+		assert $?
+	    fi
+	    rm -f $target
+	fi
+	;;
+esac
 
 install_summary()
 {
@@ -387,6 +462,74 @@ IFS=$OLDIFS
 	return 0
 }
 
-installer_main "$dev"
+case $TARGET_TYPE in
+    block)
+	installer_main "$dev"
+	;;
+    dir)
+	# TODO: not currently implemented
+	;;
+    image)
+	export TARGET_TYPE=$TARGET_TYPE
+
+	size=8G
+	if [ -n "${TARGET_DISK_SIZE}" ]; then
+	    size=${TARGET_DISK_SIZE}
+	fi
+
+	for app in qemu-img kpartx qemu-nbd btrfs; do
+	    verify_utility $app || { echo >&2 "ERROR: $app is not available"; exit 1; }
+	done
+
+	verify_root_user ||  { echo >&2 "ERROR: cubeit must be run as root"; exit 1; }
+
+	qemu-img create $target $size
+
+	if [ -n "$NBD" ]; then
+	    device=
+	    for i in `ls /dev/nbd*`; do
+		qemu-nbd -c $i $target >/dev/null 2>&1
+		if [ $? -eq 0 ]; then
+		    echo "using nbd device $i"
+		    device=$i
+		    break
+		fi
+	    done
+
+	    if [ -z "$device" ]; then
+		debugmsg ${DEBUG_CRIT} "No valid or free nbd device found"
+		false
+		assert $?
+	    fi
+	else
+	    for i in {0..7}; do
+		losetup /dev/loop$i --show >/dev/null 2>&1
+		if [ $? -ne 0 ]; then
+		    devnum=$i
+		    device="/dev/loop$devnum"
+		    losetup $device $target
+		    kpartx -a $device
+		    break
+		fi
+	    done
+	    if [ -z "$device" ]; then
+		debugmsg ${DEBUG_CRIT} "[ERROR]: No free loop devices, try nbd ?"
+		false
+		assert $?
+	    fi
+	fi
+
+	debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} $device"
+	$INSTALLERS_DIR/cubeit-installer --artifacts ${ARTIFACTS_DIR} --config config-live.sh ${INSTALL_ROOTFS} $device
+
+	if [ -n "$NBD" ]; then
+	    qemu-nbd -d $device
+	else
+	    kpartx -d $device
+	    losetup -d $device
+	fi
+
+	;;
+esac
 
 exit 0
