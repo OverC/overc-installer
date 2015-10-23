@@ -95,6 +95,10 @@ while [ $# -gt 0 ]; do
     -o)     outpath=$2
             shift
             ;;
+    --nbd)
+	    NBD=t
+	    LOOP=
+	    ;;
     --force)
 	    FORCE=t
             ;;
@@ -477,7 +481,7 @@ case $TARGET_TYPE in
 	    size=${TARGET_DISK_SIZE}
 	fi
 
-	for app in qemu-img kpartx qemu-nbd btrfs; do
+	for app in qemu-img partprobe qemu-nbd btrfs; do
 	    verify_utility $app || { echo >&2 "ERROR: $app is not available"; exit 1; }
 	done
 
@@ -488,7 +492,7 @@ case $TARGET_TYPE in
 	if [ -n "$NBD" ]; then
 	    device=
 	    for i in `ls /dev/nbd*`; do
-		qemu-nbd -c $i $target >/dev/null 2>&1
+		qemu-nbd --nocache -c $i $target >/dev/null 2>&1
 		if [ $? -eq 0 ]; then
 		    echo "using nbd device $i"
 		    device=$i
@@ -508,7 +512,7 @@ case $TARGET_TYPE in
 		    devnum=$i
 		    device="/dev/loop$devnum"
 		    losetup $device $target
-		    kpartx -a $device
+		    partprobe $device
 		    break
 		fi
 	    done
@@ -525,7 +529,6 @@ case $TARGET_TYPE in
 	if [ -n "$NBD" ]; then
 	    qemu-nbd -d $device
 	else
-	    kpartx -d $device
 	    losetup -d $device
 	fi
 

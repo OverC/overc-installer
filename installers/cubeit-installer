@@ -214,12 +214,13 @@ if [ $(echo $raw_dev | grep -c 'mmcblk') ==  "1" ]; then
        fs_dev="${raw_dev}p"
 fi
 if [ $(echo $raw_dev | grep -c 'nbd') ==  "1" ]; then
+       loop_device=t
        fs_dev="${raw_dev}p"
 fi
 if [ $(echo $raw_dev | grep -c 'loop') ==  "1" ]; then
-       fs_dev="mapper/${raw_dev}p"
-       # pick up the partiions in the mapper
-       kpartx -a /dev/${raw_dev}
+       loop_device=t
+       fs_dev="${raw_dev}p"
+       partprobe /dev/${raw_dev}
 fi
 
 ## create filesystems
@@ -274,7 +275,7 @@ mount /dev/${fs_dev}1 mnt
 # the versioned bzImage
 chroot . /bin/bash -c "cp /boot/bzImage* /mnt"
 umount ./mnt
-mount /dev/${fs_dev}1 boot
+mount /dev/${fs_dev}1 /z/boot
 
 debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs"
 kernel=`basename boot/bzImage-*`
@@ -312,13 +313,15 @@ fi
 
 if ${X86_ARCH}; then
     debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
-    chroot /z /bin/bash -c "\\
-    mount -t devtmpfs none /dev ; \\
-    mount -t proc none /proc ; \\
-    grub-install --force /dev/${raw_dev}"
 
-    #grub-install --force --root-directory /z /dev/${raw_dev} 
-#>/dev/null 2>&1
+    chroot /z /bin/bash -c "mount -t devtmpfs none /dev"
+    chroot /z /bin/bash -c "mount -t proc none /proc"
+
+    if [ -n "$loop_device" ]; then
+	chroot /z /bin/bash -c "grub-install --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search\" /dev/${raw_dev}"
+    else
+	chroot /z /bin/bash -c "grub-install --force /dev/${raw_dev}"
+    fi
 
     cat <<EOF >/z/boot/grub/grub.cfg
 set default="0"
@@ -430,17 +433,20 @@ smart update"
 fi
 
 if [ -d ${PUPPETDIR} ]; then
-    debugmsg ${DEBUG_INFO} "[INFO]: Running puppet"
-    cd /z
-    cp -r ${PUPPETDIR} tmp/.
+    verify_utility puppet
+    if [ $? -eq 0 ]; then
+	debugmsg ${DEBUG_INFO} "[INFO]: Running puppet"
+	cd /z
+	cp -r ${PUPPETDIR} tmp/.
 
-    chroot . /bin/bash -c " \\
+	chroot . /bin/bash -c " \\
 if [ $(which puppet 2> /dev/null) ]; then \\
     puppet apply /tmp/puppet/init.pp ; \\
 else \\
     echo \"Puppet not found on rootfs. Not applying puppet configuration.\" ; \\
 fi ; \\
 "
+    fi
 fi
 
 debugmsg ${DEBUG_INFO} "[INFO]: performing cleanup"
