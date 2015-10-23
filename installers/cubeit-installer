@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -x
+
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License version 2 as
 #  published by the Free Software Foundation.
@@ -444,7 +446,7 @@ if [ -d ${PUPPETDIR} ]; then
 	cp -r ${PUPPETDIR} tmp/.
 
 	chroot . /bin/bash -c " \\
-if [ $(which puppet 2> /dev/null) ]; then \\
+if [ \$(which puppet 2> /dev/null) ]; then \\
     puppet apply /tmp/puppet/init.pp ; \\
 else \\
     echo \"Puppet not found on rootfs. Not applying puppet configuration.\" ; \\
