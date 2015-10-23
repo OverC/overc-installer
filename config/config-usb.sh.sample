@@ -87,8 +87,6 @@ if [ $? -ne 0 ]; then
        export X86_ARCH=false
 fi
 
-export X86_ARCH=false
-
 if ! $X86_ARCH; then
 	if ! [ -e "$CONFIG_FILE_ARM" ]; then
 		echo "ERROR: Could not find confgiration file (${CONFIG_FILE_ARM}) for ARM architecture."
