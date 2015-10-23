@@ -506,6 +506,7 @@ umount_partitions()
 		debugmsg ${DEBUG_CRIT} "ERROR: Input parameters not provided"
 	fi
 
+	sync
 	while mounts=$(cat /proc/mounts | grep ${device})
 	do
 		for i in $(echo $mounts | awk '{print $2}')

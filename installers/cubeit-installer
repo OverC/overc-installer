@@ -263,6 +263,7 @@ fi
 
 ## vfat filesystem doesn't support soft link, here umount boot partition and
 ## then copy kernel image to boot partition
+sync
 umount boot 
 
 # we are either in /z or /z/rootfs
@@ -274,6 +275,7 @@ mount /dev/${fs_dev}1 mnt
 # we need a chroot, since the symlink is absolute between bzImage and
 # the versioned bzImage
 chroot . /bin/bash -c "cp /boot/bzImage* /mnt"
+sync
 umount ./mnt
 mount /dev/${fs_dev}1 /z/boot
 
@@ -292,6 +294,7 @@ if [ $btrfs -eq 1 ]; then
 	btrfs subvolume set-default $subvol /z/rootfs
 
 	cd /
+	sync
 	umount /z/rootfs/boot
 	umount /z/
 	mount -o subvolid=${subvol} /dev/${fs_dev}3 /z
@@ -415,6 +418,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	esac
     done
 
+    sync
     umount /z/var/lib/lxc
 fi
 
@@ -452,6 +456,7 @@ fi
 debugmsg ${DEBUG_INFO} "[INFO]: performing cleanup"
 # cleanup
 cd /
+sync
 umount /z/boot
 umount /z/dev
 umount /z/proc
