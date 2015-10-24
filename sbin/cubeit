@@ -11,6 +11,10 @@
 
 BASEDIR=$(dirname $BASH_SOURCE)
 
+if [ "$CUBE_DEBUG_SET_X_IF_SET" = 1 ] ; then
+    set -x
+fi
+
 : ${CONFIG_FILE="$BASEDIR/config-usb.sh"}
 : ${FUNCTIONS_FILE="$BASEDIR/functions.sh"}
 
@@ -117,7 +121,10 @@ INSTALLER_SBIN_DIR="${BASEDIR}/../sbin"
 # installers that will go on the usb stick, and install to the HD
 INSTALLERS_DIR="${BASEDIR}/../installers"
 # configuration for this script
-CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
+if [ -z "${CONFIG_DIRS}" ] ; then
+    CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
+fi
+export CONFIG_DIRS
 
 if [ -n "$ARTIFACTS_DIR" ]; then
     if [ ! -d "$ARTIFACTS_DIR" ]; then

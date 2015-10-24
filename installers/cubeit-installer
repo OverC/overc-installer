@@ -19,7 +19,10 @@ CONTAINERSDIR="${BASEDIR}/../images/containers"
 PACKAGESDIR="${BASEDIR}/../packages"
 PUPPETDIR="${BASEDIR}/../files/puppet"
 SBINDIR="${BASEDIR}/../sbin"
-CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
+if [ -z "${CONFIG_DIRS}" ] ; then
+    CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
+fi
+export CONFIG_DIRS
 
 # Debug Levels - fixed values
 DEBUG_SILENT=0
