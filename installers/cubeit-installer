@@ -291,9 +291,23 @@ kernel=`basename boot/bzImage-*`
 kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
 initrd="initrd-${kernel_version}.gz"
 
+# First use the config file specified one, if not set,
+# then find it in ${IMAGESDIR}
 # create both a initrd-<version> and initrd
-cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/${initrd} 
-cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/initrd
+if [ -e "$INSTALL_INITRAMFS" ]; then
+	cp $INSTALL_INITRAMFS boot/${initrd}
+	cp $INSTALL_INITRAMFS boot/initrd
+else
+	#Generally in deploy/image dir, there will be several initramfs files
+	#with different name, but they are the same file, so here just copy one
+	#of them is ok.
+	for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
+		cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/${initrd}
+		cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/initrd
+		break
+	done
+fi
+
 if [ $btrfs -eq 1 ]; then
 	# get the subvolume id of /mnt/rootfs using:
 	subvol=`btrfs subvolume list /z/rootfs | awk '{print $2;}'`
