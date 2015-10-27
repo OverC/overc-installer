@@ -413,12 +413,16 @@ EOF
 	sed -i "s/%BZIMAGE%/bzImage/" boot/startup.nsh
     fi
 else # arm architecture
-    install_dtb "./boot" "${IMAGESDIR}/dtb"
-    if [ -e ${IMAGESDIR}/*_boot.bin ]; then
+    if [ -e "${INSTALL_DTB}" ]; then
+        install_dtb "./boot" "${INSTALL_DTB}"
+    elif [ -e "${IMAGESDIR}/dtb" ]; then
+        install_dtb "./boot" "${IMAGESDIR}/dtb"
+    fi
+    if [ -e "${INSTALL_BOOTLOADER}" ]; then
+	install_bootloader "${raw_dev}" "./boot" ${INSTALL_BOOTLOADER}
+    elif [ -e ${IMAGESDIR}/*_boot.bin ]; then
 	BOARD_NAME=`basename ${IMAGESDIR}/*_boot.bin | sed 's/_boot\.bin//'`
 	install_bootloader "${raw_dev}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
-    elif [ -e "$INSTALL_BOOTLOADER" ]; then
-	install_bootloader "${raw_dev}" "./boot" $INSTALL_BOOTLOADER
     fi
 fi
 
