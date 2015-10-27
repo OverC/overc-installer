@@ -534,8 +534,9 @@ case $TARGET_TYPE in
 	    fi
 	fi
 
+	ttyconsolecon=`echo ${HDINSTALL_DOME_CONTAINER} | cut -d'-' -f2`
 	debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} $device"
-	$INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} --ttyconsolecn domE  --config config-live.sh ${INSTALL_ROOTFS} $device
+	$INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} --ttyconsolecn ${ttyconsolecon}  --config config-live.sh ${INSTALL_ROOTFS} $device
 
 	if [ -n "$NBD" ]; then
 	    qemu-nbd -d $device

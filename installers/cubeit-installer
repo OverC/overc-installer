@@ -165,6 +165,8 @@ if [ ! -d "${IMAGESDIR}" ]; then
     fi
 fi
 
+HDINSTALL_CONTAINERS="${HDINSTALL_CONTAINERS} ${HDINSTALL_DOME_CONTAINER}"
+
 # if there's a valid containers directory, we'll install everything
 # found there. Otherwise, we'll use HDINSTALL_CONTAINERS
 if [ -d "${CONTAINERSDIR}" ]; then    
@@ -459,7 +461,12 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	export HOSTDIR="/z"
 	case $container_src in
 	    *-dom0-*)
-		${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt}	
+		monitor_container_opt=""
+		if [ -n ${HDINSTALL_DOME_CONTAINER} ]; then
+			monitor_container_opt=`basename ${HDINSTALL_DOME_CONTAINER} | cut -d'-' -f2`
+			monitor_container_opt="-m ${monitor_container_opt}"
+		fi
+		${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt} ${monitor_container_opt}
 		;;
 	    *-dom1-*)
 		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt}

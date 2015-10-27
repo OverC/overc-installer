@@ -12,7 +12,7 @@ function print_cmd_help {
 	case "${1}" in
 		add)
 			cat << EOF
-add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-S tty console dev]
+add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-S tty console dev] [-m monitor container]
 
 Adds a new container which doesn't already exist.
 EOF
@@ -134,6 +134,7 @@ Options summary:
 -F       : force option - ie disable prompts
 -s       : container controlling tty console
 -S [arg] : tty console device.  default is ttyS0
+-m [arg] : monitor container controlled by dom0, default is domE
 
 Special container names:
 dom0     : the domain0 container.  This brings the normal high level
@@ -287,6 +288,10 @@ function deploy_new_container {
 	create_lxc_config
 
 	create_autodev_script
+
+	if [ "${cn}" == "dom0" -a "${monitor_container}" != "domE" ]; then
+		sed -i "s/domE/${monitor_container}/" ${pathtocontainer}/rootfs/etc/cube-cmd-server.conf
+	fi
 
 	if [ ${discoverable} == 1 ]; then
 		if [ -e "${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf" ]; then
@@ -733,6 +738,7 @@ cmdhelp=0
 force=0
 ttyconsoledev="ttyS0"
 havettyconsole=0
+monitor_container="domE"
 
 # See if we're using btrfs
 mountpt=`grep ${lxcbase} /proc/mounts`
@@ -749,7 +755,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?Fdhcap0n:f:g:i:rt:sS:" opt; do
+while getopts "?Fdhcap0n:m:f:g:i:rt:sS:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -779,6 +785,9 @@ while getopts "?Fdhcap0n:f:g:i:rt:sS:" opt; do
 		;;
 	i)
 		hist_index=$OPTARG
+		;;
+	m)
+		monitor_container=$OPTARG
 		;;
 	n)
 		cn=$OPTARG
