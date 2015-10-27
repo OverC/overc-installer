@@ -19,6 +19,9 @@ INSTALL_GRUBHDCFG="grub-hd.cfg"
 INSTALL_GRUBUSBCFG="grub-usb.cfg"
 INSTALL_GRUBCFG="${INSTALLER_FILES_DIR}/${INSTALL_GRUBUSBCFG}"
 
+#the smart config file which has been set the smart channels.
+INSTALL_SMARTCONFIG="${ARTIFACTS_DIR}/config"
+
 INSTALL_FILES="${INSTALL_KERNEL} ${INSTALL_ROOTFS} ${INSTALL_MODULES} ${INSTALL_GRUBCFG}"
 
 HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-graphical-builder-genericx86-64.tar.bz2 \

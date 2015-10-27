@@ -1,5 +1,4 @@
 #!/bin/bash
-
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License version 2 as
 #  published by the Free Software Foundation.
@@ -172,6 +171,10 @@ function remove_from_inittab {
 }
 
 function create_lxc_config {
+	temp_lxcbase=$lxcbase
+	if $host_cross ; then
+		lxcbase=$lxcbase_cross
+	fi
 	cat << EOF >${pathtocontainer}/config
 lxc.utsname = ${cn}
 lxc.rootfs = ${lxcbase}/${cn}/rootfs
@@ -195,12 +198,18 @@ EOF
 		# Domain 0 wants to drive X onto a real console
 		echo "lxc.console = none" >>${pathtocontainer}/config
 	fi
+	lxcbase=$temp_lxcbase
 }
 
 function create_lxc_fstab {
 	# Make sure we have mountable directories on the host
 	mkdir -p ${bindmntbase}/all
 	mkdir -p ${bindmntbase}/${cn}
+
+	if $host_cross ; then
+		lxcbase=$lxcbase_cross
+		bindmntbase=$bindmntbase_cross
+        fi
 
 	# Create the fstab
 	cat << EOF >${pathtocontainer}/fstab
@@ -222,10 +231,13 @@ EOF
 	    # if we aren't dom0, then we'll be launched by dom0, so we need to have our
 	    # directory created there (for the local container directory), or that nested container
 	    # launch will fail
-	    if [ -d /var/lib/lxc/dom0/rootfs/ ]; then
-		mkdir -p ${lxcbase}/dom0/rootfs/${bindmntbase}/${cn}
+	    if [ -d $temp_lxcbase/dom0/rootfs/ ]; then
+		mkdir -p ${temp_lxcbase}/dom0/rootfs/${bindmntbase}/${cn}
 	    fi
 	fi
+
+	lxcbase=$temp_lxcbase
+	bindmntbase=$temp_bindmntbase
 }
 
 function create_autodev_script {
@@ -267,7 +279,7 @@ function deploy_new_container {
 	fi
 
 	#Set container hostname to reduce confusion when we login
-	host_name=`cat /etc/hostname`
+	host_name=`cat ${HOSTDIR}/etc/hostname`
 	echo ${host_name}-${cn} >${pathtocontainer}/rootfs/etc/hostname
 
 	create_lxc_fstab
@@ -278,7 +290,7 @@ function deploy_new_container {
 
 	if [ ${discoverable} == 1 ]; then
 		if [ -e "${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf" ]; then
-		        target_hostname=`cat /etc/hostname`
+		        target_hostname=`cat ${HOSTDIR}/etc/hostname`
 
 			sed -i "s/^.*host\-name=.*/host-name=${target_hostname}-${cn}/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
 			sed -i "s/^.*rlimit\-nproc=.*/# rlimit-nproc=3/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
@@ -286,24 +298,26 @@ function deploy_new_container {
 			echo "WARNING: container is discoverable, but avahi not found"
 	        fi
 	fi
-
+	
 	if [ ${havettyconsole} == 1  ]; then
 		# If container /dev is mounted by tmpfs (when lxc.autodev=1) then
 		# systemd fails to start dev-ttyXXXX.device service and this causes
 		# serial-getty@ttyXXXX.service fails to start.  Workaround for now
 		# is to remove the dependency to dev-%i.device service.
 		sed -i "s:After=dev-%i.device :After=:g" ${pathtocontainer}/rootfs/lib/systemd/system/serial-getty@.service
-		# Enable the container service serial-getty@${ttyconsoledev}.service
-		chroot ${pathtocontainer}/rootfs /bin/bash \
-			-c "mount -t proc none /proc && /bin/systemctl unmask serial-getty@${ttyconsoledev}.service && umount /proc"
-		chroot ${pathtocontainer}/rootfs /bin/bash \
-			-c "mount -t proc none /proc && /bin/systemctl enable serial-getty@${ttyconsoledev}.service && umount /proc"
-		# Mask out the essential service serial-getty@${ttyconsoledev}.service
-		ln -sf /dev/null /etc/systemd/system/serial-getty@${ttyconsoledev}.service
+
+		# remove serial console in order to make domE login prompt appears
+		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* )
+		for k in ${serialconsoles}; do
+		        ln -s -f /dev/null ${k}
+		done
+
 	else
+		serialconsoles=$( ls ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/serial-getty* )
 		# Mask out the container service serial-getty@${ttyconsoledev}.service
-		chroot ${pathtocontainer}/rootfs /bin/bash \
-			-c "mount -t proc none /proc && /bin/systemctl mask serial-getty@${ttyconsoledev}.service && umount /proc"
+		for k in ${serialconsoles}; do
+			ln -s -f /dev/null ${k}
+		done
 	fi
 }
 
@@ -694,12 +708,19 @@ function delete_history {
 }
 
 # Mainline starts here
-
+host_cross=false
 lxcbase=${LXCBASE}
 if [ -z "${lxcbase}" ]; then
     lxcbase=/var/lib/lxc
 fi
-bindmntbase=/opt/container
+bindmntbase=${BINDMNTBASE}
+if [ -z "${bindmntbase}" ]; then
+	bindmntbase="/opt/container"
+fi
+temp_lxcbase=$lxcbase
+temp_bindmntbase=$bindmntbase
+lxcbase_cross="/var/lib/lxc"
+bindmntbase_cross="/opt/container"
 containers=overc-containers
 meta=overc-meta
 domain0=0
@@ -728,7 +749,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?Fdhap0n:f:g:i:rt:sS:" opt; do
+while getopts "?Fdhcap0n:f:g:i:rt:sS:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -737,6 +758,9 @@ while getopts "?Fdhap0n:f:g:i:rt:sS:" opt; do
 		;;
 	a)
 		autostart=1
+		;;
+	c)	
+		host_cross=true
 		;;
 	p)
 		peerstart=1

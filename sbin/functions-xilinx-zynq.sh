@@ -11,5 +11,5 @@ install_bootloader()
 		return 0
 	fi
 
-	install $bootloader $mountpoint/
+	install $bootloader $mountpoint/boot.bin
 }

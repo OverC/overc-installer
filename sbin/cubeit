@@ -1,5 +1,4 @@
 #!/bin/bash
-
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License version 2 as
 #  published by the Free Software Foundation.
@@ -470,6 +469,11 @@ IFS=$OLDIFS
 	    fi
 	fi
 
+	if [ -e "$INSTALL_SMARTCONFIG" ]; then
+		debugmsg ${DEBUG_INFO} "Install smart config $INSTALL_SMARTCONFIG"
+		cp $INSTALL_SMARTCONFIG ${INSTALLER_TARGET_IMAGES_DIR}/config.smart
+	fi
+	
 	return 0
 }
 
@@ -531,7 +535,7 @@ case $TARGET_TYPE in
 	fi
 
 	debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} $device"
-	$INSTALLERS_DIR/cubeit-installer --artifacts ${ARTIFACTS_DIR} --config config-live.sh ${INSTALL_ROOTFS} $device
+	$INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} --ttyconsolecn domE  --config config-live.sh ${INSTALL_ROOTFS} $device
 
 	if [ -n "$NBD" ]; then
 	    qemu-nbd -d $device

@@ -279,15 +279,23 @@ tar --numeric-owner -xpf $rootfs
 
 mount /dev/${fs_dev}1 mnt
 
-# we need a chroot, since the symlink is absolute between bzImage and
-# the versioned bzImage
-chroot . /bin/bash -c "cp /boot/bzImage* /mnt"
+cp boot/*Image-* mnt/
+if [ -e boot/uImage-* ]; then
+	cp boot/uImage-* mnt/uImage
+	#create a backup kernel for recovery boot
+	cp boot/uImage-* mnt/uImage_bakup
+elif [ -e boot/bzImage-* ]; then
+	cp boot/bzImage-* mnt/bzImage
+	#create a backup kernel for recovery boot
+	cp boot/bzImage-* mnt/bzImage_bakup
+fi
+ 
 sync
 umount ./mnt
-mount /dev/${fs_dev}1 /z/boot
+mount /dev/${fs_dev}1 ./boot
 
 debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs"
-kernel=`basename boot/bzImage-*`
+kernel=`basename boot/*Image-*`
 kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
 initrd="initrd-${kernel_version}.gz"
 
@@ -302,8 +310,8 @@ else
 	#with different name, but they are the same file, so here just copy one
 	#of them is ok.
 	for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
-		cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/${initrd}
-		cp /${IMAGESDIR}/*-initramfs-*-64.cpio.gz boot/initrd
+		cp /${IMAGESDIR}/*-initramfs-*.cpio.gz boot/${initrd}
+		cp /${IMAGESDIR}/*-initramfs-*.cpio.gz boot/initrd
 		break
 	done
 fi
@@ -355,21 +363,29 @@ terminal_input console serial
 terminal_output console serial
 set timeout=5
 
-menuentry 'OverC' {
+menuentry 'Overc' {
 	insmod gzio
 	insmod ext2
 	insmod fat
 	search --no-floppy --label OVERCBOOT --set=root 
 	echo	'Loading Linux ...'
-	linux	/bzImage root=LABEL=OVERCROOTFS ro  
+	linux	/bzImage root=LABEL=OVERCROOTFS ro rootdelay=3
 	echo	'Loading initial ramdisk ...'
 	initrd	/initrd
 }
-EOF
 
-    echo "LABEL=$SWAPLABEL none swap sw 0 0" >> etc/fstab
-    echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> etc/fstab
-    echo "LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0" >> etc/fstab
+menuentry 'Overc recovery' {
+        insmod gzio
+        insmod ext2
+        insmod fat
+        search --no-floppy --label OVERCBOOT --set=root 
+        echo    'Loading Linux ...'
+        linux   /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootdelay=3
+        echo    'Loading initial ramdisk ...'
+        initrd  /initrd
+}
+
+EOF
 
     debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
     # fixups for virtual installs
@@ -399,7 +415,19 @@ else # arm architecture
     if [ -e ${IMAGESDIR}/*_boot.bin ]; then
 	BOARD_NAME=`basename ${IMAGESDIR}/*_boot.bin | sed 's/_boot\.bin//'`
 	install_bootloader "${raw_dev}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
+    elif [ -e "$INSTALL_BOOTLOADER" ]; then
+	install_bootloader "${raw_dev}" "./boot" $INSTALL_BOOTLOADER
     fi
+fi
+
+echo "LABEL=$SWAPLABEL none swap sw 0 0" >> /z/etc/fstab
+echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> /z/etc/fstab
+echo "LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0" >> /z/etc/fstab
+
+if [ -e "$INSTALL_SMARTCONFIG" ]; then
+	cp $INSTALL_SMARTCONFIG /z/var/lib/smart/config
+elif [ -e /${IMAGESDIR}/config.smart ]; then
+	cp /${IMAGESDIR}/config.smart /z/var/lib/smart/config
 fi
 
 if [ -n "${HDINSTALL_CONTAINERS}" ]; then
@@ -426,17 +454,26 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	fi
 
 	# actually install the container
+	export LXCBASE="/z/var/lib/lxc"
+	export BINDMNTBASE="/z/opt/container"
+	export HOSTDIR="/z"
 	case $container_src in
 	    *-dom0-*)
-		chroot . /bin/bash -c "/tmp/overc-cctl add -d -a -g onboot -t 0 -n $cname -f /tmp/$container_src ${ttyconsole_opt}"
+		${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt}	
 		;;
 	    *-dom1-*)
-		chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$container_src ${ttyconsole_opt}"
+		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt}
 		;;
 	    *)
-		chroot . /bin/bash -c "/tmp/overc-cctl add -d -p -g peer -t 0 -n $cname -f /tmp/$container_src ${ttyconsole_opt}"
+		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt}
 		;;
 	esac
+
+	if [ -e "$INSTALL_SMARTCONFIG" ]; then
+		cp $INSTALL_SMARTCONFIG /z/var/lib/lxc/$cname/rootfs/var/lib/smart/config
+	elif [ -e /${IMAGESDIR}/config.smar ]; then
+		cp /${IMAGESDIR}/config.smart /z/var/lib/lxc/$cname/rootfs/var/lib/smart/config
+	fi
     done
 
     sync
@@ -479,10 +516,28 @@ debugmsg ${DEBUG_INFO} "[INFO]: performing cleanup"
 cd /
 sync
 umount /z/boot
-umount /z/dev
-umount /z/proc
+
+if [ $(cat /proc/mounts | grep -ic "/z/dev") == "1" ]; then
+	umount /z/dev
+fi
+if [ $(cat /proc/mounts | grep -ic "/z/proc") == "1" ]; then
+	umount /z/proc
+fi
+
 umount /z
 
+#create a backup snapshot for rootfs
+if [ $btrfs -eq 0 ]; then
+	:
+else
+	debugmsg ${DEBUG_INFO} "[INFO]: Create snapshot ofrootfs for recovery."
+	mount /dev/${fs_dev}3 /z
+	if [ -e "/z/rootfs" ]; then
+		btrfs subvolume snapshot /z/rootfs /z/rootfs_bakup
+	fi
+	umount /z
+fi
+	
 # don't run this on a host!!
 # sync ; sync ; echo 3> /proc/sys/vm/drop_caches
 # echo o > /proc/sysrq-trigger
