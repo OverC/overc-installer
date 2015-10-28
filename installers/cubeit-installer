@@ -291,6 +291,7 @@ debugmsg ${DEBUG_INFO} "[INFO]: creating filesystems"
 debugmsg ${DEBUG_INFO} "[INFO]: creating swap"
 mkswap -L $SWAPLABEL /dev/${fs_dev}2
 
+set -e
 debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
 mkfs.vfat -I -n $BOOTLABEL /dev/${fs_dev}1
 if [ $btrfs -eq 0 ]; then
@@ -299,9 +300,13 @@ if [ $btrfs -eq 0 ]; then
     mkfs.ext4 -v -L $LXCLABEL /dev/${fs_dev}4
 else
     debugmsg ${DEBUG_INFO} "[INFO]: creating / (btrfs)"
-    mkfs.btrfs -f -L $ROOTLABEL /dev/${fs_dev}3
-    mkfs.btrfs -f -L $LXCLABEL /dev/${fs_dev}4
+    set +e
+    has_f=`mkfs.btrfs 2>&1 |grep -q '^.*\-f' && echo -f`
+    set -e
+    mkfs.btrfs $has_f -L $ROOTLABEL /dev/${fs_dev}3
+    mkfs.btrfs $has_f -L $LXCLABEL /dev/${fs_dev}4
 fi
+set +e
 
 mkdir -p /z
 mount /dev/${fs_dev}3 /z
