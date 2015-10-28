@@ -97,6 +97,10 @@ while [ $# -gt 0 ]; do
             ARTIFACTS_DIR="$2"
 	    shift
             ;;
+    --disk-size)
+	    TARGET_DISK_SIZE="$2"
+	    shift
+	    ;;
     --installer)
 	    # create an installer, not a final image (this is the default)
             INSTALLER_IMAGE=t
@@ -493,7 +497,7 @@ case $TARGET_TYPE in
     image)
 	export TARGET_TYPE=$TARGET_TYPE
 
-	size=8G
+	size=7G
 	if [ -n "${TARGET_DISK_SIZE}" ]; then
 	    size=${TARGET_DISK_SIZE}
 	fi
