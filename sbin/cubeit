@@ -523,16 +523,7 @@ case $TARGET_TYPE in
 		assert $?
 	    fi
 	else
-	    for i in {0..7}; do
-		losetup /dev/loop$i --show >/dev/null 2>&1
-		if [ $? -ne 0 ]; then
-		    devnum=$i
-		    device="/dev/loop$devnum"
-		    losetup $device $target
-		    # partprobe $device
-		    break
-		fi
-	    done
+	    device=`losetup -f --show $target`
 	    if [ -z "$device" ]; then
 		debugmsg ${DEBUG_CRIT} "[ERROR]: No free loop devices, try nbd ?"
 		false
