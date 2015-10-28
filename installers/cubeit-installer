@@ -165,7 +165,61 @@ if [ ! -d "${IMAGESDIR}" ]; then
     fi
 fi
 
-HDINSTALL_CONTAINERS="${HDINSTALL_CONTAINERS} ${HDINSTALL_DOME_CONTAINER}"
+
+get_container_name_by_prop()
+{
+    local prop=$1
+    local ret=""
+
+    for i in "${!container_props[@]}"; do
+	#echo "key  : $i"
+	#echo "value: ${container_props[$i]}"
+	echo ${container_props[$i]} | grep -qw $prop
+	if [ $? -eq 0 ]; then
+	    ret="${i}"
+	fi
+    done
+
+    echo "${ret}"
+}
+
+# containers are listed in HDINSTALL_CONTAINERS as:
+#    <full path>/<container tgz>:<properties>
+containers_to_check=${HDINSTALL_CONTAINERS}
+HDINSTALL_CONTAINERS=""
+declare -A container_props=()
+for c in ${containers_to_check}; do
+    props=""
+
+    cn=`echo "${c}" | cut -d':' -f1`
+    cn_short=`basename ${cn}`
+    cname=`echo $cn_short | cut -d'-' -f2`
+
+    for i in 1 2 3 4 5 6; do
+	props=`echo "${c}" | cut -d':' -f$i`
+	if [ "${cn}" == "${props}" ]; then
+	    props=""
+	fi
+
+	# store any properies as: <short name> <value> in the properties array
+	if [ -n "${props}" ]; then
+	    container_props[$cname]="${container_props[$cname]} ${props}"
+	fi
+    done
+
+    # this gets us the name without any :<properties>
+    HDINSTALL_CONTAINERS="${HDINSTALL_CONTAINERS} ${cn}"
+done
+
+# if ttyconsolecn wasn't passed on the command line, check to see
+# if a container in the configuration had the "console" property. If
+# so, set it. Otherwise, assign domE as the default
+if [ -z "${ttyconsolecn}" ]; then
+    ttyconsolecn=`get_container_name_by_prop console`
+    if [ -z "${ttyconsolecn}" ]; then
+	ttyconsolecn="domE"
+    fi
+fi
 
 # if there's a valid containers directory, we'll install everything
 # found there. Otherwise, we'll use HDINSTALL_CONTAINERS
@@ -456,7 +510,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	
 	ttyconsole_opt="-S ${ttyconsoledev}"
 	if [ "${ttyconsolecn}" == "${cname}" ]; then
-            ttyconsole_opt="-s ${havettyconsole_opt}"
+            ttyconsole_opt="-s ${ttyconsole_opt}"
 	fi
 
 	# actually install the container
@@ -466,10 +520,11 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	case $container_src in
 	    *-dom0-*)
 		monitor_container_opt=""
-		if [ -n ${HDINSTALL_DOME_CONTAINER} ]; then
-			monitor_container_opt=`basename ${HDINSTALL_DOME_CONTAINER} | cut -d'-' -f2`
-			monitor_container_opt="-m ${monitor_container_opt}"
+		monitored_container=`get_container_name_by_prop monitored`
+		if [ -n "${monitored_container}" ]; then
+			monitor_container_opt="-m ${monitored_container}"
 		fi
+
 		${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt} ${monitor_container_opt}
 		;;
 	    *-dom1-*)
@@ -481,9 +536,9 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	esac
 
 	if [ -e "$INSTALL_SMARTCONFIG" ]; then
-		cp $INSTALL_SMARTCONFIG /z/var/lib/lxc/$cname/rootfs/var/lib/smart/config
+	    cp $INSTALL_SMARTCONFIG /z/var/lib/lxc/$cname/rootfs/var/lib/smart/config
 	elif [ -e /${IMAGESDIR}/config.smar ]; then
-		cp /${IMAGESDIR}/config.smart /z/var/lib/lxc/$cname/rootfs/var/lib/smart/config
+	    cp /${IMAGESDIR}/config.smart /z/var/lib/lxc/$cname/rootfs/var/lib/smart/config
 	fi
     done
 
@@ -528,10 +583,12 @@ cd /
 sync
 umount /z/boot
 
-if [ $(cat /proc/mounts | grep -ic "/z/dev") == "1" ]; then
+cat /proc/mounts | grep -q "/z/dev"
+if [ $? -eq 0 ]; then
 	umount /z/dev
 fi
-if [ $(cat /proc/mounts | grep -ic "/z/proc") == "1" ]; then
+cat /proc/mounts | grep -q "/z/proc"
+if [ $? -eq 0 ]; then
 	umount /z/proc
 fi
 
@@ -541,7 +598,7 @@ umount /z
 if [ $btrfs -eq 0 ]; then
 	:
 else
-	debugmsg ${DEBUG_INFO} "[INFO]: Create snapshot ofrootfs for recovery."
+	debugmsg ${DEBUG_INFO} "[INFO]: Create snapshot of rootfs for recovery."
 	mount /dev/${fs_dev}3 /z
 	if [ -e "/z/rootfs" ]; then
 		btrfs subvolume snapshot /z/rootfs /z/rootfs_bakup
