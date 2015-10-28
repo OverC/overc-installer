@@ -364,6 +364,7 @@ initrd="initrd-${kernel_version}.gz"
 # then find it in ${IMAGESDIR}
 # create both a initrd-<version> and initrd
 if [ -e "$INSTALL_INITRAMFS" ]; then
+	mkdir -p boot
 	cp $INSTALL_INITRAMFS boot/${initrd}
 	cp $INSTALL_INITRAMFS boot/initrd
 else
@@ -371,8 +372,9 @@ else
 	#with different name, but they are the same file, so here just copy one
 	#of them is ok.
 	for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
-		cp /${IMAGESDIR}/*-initramfs-*.cpio.gz boot/${initrd}
-		cp /${IMAGESDIR}/*-initramfs-*.cpio.gz boot/initrd
+		mkdir -p boot
+		cp /$i boot/${initrd}
+		cp /$i boot/initrd
 		break
 	done
 fi
