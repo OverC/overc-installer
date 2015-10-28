@@ -21,7 +21,7 @@ usage()
 {
 cat << EOF
 
-  cubeit [--config <config script>] [--force] --artifacts [<artifacts dir>] <target>
+  cubeit [--config <config script>] [--target-config <config script>] [--force] --artifacts [<artifacts dir>] <target>
 
   cubeit is capable of creating a "cube capable" installer + paylaod, or image.
 
@@ -33,6 +33,8 @@ cat << EOF
   options:
 
      --config <script>: use the specified configuration script found in ~/.overc/
+     --target-config <script>: use the specified configuration script found in ~/.overc/
+                               when running the target installer (live image creation)
      --force: force overwrite any output files or images
      --artifacts: directory where the binary inputs for image generation are found.
 		  The configuration script indicates what specific images will be used
@@ -87,6 +89,10 @@ while [ $# -gt 0 ]; do
             CONFIG_FILE="$2"
 	    shift
             ;;
+    --target-config)
+	    TARGET_CONFIG_FILE="$2"
+	    shift
+	    ;;
     --artifacts)
             ARTIFACTS_DIR="$2"
 	    shift
@@ -534,8 +540,15 @@ case $TARGET_TYPE in
 	    fi
 	fi
 
-	debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} $device"
-	$INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} --config config-live.sh ${INSTALL_ROOTFS} $device
+	if [ -z "${TARGET_CONFIG_FILE}" ]; then
+	    if [ -n "${CONFIG_FILE}" ]; then
+		TARGET_CONFIG_FILE=${CONFIG_FILE}
+	    else
+		TARGET_CONFIG_FILE="config-live.sh"
+	    fi
+	fi
+	debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} --config ${TARGET_CONFIG_FILE} $device"
+	$INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} --config ${TARGET_CONFIG_FILE} ${INSTALL_ROOTFS} $device
 
 	if [ -n "$NBD" ]; then
 	    qemu-nbd -d $device
