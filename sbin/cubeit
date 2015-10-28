@@ -481,7 +481,7 @@ IFS=$OLDIFS
 
 	if [ -e "$INSTALL_SMARTCONFIG" ]; then
 		debugmsg ${DEBUG_INFO} "Install smart config $INSTALL_SMARTCONFIG"
-		cp $INSTALL_SMARTCONFIG ${INSTALLER_TARGET_IMAGES_DIR}/config.smart
+		cp $INSTALL_SMARTCONFIG ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/config.smart
 	fi
 	
 	return 0
