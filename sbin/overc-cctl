@@ -406,6 +406,11 @@ function clean_containers {
 	done
 }
 
+function relpath {
+	python -c "import os.path; print os.path.join(os.path.relpath(os.path.dirname('$1'), os.path.dirname('$2')), os.path.basename('$1'))"
+}
+
+
 function add_container {
 	check_cn
 	if [ "${rootfs_fn}" == "" ]; then
@@ -474,7 +479,7 @@ function add_container {
 		mkdir -p ${pathtohistory}
 		switch_container ${volname} addhist
 	else
-		ln -srTf ${pathtocontainer} ${lxcbase}/${cn}
+		ln -sTf $(relpath ${pathtocontainer} ${lxcbase}/${cn}) ${lxcbase}/${cn}
 	fi
 }
 
@@ -505,7 +510,7 @@ function snapshot_container {
 		if [ ! -d ${pathtohistory} ]; then
 			mkdir -p ${pathtohistory}
 		fi
-		ln -sfrTL ${pathtocontainer} ${pathtohistory}/${next}
+		ln -sfTL $(relpath ${pathtocontainer} ${pathtohistory}/${next}) ${pathtohistory}/${next}
 	else
 		echo "Container snapshot only supported on btrfs filesystem"
 	fi
@@ -542,11 +547,11 @@ function switch_container {
 	if [ "${2}" == "addhist" ] && [ ${removecont} == 0 ]; then
 		next=$(( ${hist_num} + 1 ))
 		echo "Adding history entry ${next}"
-		ln -sfrTL ${lxcbase}/${cn} ${pathtohistory}/${next}
+		ln -sfTL $(relpath ${lxcbase}/${cn} ${pathtohistory}/${next}) ${pathtohistory}/${next}
 	fi
 	pathtocontainer=${lxcbase}/${containers}/${cn}/${1}
 	previous=$( readlink -f ${lxcbase}/${cn} )
-	ln -sfTrL ${pathtocontainer} ${lxcbase}/${cn}
+	ln -sfTL $(relpath ${pathtocontainer} ${lxcbase}/${cn}) ${lxcbase}/${cn}
 	if [ ${removecont} == 1 ]; then
 		btrfs subvolume delete -C ${previous}
 	fi
