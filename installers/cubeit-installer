@@ -544,7 +544,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	if [ -e "$INSTALL_SMARTCONFIG" ]; then
 	    cp $INSTALL_SMARTCONFIG /z/var/lib/lxc/$cname/rootfs/var/lib/smart/config
-	elif [ -e /${IMAGESDIR}/config.smar ]; then
+	elif [ -e /${IMAGESDIR}/config.smart ]; then
 	    cp /${IMAGESDIR}/config.smart /z/var/lib/lxc/$cname/rootfs/var/lib/smart/config
 	fi
     done
