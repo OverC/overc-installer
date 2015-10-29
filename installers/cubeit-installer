@@ -97,7 +97,7 @@ ttyconsoledev="ttyS0"
 while [ $# -gt 0 ]; do
     case "$1" in
     --config) 
-            CONFIG_FILE="$2"
+            CONFIG_FILES="${CONFIG_FILES} $2"
 	    shift
             ;;
     --image)
@@ -127,34 +127,31 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-CONFIGS_TO_SOURCE="${CONFIG_FILE}"
-if [ -n "${CONFIGS_TO_SOURCE}" ]; then
-    if ! [ -e $CONFIG_FILE ]; then
-	CONFIGS_TO_SOURCE=""
+if [ -z "${CONFIG_FILES}" ]; then
+    CONFIG_FILES="config-installer.sh"
+fi
+
+colon_separated_config_dirs=`echo ${CONFIG_DIRS} | sed 's/ /:/g'`
+for config in ${CONFIG_FILES}; do
+    config_to_source="${config}"
+
+    # check to see if the config exists. If it doesn't search the config paths
+    if ! [ -e "${config}" ]; then
 	for d in ${CONFIG_DIRS}; do
-	    if [ -e "${d}/${CONFIG_FILE}" ]; then
-		CONFIGS_TO_SOURCE="${CONFIGS_TO_SOURCE} ${d}/$CONFIG_FILE"
+	    if [ -e "${d}/${config}" ]; then
+		config_to_source="${d}/${config}"
 	    fi
 	done
 
-	if [ -z "${CONFIGS_TO_SOURCE}" ]; then
-	    debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find configuration file (${CONFIG_FILE})."
+	if [ -z "${config_to_source}" ]; then
+	    echo "ERROR: Could not find configuration file (${config_to_soure})."
+	    echo "Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
 	    exit 1
 	fi
-    else
-	# Convert to abs path
-	if [[ "$CONFIG_FILE" != /* ]]; then
-            CONFIGS_TO_SOURCE="$(pwd)/${CONFIGS_TO_SOURCE}"
-	fi
     fi
-fi
-
-old_pwd=`pwd`
-for d in ${CONFIGS_TO_SOURCE}; do
-    cd `dirname $d`
-    source ${CONFIGS_TO_SOURCE}
+    export PATH="$PATH:${colon_separated_config_dirs}"
+    source `basename ${config_to_source}`
 done
-cd $old_pwd
 
 if [ ! -d "${IMAGESDIR}" ]; then
     if [ -n "${ARTIFACTS_DIR}" ]; then
@@ -171,10 +168,10 @@ get_container_name_by_prop()
     local prop=$1
     local ret=""
 
-    for i in "${!container_props[@]}"; do
+    for i in "${!container_map[@]}"; do
 	#echo "key  : $i"
-	#echo "value: ${container_props[$i]}"
-	echo ${container_props[$i]} | grep -qw $prop
+	#echo "value: ${container_map[$i]}"
+	echo ${container_map[$i]} | grep -qw $prop
 	if [ $? -eq 0 ]; then
 	    ret="${i}"
 	fi
@@ -186,30 +183,19 @@ get_container_name_by_prop()
 # containers are listed in HDINSTALL_CONTAINERS as:
 #    <full path>/<container tgz>:<properties>
 containers_to_check=${HDINSTALL_CONTAINERS}
-HDINSTALL_CONTAINERS=""
-declare -A container_props=()
-for c in ${containers_to_check}; do
-    props=""
+if [ -n "$containers_to_check" ]; then
+    create_property_map container_map ${HDINSTALL_CONTAINERS}
+else
+    # if there's a valid containers directory, we'll install everything
+    # found there. Otherwise, we'll use HDINSTALL_CONTAINERS
+    if [ -d "${CONTAINERSDIR}" ]; then
+	for c in $(ls ${CONTAINERSDIR} | grep '\-dom0\-' ; ls ${CONTAINERSDIR} | grep -v '\-dom0\-' ); do
+	    HDINSTALL_CONTAINERS="$HDINSTALL_CONTAINERS `readlink -f ${CONTAINERSDIR}/$c`"
+	done
+    fi
+    create_property_map container_map ${HDINSTALL_CONTAINERS}
+fi
 
-    cn=`echo "${c}" | cut -d':' -f1`
-    cn_short=`basename ${cn}`
-    cname=`echo $cn_short | cut -d'-' -f2`
-
-    for i in 1 2 3 4 5 6; do
-	props=`echo "${c}" | cut -d':' -f$i`
-	if [ "${cn}" == "${props}" ]; then
-	    props=""
-	fi
-
-	# store any properies as: <short name> <value> in the properties array
-	if [ -n "${props}" ]; then
-	    container_props[$cname]="${container_props[$cname]} ${props}"
-	fi
-    done
-
-    # this gets us the name without any :<properties>
-    HDINSTALL_CONTAINERS="${HDINSTALL_CONTAINERS} ${cn}"
-done
 
 # if ttyconsolecn wasn't passed on the command line, check to see
 # if a container in the configuration had the "console" property. If
@@ -219,14 +205,6 @@ if [ -z "${ttyconsolecn}" ]; then
     if [ -z "${ttyconsolecn}" ]; then
 	ttyconsolecn="domE"
     fi
-fi
-
-# if there's a valid containers directory, we'll install everything
-# found there. Otherwise, we'll use HDINSTALL_CONTAINERS
-if [ -d "${CONTAINERSDIR}" ]; then    
-    for c in $(ls ${CONTAINERSDIR} | grep '\-dom0\-' ; ls ${CONTAINERSDIR} | grep -v '\-dom0\-' ); do
-	HDINSTALL_CONTAINERS="$HDINSTALL_CONTAINERS `readlink -f ${CONTAINERSDIR}/$c`"
-    done
 fi
 
 ## typical qemu disk is vdb
@@ -506,7 +484,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
     mkdir -p /z/tmp
 
-    for c in ${HDINSTALL_CONTAINERS}; do
+    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	debugmsg ${DEBUG_INFO} "[INFO]: installing $c"
 
 	# containers names are "prefix-<container name>-<... suffixes >

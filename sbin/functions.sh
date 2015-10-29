@@ -706,6 +706,96 @@ install_container()
     chroot . /bin/bash -c "/tmp/overc-cctl add -d -a -g onboot -t 0 -n $cname -f /tmp/$c ${ttyconsole_opt}"
 }
 
+
+# $1: array
+# $2: new name
+ref_array() {
+    local varname="$1"
+    local export_as="$2"
+    local code=$(declare -p "$varname")
+    echo ${code/$varname/-g $export_as}
+}
+
+# $1: map
+keys() {
+    eval $(ref_array "$1" array)
+    local key
+
+    for key in "${!array[@]}"; do
+	echo $key
+        #printf "Key: %s, value: %s\n" "$key" "${array[$key]}"
+    done
+}
+
+# $1: map
+# $2: key
+value() {
+    eval $(ref_array "$1" array)
+    local key
+    local match=$2
+
+    for key in "${!array[@]}"; do
+	if [ "$key" = "$match" ]; then
+	    echo ${array[$key]}
+	fi
+    done
+}
+
+# $1: the property map variable to create
+# $2: a variable with a list of items:<properties>
+# output: a property map in $2
+create_property_map()
+{
+    local ret_property_map_name="$1"
+    shift
+    local input_var=$@
+
+    # make the associative array from the name passed in
+    eval "declare -g -A $ret_property_map_name=()"
+
+    # containers are listed in HDINSTALL_CONTAINERS as:
+    #    <full path>/<container tgz>:<properties>
+    values_to_check=${input_var}
+    declare -A temp_property_map=()
+    for c in ${values_to_check}; do
+	props=""
+
+	cn=`echo "${c}" | cut -d':' -f1`
+	cn_short=`basename ${cn}`
+	cname=`echo $cn_short | cut -d'-' -f2`
+
+	all_props=""
+	for prop_count in 1 2 3 4 5 6; do
+	    props=`echo "${c}" | cut -d':' -f$prop_count`
+	    if [ "${cn}" == "${props}" ]; then
+		props=""
+	    else
+		all_props="$all_props $props"
+	    fi
+	done
+
+	# store any properies as: <short name> <value> in the properties array
+	temp_property_map[$cname]="${all_props}"
+	eval $ret_property_map_name[$cname]="\"${all_props}\""
+    done
+}
+
+strip_properties()
+{
+    local input_var=$@
+
+    # containers are listed in HDINSTALL_CONTAINERS as:
+    #    <full path>/<container tgz>:<properties>
+    extracted_var=""
+    for c in ${input_var}; do
+	cn=`echo "${c}" | cut -d':' -f1`
+	# this gets us the name without any :<properties>
+	extracted_var="${extracted_var} ${cn}"
+    done
+
+    echo $extracted_var
+}
+
 extract_tarball()
 {
 	local tarball_src="$1"

@@ -15,7 +15,6 @@ if [ "$CUBE_DEBUG_SET_X_IF_SET" = 1 ] ; then
     set -x
 fi
 
-: ${CONFIG_FILE="$BASEDIR/config-usb.sh"}
 : ${FUNCTIONS_FILE="$BASEDIR/functions.sh"}
 
 usage()
@@ -86,8 +85,8 @@ LOOP=t
 INSTALLER_IMAGE=t
 while [ $# -gt 0 ]; do
     case "$1" in
-    --config) 
-            CONFIG_FILE="$2"
+    --config)
+            CONFIG_FILES="${CONFIG_FILES} $2"
 	    shift
             ;;
     --target-config)
@@ -165,36 +164,33 @@ if [ "$TARGET_TYPE" = "block" ]; then
     USBSTORAGE_DEVICE=/sys/block/$(basename "$target")
 fi
 
-## Load configuration file
-CONFIGS_TO_SOURCE="${CONFIG_FILE}"
-if [ -n "${CONFIG_FILE}" ]; then
-    if ! [ -e $CONFIG_FILE ]; then
-	CONFIGS_TO_SOURCE=""
+## Load configuration file(s)
+if [ -z ${CONFIG_FILES} ]; then
+    echo "ERROR: no configuration was provided via --config"
+    exit 1
+fi
+
+colon_separated_config_dirs=`echo ${CONFIG_DIRS} | sed 's/ /:/g'`
+for config in ${CONFIG_FILES}; do
+    config_to_source="${config}"
+
+    # check to see if the config exists. If it doesn't search the config paths
+    if ! [ -e "${config}" ]; then
 	for d in ${CONFIG_DIRS}; do
-	    if [ -e "${d}/${CONFIG_FILE}" ]; then
-		CONFIGS_TO_SOURCE="${CONFIGS_TO_SOURCE} ${d}/$CONFIG_FILE"
+	    if [ -e "${d}/${config}" ]; then
+		config_to_source="${d}/${config}"
 	    fi
 	done
 
-	if [ -z "${CONFIGS_TO_SOURCE}" ]; then
-	    echo "ERROR: Could not find configuration file (${CONFIG_FILE})."
+	if [ -z "${config_to_source}" ]; then
+	    echo "ERROR: Could not find configuration file (${config_to_soure})."
 	    echo "Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
 	    exit 1
 	fi
-    else
-	# Convert to abs path
-	if [[ "$CONFIG_FILE" != /* ]]; then
-            CONFIGS_TO_SOURCE="$(pwd)/${CONFIGS_TO_SOURCE}"
-	fi
     fi
-fi
-
-old_pwd=`pwd`
-for d in ${CONFIGS_TO_SOURCE}; do
-    cd `dirname $d`
-    source ${CONFIGS_TO_SOURCE}
+    export PATH="$PATH:${colon_separated_config_dirs}"
+    source `basename ${config_to_source}`
 done
-cd $old_pwd
 
 # Find the grub configuration
 for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
@@ -213,6 +209,7 @@ if [ -z "${INSTALLER_TARGET_DIR}" ]; then
     INSTALLER_TARGET_DIR="/opt/installer"
 fi
 INSTALLER_TARGET_SBIN_DIR="${INSTALLER_TARGET_DIR}/sbin"
+INSTALLER_TARGET_CONFIG_DIR="${INSTALLER_TARGET_DIR}/config"
 INSTALLER_TARGET_FILES_DIR="${INSTALLER_TARGET_DIR}/files"
 INSTALLER_TARGET_IMAGES_DIR="${INSTALLER_TARGET_DIR}/images"
 
@@ -233,6 +230,8 @@ for d in ${CONFIG_DIRS} $BASEDIR; do
 	source "${d}/functions-${BOARD_NAME}.sh"
     fi
 done
+
+create_property_map container_map ${HDINSTALL_CONTAINERS}
 
 ## Set up trap handler
 
@@ -451,12 +450,26 @@ IFS=$OLDIFS
 	fi
 
 	# containers
+	# make a container map, based on the HDINSTALL_CONTAINERS
 	if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    debugmsg ${DEBUG_INFO} "Copying Containers to install media"
-	    recursive_mkdir ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/containers
-	    for c in ${HDINSTALL_CONTAINERS}; do
+
+	    recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}/containers
+	    recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}
+
+	    # drop any properties and copy the containers to the installer
+	    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 		cp ${c} ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/containers/
 	    done
+
+	    # create a configuration that can be read by the cubeit-installer
+	    echo "HDINSTALL_CONTAINERS=\"\\" > ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+	    for c in ${HDINSTALL_CONTAINERS}; do
+		echo -n "${INSTALLER_TARGET_IMAGES_DIR}/containers/" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+		echo -n `basename ${c}` >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+		echo " \\" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+	    done
+	    echo "\"" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 	fi
 
 	if [ -n "${HD_MODULES}" ]; then
