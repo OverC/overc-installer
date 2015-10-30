@@ -501,6 +501,59 @@ IFS=$OLDIFS
 	return 0
 }
 
+# In a desktop environment, disable the automounter to automatically
+# mount the inserted media and Nautilus automatically pops up a
+# window to open a folder during installing to avoid umount failures
+# It's only for gnome currently.
+# TODO: fix for other desktop environment, e.g. KDE, XFCE
+RUN_LOGNAME="sudo -u $(logname)"
+MEDIA_HANDLING="org.gnome.desktop.media-handling"
+MEDIA_HANDLING_PATH="/org/gnome/desktop/media-handling"
+HAVE_GSETTING=1
+HAVE_DCONF=1
+DESKTOP_SESSION=""
+verify_utility gsettings && HAVE_GSETTING=0
+verify_utility dconf && HAVE_DCONF=0
+
+ps -ef|grep gnome-session|grep -v grep >/dev/null 2>&1
+[ $? -eq 0 ] && DESKTOP_SESSION="gnome"
+
+disable_automounter()
+{
+	if [ "${DESKTOP_SESSION}" = "gnome" ]; then
+		if [ ${HAVE_GSETTING} -eq 0 ]; then
+		        debugmsg ${DEBUG_INFO} "[INFO]: Disable automounter during install with gsetting."
+			AUTOMOUNT_BACK=`${RUN_LOGNAME} gsettings get ${MEDIA_HANDLING} automount`
+			AUTOMOUNT_OPEN_BACK=`${RUN_LOGNAME} gsettings get ${MEDIA_HANDLING} automount-open`
+			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount "false"
+			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount-open "false"
+		elif [ ${HAVE_DCONF} -eq 0 ]; then
+		        debugmsg ${DEBUG_INFO} "[INFO]: Disable automounter during install with dconf."
+			AUTOMOUNT_BACK=`${RUN_LOGNAME} dconf read ${MEDIA_HANDLING_PATH}/automount`
+			AUTOMOUNT_OPEN_BACK=`${RUN_LOGNAME} dconf read ${MEDIA_HANDLING_PATH}/automount-open`
+			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount "false"
+			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount-open "false"
+		fi
+	fi
+}
+
+restore_automounter()
+{
+	if [ "${DESKTOP_SESSION}" = "gnome" ]; then
+		if [ ${HAVE_GSETTING} -eq 0 ]; then
+		        debugmsg ${DEBUG_INFO} "[INFO]: Restore previous automounter settings with gsetting."
+			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount "${AUTOMOUNT_BACK}"
+			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount-open "${AUTOMOUNT_OPEN_BACK}"
+		elif [ ${HAVE_DCONF} -eq 0 ]; then
+		        debugmsg ${DEBUG_INFO} "[INFO]: Restore previous automounter settings with gconf."
+			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount "${AUTOMOUNT_BACK}"
+			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount-open "${AUTOMOUNT_OPEN_BACK}"
+		fi
+	fi
+}
+
+disable_automounter
+
 case $TARGET_TYPE in
     block)
 	installer_main "$dev"
@@ -567,5 +620,7 @@ case $TARGET_TYPE in
 
 	;;
 esac
+
+restore_automounter
 
 exit 0
