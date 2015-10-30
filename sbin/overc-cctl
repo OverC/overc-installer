@@ -12,7 +12,7 @@ function print_cmd_help {
 	case "${1}" in
 		add)
 			cat << EOF
-add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-S tty console dev] [-m monitor container]
+add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-S tty console dev] [-m monitor container] [-v vty number]
 
 Adds a new container which doesn't already exist.
 EOF
@@ -135,6 +135,7 @@ Options summary:
 -s       : container controlling tty console
 -S [arg] : tty console device.  default is ttyS0
 -m [arg] : monitor container controlled by dom0, default is domE
+-v [arg] : specify the vty number to be used for login
 
 Special container names:
 dom0     : the domain0 container.  This brings the normal high level
@@ -249,7 +250,7 @@ if [ ! -e \$LXC_ROOTFS_MOUNT ] ; then
 	exit 1
 fi
 
-blacklist="console|core|fd|full|hugepages|initctl|log|lp0|lp1|lp2|lp3|mqueue|null|pts|random|shm|stderr|stdin|stdout|tty|tty1|tty2|tty3|urandom|zero"
+blacklist="console|core|fd|full|hugepages|initctl|log|lp0|lp1|lp2|lp3|mqueue|null|pts|random|shm|stderr|stdin|stdout|tty|urandom|zero"
 
 # Populate the dev directory, avoiding anything in the blacklist
 cd /dev ; cp -ua \`ls | egrep -v -e "^(\$blacklist)\\\$"\` \$LXC_ROOTFS_MOUNT/dev
@@ -291,6 +292,17 @@ function deploy_new_container {
 
 	if [ "${cn}" == "dom0" -a "${monitor_container}" != "domE" ]; then
 		sed -i "s/domE/${monitor_container}/" ${pathtocontainer}/rootfs/etc/cube-cmd-server.conf
+	fi
+
+	if [ -n "vty_num" ]; then
+		#disable the autoTV
+		sed -i "s/#NAutoVTs=.*$/NAutoVTs=0/g" ${pathtocontainer}/rootfs/etc/systemd/logind.conf
+		sed -i "s/#ReserveVT=.*$/ReserveVT=0/g" ${pathtocontainer}/rootfs/etc/systemd/logind.conf
+		gettys=$( ls ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/getty* )
+		for k in ${gettys}; do
+			ln -s -f /dev/null ${k}
+		done
+		ln -sf /lib/systemd/system/getty@.service ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/getty@tty${vty_num}.service
 	fi
 
 	if [ ${discoverable} == 1 ]; then
@@ -760,7 +772,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?Fdhcap0n:m:f:g:i:rt:sS:" opt; do
+while getopts "?Fdhcap0n:m:f:g:i:rt:sS:v:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -806,6 +818,15 @@ while getopts "?Fdhcap0n:m:f:g:i:rt:sS:" opt; do
 			continue
 		else
 			echo "Error: -t requires a number as argument"
+			exit 1
+		fi
+		;;
+	v)
+		vty_num=$OPTARG
+		if [ "${vty_num}" -ge "2" -a "${vty_num}" -le "6" ] 2>/dev/null; then
+			continue
+		else
+			echo "Error: -v requires a number >= 2 and <= 6"
 			exit 1
 		fi
 		;;
