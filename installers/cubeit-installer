@@ -515,7 +515,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	# containers names are "prefix-<container name>-<... suffixes >
 	container_src=`basename $c`
-	cname=`echo $container_src | cut -d'-' -f2`
+	cname=`${SBINDIR}/cubename $c`
 	cp $c /z/tmp/
 	cp ${SBINDIR}/overc-cctl /z/tmp/
 	
