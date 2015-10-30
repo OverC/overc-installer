@@ -61,13 +61,13 @@ cat << EOF
   examples:
 
       # network block device
-      $ cubeit --artifacts-dir `pwd` /dev/nbd0
+      $ cubeit --artifacts `pwd` /dev/nbd0
 
       # usb drive as sdc
-      $ cubeit --artifacts-dir `pwd` /dev/sdc
+      $ cubeit --artifacts `pwd` /dev/sdc
 
       # network block device
-      $ cubeit --artifacts-dir `pwd` --config /tmp/my_usb_config.sh /dev/nbd0
+      $ cubeit --artifacts `pwd` --config /tmp/my_usb_config.sh /dev/nbd0
 
       # image
       $ cubeit --force --config config-live.sh --artifacts `pwd` /tmp/overc.img
