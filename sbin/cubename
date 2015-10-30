@@ -1,0 +1,93 @@
+#!/bin/bash
+
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+
+usage()
+{
+cat << EOF
+
+  cubename <path to cube file>
+
+  example:
+    
+      $  cubename cube-server-genericx86-64-20151030174740.rootfs.tar.bz2
+ 
+EOF
+}
+
+if [ -z "$1" ]; then
+    usage
+    exit
+fi
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+	--prefix)
+	    prefix="$2"
+	    shift
+	    ;;
+	--suffix)
+	    suffix="$2"
+	    shift
+	    ;;
+	-v) verbose=t
+            ;;
+        *) break
+            ;;
+    esac
+    shift
+done
+
+# Parms: $1 = filename
+function extract_container_name
+{
+    local fullname=$1
+
+    # container names follow these rules:
+    #
+    # <type>-<name>-<rest>
+    #
+    # <type>: cube, docker, lxc
+    # <name>: dom or <string>
+    # 
+    # if name is 'dom', the next character or -<string> is the
+    # name of the domain. Strings must be all alpha numeric.
+    #
+    # <rest>: <arch>.tar.bz
+    # <arch>: genericx86-64, ARM, etc.
+    #  
+    #
+    # system container: cube-dom<x>-<rest>
+    # application container: cube-<string>-<rest>
+    # 
+
+    container_src=`basename $fullname`
+
+    # read in the parts, split by '-'. keys start with 0 and increase
+    array=(${container_src//\-/ }) 
+
+    type=${array[0]}
+    name=${array[1]}
+
+    if [ "$type" = "cube" ]; then
+	case $name in
+	    dom*)
+		output=$name
+		;;
+	    *)
+		output=$type-$name
+		;;
+	esac
+    fi
+
+    echo ${output}
+}
+
+extract_container_name $1
