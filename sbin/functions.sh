@@ -611,6 +611,10 @@ install_grub()
 		sed "s|%INSTALL_INITRAMFS%|${initramfs_name}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
 		sed "s|%INSTALLER_PARTITION%|${p2}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
 		sed "s|%ROOTFS_LABEL%|${ROOTFS_LABEL}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
+		if ! [ -n "$DISTRIBUTION" ]; then
+			DISTRIBUTION="OverC"
+		fi
+		sed "s|%DISTRIBUTION%|${DISTRIBUTION}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
 	else
 		debugmsg ${DEBUG_CRIT} "ERROR: Could not update grub configuration with install kernel"
 		return 1

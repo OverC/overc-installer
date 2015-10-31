@@ -192,6 +192,10 @@ for config in ${CONFIG_FILES}; do
     source `basename ${config_to_source}`
 done
 
+if ! [ -n "$DISTRIBUTION" ]; then
+    DISTRIBUTION="OverC"
+fi
+
 # Find the grub configuration
 for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
     if [ -e "${d}/${INSTALL_GRUBUSBCFG}" ] &&
@@ -470,6 +474,7 @@ IFS=$OLDIFS
 		echo " \\" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 	    done
 	    echo "\"" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+	    echo "DISTRIBUTION=\"$DISTRIBUTION\"" >>${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 	fi
 
 	if [ -n "${HD_MODULES}" ]; then

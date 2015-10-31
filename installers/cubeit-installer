@@ -162,6 +162,9 @@ if [ ! -d "${IMAGESDIR}" ]; then
     fi
 fi
 
+if ! [ -n "$DISTRIBUTION" ]; then
+    DISTRIBUTION="OverC"
+fi
 
 get_container_name_by_prop()
 {
@@ -421,7 +424,7 @@ terminal_input console serial
 terminal_output console serial
 set timeout=5
 
-menuentry 'Overc' {
+menuentry "$DISTRIBUTION" {
 	insmod gzio
 	insmod ext2
 	insmod fat
@@ -432,7 +435,7 @@ menuentry 'Overc' {
 	initrd	/initrd
 }
 
-menuentry 'Overc recovery' {
+menuentry "$DISTRIBUTION recovery" {
         insmod gzio
         insmod ext2
         insmod fat
