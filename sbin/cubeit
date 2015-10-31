@@ -126,7 +126,7 @@ done
 # support files
 INSTALLER_FILES_DIR="${BASEDIR}/../files"
 # sbin files (typically this creator)
-INSTALLER_SBIN_DIR="${BASEDIR}/../sbin"
+SBINDIR="${BASEDIR}/../sbin"
 # installers that will go on the usb stick, and install to the HD
 INSTALLERS_DIR="${BASEDIR}/../installers"
 # configuration for this script
@@ -363,7 +363,7 @@ custom_install_rules()
 	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
 	assert_return $?
 
-	cp ${INSTALLER_SBIN_DIR}/* ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
+	cp ${SBINDIR}/* ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
 	if [ $? -ne 0 ]; then
 		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy sbin files"
 		return 1

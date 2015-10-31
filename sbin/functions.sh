@@ -766,7 +766,7 @@ create_property_map()
 
 	cn=`echo "${c}" | cut -d':' -f1`
 	cn_short=`basename ${cn}`
-	cname=`echo $cn_short | cut -d'-' -f2`
+	cname=`${SBINDIR}/cubename $cn_short`
 
 	all_props=""
 	for prop_count in 1 2 3 4 5 6; do
