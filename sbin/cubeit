@@ -188,7 +188,7 @@ for config in ${CONFIG_FILES}; do
 	    exit 1
 	fi
     fi
-    export PATH="$PATH:${colon_separated_config_dirs}"
+    export PATH="$PATH:${colon_separated_config_dirs}:$(dirname ${config_to_source})"
     source `basename ${config_to_source}`
 done
 
