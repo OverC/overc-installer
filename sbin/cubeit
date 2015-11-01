@@ -235,8 +235,6 @@ for d in ${CONFIG_DIRS} $BASEDIR; do
     fi
 done
 
-create_property_map container_map ${HDINSTALL_CONTAINERS}
-
 ## Set up trap handler
 
 trap_cmd='trap_handler $?'

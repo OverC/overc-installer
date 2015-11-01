@@ -745,7 +745,7 @@ value() {
     done
 }
 
-# $1: the property map variable to create
+# $1: the property map variable to fill (must already be declared)
 # $2: a variable with a list of items:<properties>
 # output: a property map in $2
 create_property_map()
@@ -753,9 +753,6 @@ create_property_map()
     local ret_property_map_name="$1"
     shift
     local input_var=$@
-
-    # make the associative array from the name passed in
-    eval "declare -g -A $ret_property_map_name=()"
 
     # containers are listed in HDINSTALL_CONTAINERS as:
     #    <full path>/<container tgz>:<properties>
