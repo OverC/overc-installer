@@ -307,25 +307,29 @@ else
 fi
 set +e
 
-mkdir -p /z
-mount /dev/${fs_dev}3 /z
+if [ -z "${TMPMNT}" ]; then
+    TMPMNT=`mktemp -d /tmp/pulsarmountXXXXX`
+    export TMPMNT
+fi
+mkdir -p ${TMPMNT}
+mount /dev/${fs_dev}3 ${TMPMNT}
 
 if [ $btrfs -eq 0 ]; then
-	mkdir /z/boot
-	mount /dev/${fs_dev}1 /z/boot
+	mkdir ${TMPMNT}/boot
+	mount /dev/${fs_dev}1 ${TMPMNT}/boot
 else
 	# create a subvolume
-	btrfs subvolume create /z/rootfs
+	btrfs subvolume create ${TMPMNT}/rootfs
 
-	mkdir /z/rootfs/boot
-	mount /dev/${fs_dev}1 /z/rootfs/boot
+	mkdir ${TMPMNT}/rootfs/boot
+	mount /dev/${fs_dev}1 ${TMPMNT}/rootfs/boot
 fi
 
 ## unpack the installation
 if [ $btrfs -eq 0 ]; then
-	cd /z
+	cd ${TMPMNT}
 else
-	cd /z/rootfs
+	cd ${TMPMNT}/rootfs
 fi
 
 ## vfat filesystem doesn't support soft link, here umount boot partition and
@@ -333,7 +337,7 @@ fi
 sync
 umount boot 
 
-# we are either in /z or /z/rootfs
+# we are either in ${TMPMNT} or ${TMPMNT}/rootfs
 debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
 tar --numeric-owner -xpf $rootfs
 
@@ -380,17 +384,17 @@ fi
 
 if [ $btrfs -eq 1 ]; then
 	# get the subvolume id of /mnt/rootfs using:
-	subvol=`btrfs subvolume list /z/rootfs | awk '{print $2;}'`
+	subvol=`btrfs subvolume list ${TMPMNT}/rootfs | awk '{print $2;}'`
 	# set default volume when mounted
-	btrfs subvolume set-default $subvol /z/rootfs
+	btrfs subvolume set-default $subvol ${TMPMNT}/rootfs
 
 	cd /
 	sync
-	umount /z/rootfs/boot
-	umount /z/
-	mount -o subvolid=${subvol} /dev/${fs_dev}3 /z
-	mount /dev/${fs_dev}1 /z/boot
-	cd /z/
+	umount ${TMPMNT}/rootfs/boot
+	umount ${TMPMNT}/
+	mount -o subvolid=${subvol} /dev/${fs_dev}3 ${TMPMNT}
+	mount /dev/${fs_dev}1 ${TMPMNT}/boot
+	cd ${TMPMNT}/
 fi
 
 # A fixup for virtual installs. If we've booted off a usb device
@@ -408,16 +412,16 @@ fi
 if ${X86_ARCH}; then
     debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
 
-    chroot /z /bin/bash -c "mount -t devtmpfs none /dev"
-    chroot /z /bin/bash -c "mount -t proc none /proc"
+    chroot ${TMPMNT} /bin/bash -c "mount -t devtmpfs none /dev"
+    chroot ${TMPMNT} /bin/bash -c "mount -t proc none /proc"
 
     if [ -n "$loop_device" ]; then
-	chroot /z /bin/bash -c "grub-install --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search\" /dev/${raw_dev}"
+	chroot ${TMPMNT} /bin/bash -c "grub-install --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search\" /dev/${raw_dev}"
     else
-	chroot /z /bin/bash -c "grub-install --force /dev/${raw_dev}"
+	chroot ${TMPMNT} /bin/bash -c "grub-install --force /dev/${raw_dev}"
     fi
 
-    cat <<EOF >/z/boot/grub/grub.cfg
+    cat <<EOF >${TMPMNT}/boot/grub/grub.cfg
 set default="0"
 
 serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1
@@ -452,7 +456,7 @@ EOF
     debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
     # fixups for virtual installs
     if [ "${raw_dev}" = "vdb" ]; then
-	sed -i "s/${raw_dev}/${final_dev}/" /z/boot/grub/grub.cfg
+	sed -i "s/${raw_dev}/${final_dev}/" ${TMPMNT}/boot/grub/grub.cfg
     fi
 
     if [ -e /${IMAGESDIR}/boot*.efi ]; then
@@ -462,7 +466,7 @@ EOF
 	# remove those sections that are supported by uefi grub,
 	# such as if/else statement and functions and only keep
 	# grub menuentry section.
-	cat /z/boot/grub/grub.cfg | sed '/insmod\|terminal\|echo/d' >boot/EFI/BOOT/grub.cfg
+	cat ${TMPMNT}/boot/grub/grub.cfg | sed '/insmod\|terminal\|echo/d' >boot/EFI/BOOT/grub.cfg
 	    
 	echo `basename boot/EFI/BOOT/boot*.efi` >boot/startup.nsh
 	chmod +x boot/startup.nsh
@@ -486,33 +490,33 @@ else # arm architecture
     fi
 fi
 
-echo "LABEL=$SWAPLABEL none swap sw 0 0" >> /z/etc/fstab
-echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> /z/etc/fstab
-echo "LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0" >> /z/etc/fstab
+echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab
+echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> ${TMPMNT}/etc/fstab
+echo "LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0" >> ${TMPMNT}/etc/fstab
 
 if [ -e "$INSTALL_SMARTCONFIG" ]; then
-	cp $INSTALL_SMARTCONFIG /z/var/lib/smart/config
+	cp $INSTALL_SMARTCONFIG ${TMPMNT}/var/lib/smart/config
 elif [ -e /${IMAGESDIR}/config.smart ]; then
-	cp /${IMAGESDIR}/config.smart /z/var/lib/smart/config
+	cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/smart/config
 fi
 
 #make essential system use vty 1 to login and disable the autoVTs of systemd
-sed -i "s/#NAutoVTs=.*$/NAutoVTs=0/g" /z/etc/systemd/logind.conf
-sed -i "s/#ReserveVT=.*$/ReserveVT=0/g" /z/etc/systemd/logind.conf
-gettys=$( ls /z/etc/systemd/system/getty.target.wants/getty* )
+sed -i "s/#NAutoVTs=.*$/NAutoVTs=0/g" ${TMPMNT}/etc/systemd/logind.conf
+sed -i "s/#ReserveVT=.*$/ReserveVT=0/g" ${TMPMNT}/etc/systemd/logind.conf
+gettys=$( ls ${TMPMNT}/etc/systemd/system/getty.target.wants/getty* )
 for k in ${gettys}; do
 	ln -s -f /dev/null ${k}
 done
-ln -sf /lib/systemd/system/getty@.service /z/etc/systemd/system/getty.target.wants/getty@tty1.service
+ln -sf /lib/systemd/system/getty@.service ${TMPMNT}/etc/systemd/system/getty.target.wants/getty@tty1.service
 
 if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     debugmsg ${DEBUG_INFO} "[INFO]: installing containers"
-    if [ ! -d /z/var/lib/lxc ]; then
-        mkdir -p /z/var/lib/lxc
+    if [ ! -d ${TMPMNT}/var/lib/lxc ]; then
+        mkdir -p ${TMPMNT}/var/lib/lxc
     fi
-    mount /dev/${fs_dev}4 /z/var/lib/lxc
+    mount /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
 
-    mkdir -p /z/tmp
+    mkdir -p ${TMPMNT}/tmp
 
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	debugmsg ${DEBUG_INFO} "[INFO]: installing $c"
@@ -520,8 +524,8 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	# containers names are "prefix-<container name>-<... suffixes >
 	container_src=`basename $c`
 	cname=`${SBINDIR}/cubename $c`
-	cp $c /z/tmp/
-	cp ${SBINDIR}/overc-cctl /z/tmp/
+	cp $c ${TMPMNT}/tmp/
+	cp ${SBINDIR}/overc-cctl ${TMPMNT}/tmp/
 	
 	ttyconsole_opt="-S ${ttyconsoledev}"
 	if [ "${ttyconsolecn}" == "${cname}" ]; then
@@ -533,9 +537,9 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    ttyconsole_opt=" -v $vty_num ${ttyconsole_opt}"
 	fi
 	# actually install the container
-	export LXCBASE="/z/var/lib/lxc"
-	export BINDMNTBASE="/z/opt/container"
-	export HOSTDIR="/z"
+	export LXCBASE="${TMPMNT}/var/lib/lxc"
+	export BINDMNTBASE="${TMPMNT}/opt/container"
+	export HOSTDIR="${TMPMNT}"
 	case $container_src in
 	    *-dom0-*)
 		monitor_container_opt=""
@@ -555,14 +559,14 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	esac
 
 	if [ -e "$INSTALL_SMARTCONFIG" ]; then
-	    cp $INSTALL_SMARTCONFIG /z/var/lib/lxc/$cname/rootfs/var/lib/smart/config
+	    cp $INSTALL_SMARTCONFIG ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
 	elif [ -e /${IMAGESDIR}/config.smart ]; then
-	    cp /${IMAGESDIR}/config.smart /z/var/lib/lxc/$cname/rootfs/var/lib/smart/config
+	    cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
 	fi
     done
 
     sync
-    umount /z/var/lib/lxc
+    umount ${TMPMNT}/var/lib/lxc
 fi
 
 if [ -d "${PACKAGESDIR}" ]; then
@@ -583,7 +587,7 @@ if [ -d ${PUPPETDIR} ]; then
     verify_utility puppet
     if [ $? -eq 0 ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: Running puppet"
-	cd /z
+	cd ${TMPMNT}
 	cp -r ${PUPPETDIR} tmp/.
 
 	chroot . /bin/bash -c " \\
@@ -600,29 +604,40 @@ debugmsg ${DEBUG_INFO} "[INFO]: performing cleanup"
 # cleanup
 cd /
 sync
-umount /z/boot
+umount ${TMPMNT}/boot
 
-cat /proc/mounts | grep -q "/z/dev"
+cat /proc/mounts | grep -q "${TMPMNT}/dev"
 if [ $? -eq 0 ]; then
-	umount /z/dev
+	umount ${TMPMNT}/dev
 fi
-cat /proc/mounts | grep -q "/z/proc"
+cat /proc/mounts | grep -q "${TMPMNT}/proc"
 if [ $? -eq 0 ]; then
-	umount /z/proc
+	umount ${TMPMNT}/proc
 fi
 
-umount /z
+umount ${TMPMNT}
+if [ $? -ne 0 ]; then
+    echo ERROR: umount ${TMPMNT} failed
+    exit
+fi
+rmdir ${TMPMNT}
+
 
 #create a backup snapshot for rootfs
 if [ $btrfs -eq 0 ]; then
 	:
 else
 	debugmsg ${DEBUG_INFO} "[INFO]: Create snapshot of rootfs for recovery."
-	mount /dev/${fs_dev}3 /z
-	if [ -e "/z/rootfs" ]; then
-		btrfs subvolume snapshot /z/rootfs /z/rootfs_bakup
+	mount /dev/${fs_dev}3 ${TMPMNT}
+	if [ -e "${TMPMNT}/rootfs" ]; then
+		btrfs subvolume snapshot ${TMPMNT}/rootfs ${TMPMNT}/rootfs_bakup
 	fi
-	umount /z
+	umount ${TMPMNT}
+	if [ $? -ne 0 ]; then 
+	    echo ERROR: umount ${TMPMNT} failed
+	    exit             
+	fi
+	rmdir ${TMPMNT}
 fi
 	
 # don't run this on a host!!
