@@ -618,10 +618,8 @@ fi
 umount ${TMPMNT}
 if [ $? -ne 0 ]; then
     echo ERROR: umount ${TMPMNT} failed
-    exit
+    exit 1
 fi
-rmdir ${TMPMNT}
-
 
 #create a backup snapshot for rootfs
 if [ $btrfs -eq 0 ]; then
@@ -637,8 +635,9 @@ else
 	    echo ERROR: umount ${TMPMNT} failed
 	    exit             
 	fi
-	rmdir ${TMPMNT}
 fi
+
+rmdir ${TMPMNT}
 	
 # don't run this on a host!!
 # sync ; sync ; echo 3> /proc/sys/vm/drop_caches
