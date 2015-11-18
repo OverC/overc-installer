@@ -9,20 +9,30 @@ if [ -z "${ARTIFACTS_DIR}" ]; then
     ARTIFACTS_DIR=""
 fi
 
+### Included in PREREQ_FILES.
 INSTALL_KERNEL="${ARTIFACTS_DIR}/bzImage"
 INSTALL_ROOTFS="${ARTIFACTS_DIR}/cube-essential-genericx86-64.tar.bz2"
 INSTALL_MODULES=""
-INSTALL_INITRAMFS="${ARTIFACTS_DIR}/cube-builder-initramfs-genericx86-64.cpio.gz"
-INSTALL_EFIBOOT="${ARTIFACTS_DIR}/bootx64.efi"
 
 INSTALL_GRUBHDCFG="grub-hd.cfg"
 INSTALL_GRUBUSBCFG="grub-usb.cfg"
 INSTALL_GRUBCFG="${INSTALLER_FILES_DIR}/${INSTALL_GRUBUSBCFG}"
+### End included in PREREQ_FILES.
+
+## List of prerequisite files for the installer to check. If you overwrite any
+#  of the variables in the previous section after sourcing this config be sure
+#  to run calc_prereq_files() again to recalculate PREREQ_FILES.
+calc_prereq_files() {
+    INSTALL_FILES="${INSTALL_KERNEL} ${INSTALL_ROOTFS} ${INSTALL_MODULES} ${INSTALL_GRUBCFG}"
+    PREREQ_FILES="${INSTALL_FILES}"
+}
+calc_prereq_files
+
+INSTALL_INITRAMFS="${ARTIFACTS_DIR}/cube-builder-initramfs-genericx86-64.cpio.gz"
+INSTALL_EFIBOOT="${ARTIFACTS_DIR}/bootx64.efi"
 
 #the smart config file which has been set the smart channels.
 INSTALL_SMARTCONFIG="${ARTIFACTS_DIR}/config"
-
-INSTALL_FILES="${INSTALL_KERNEL} ${INSTALL_ROOTFS} ${INSTALL_MODULES} ${INSTALL_GRUBCFG}"
 
 HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/cube-graphical-builder-genericx86-64.tar.bz2 \
                   ${ARTIFACTS_DIR}/cube-builder-genericx86-64.tar.bz2"
@@ -32,7 +42,6 @@ HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/cube-graphical-builder-genericx86-64.tar.bz2 
 #INSTALL_PUPPET_DIR="puppet"
 
 ## List of prerequisite files for the installer to check
-PREREQ_FILES="${INSTALL_FILES}"
 BOARD_NAME="Generic x86"
 EVAL_NAME="Evaluation - OverC"
 DISTRIBUTION="OverC"
