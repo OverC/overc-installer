@@ -10,9 +10,9 @@ if [ -z "${ARTIFACTS_DIR}" ]; then
 fi
 
 INSTALL_KERNEL="${ARTIFACTS_DIR}/bzImage"
-INSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-essential-genericx86-64.tar.bz2"
+INSTALL_ROOTFS="${ARTIFACTS_DIR}/cube-essential-genericx86-64.tar.bz2"
 INSTALL_MODULES=""
-INSTALL_INITRAMFS="${ARTIFACTS_DIR}/pod-builder-initramfs-genericx86-64.cpio.gz"
+INSTALL_INITRAMFS="${ARTIFACTS_DIR}/cube-builder-initramfs-genericx86-64.cpio.gz"
 INSTALL_EFIBOOT="${ARTIFACTS_DIR}/bootx64.efi"
 
 INSTALL_GRUBHDCFG="grub-hd.cfg"
@@ -24,8 +24,8 @@ INSTALL_SMARTCONFIG="${ARTIFACTS_DIR}/config"
 
 INSTALL_FILES="${INSTALL_KERNEL} ${INSTALL_ROOTFS} ${INSTALL_MODULES} ${INSTALL_GRUBCFG}"
 
-HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-graphical-builder-genericx86-64.tar.bz2 \
-                  ${ARTIFACTS_DIR}/pod-builder-genericx86-64.tar.bz2"
+HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/cube-graphical-builder-genericx86-64.tar.bz2 \
+                  ${ARTIFACTS_DIR}/cube-builder-genericx86-64.tar.bz2"
 
 
 # Uncomment to specify path to init.pp

@@ -1,7 +1,7 @@
 source config-usb.sh
 
-HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/pod-essential-genericx86-64.tar.bz2"
+HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/cube-essential-genericx86-64.tar.bz2"
 
-HDINSTALL_CONTAINERS="${ARTIFACTS_DIR}/pod-dom0-genericx86-64.tar.bz2 \
-                      ${ARTIFACTS_DIR}/pod-dom1-genericx86-64.tar.bz2 \
-                      ${ARTIFACTS_DIR}/pod-domE-genericx86-64.tar.bz2"
+HDINSTALL_CONTAINERS="${ARTIFACTS_DIR}/cube-dom0-genericx86-64.tar.bz2 \
+                      ${ARTIFACTS_DIR}/cube-dom1-genericx86-64.tar.bz2 \
+                      ${ARTIFACTS_DIR}/cube-domE-genericx86-64.tar.bz2"
