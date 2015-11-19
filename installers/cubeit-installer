@@ -490,6 +490,14 @@ else # arm architecture
     fi
 fi
 
+#Remove the systemd's costly remount of the root partition from /etc/fstab,
+#and also remove API filesystems mounting from it, as systemd will mount them itself.
+sed -i '\/dev\/root/d' ${TMPMNT}/etc/fstab
+sed -i '/^proc/d' ${TMPMNT}/etc/fstab
+sed -i '/^devpts/d' ${TMPMNT}/etc/fstab
+sed -i '/^tmpfs/d' ${TMPMNT}/etc/fstab
+sed -i '/^usbdevfs/d' ${TMPMNT}/etc/fstab
+
 echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab
 echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> ${TMPMNT}/etc/fstab
 echo "LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0" >> ${TMPMNT}/etc/fstab

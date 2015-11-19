@@ -336,6 +336,15 @@ function deploy_new_container {
 			ln -s -f /dev/null ${k}
 		done
 	fi
+
+	#Remove the systemd's costly remount of the root partition from /etc/fstab,
+	#and also remove API filesystems mounting from it, as systemd will mount them itself.
+	sed -i '\/dev\/root/d' ${pathtocontainer}/rootfs/etc/fstab
+	sed -i '/^proc/d' ${pathtocontainer}/rootfs/etc/fstab
+	sed -i '/^devpts/d' ${pathtocontainer}/rootfs/etc/fstab
+	sed -i '/^tmpfs/d' ${pathtocontainer}/rootfs/etc/fstab
+	sed -i '/^usbdevfs/d' ${pathtocontainer}/rootfs/etc/fstab
+
 }
 
 function get_container_attributes {
