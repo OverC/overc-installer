@@ -905,6 +905,7 @@ installer_main()
 	
 	# Cleanup
 	debugmsg ${DEBUG_INFO} "Unmounting all partitions"
+	sync
 	umount ${mnt1}
 	umount ${mnt2}
 	

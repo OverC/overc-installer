@@ -644,6 +644,7 @@ else
 	if [ -e "${TMPMNT}/rootfs" ]; then
 		btrfs subvolume snapshot ${TMPMNT}/rootfs ${TMPMNT}/rootfs_bakup
 	fi
+	sync
 	umount ${TMPMNT}
 	if [ $? -ne 0 ]; then 
 	    echo ERROR: umount ${TMPMNT} failed
