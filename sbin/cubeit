@@ -620,6 +620,12 @@ case $TARGET_TYPE in
 	else
 	    losetup -d $device
 	fi
+	# Chown the image file to the owner of the directory
+	# it was written to
+	if [ -e $target ] ; then
+		d=$(dirname $target)
+		chown $(stat -c "%u" $d) $target
+	fi
 
 	;;
 esac
