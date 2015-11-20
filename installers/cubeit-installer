@@ -343,7 +343,7 @@ tar --numeric-owner -xpf $rootfs
 
 mount /dev/${fs_dev}1 mnt
 
-imgs=`echo boot/*Image-*`
+imgs=`ls boot/*Image-* 2>/dev/null`
 if [ -n "$imgs" ] ; then
     cp boot/*Image-* mnt/
 fi
@@ -361,28 +361,31 @@ sync
 umount ./mnt
 mount /dev/${fs_dev}1 ./boot
 
-debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs"
-kernel=`basename boot/*Image-*`
-kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
-initrd="initrd-${kernel_version}.gz"
+img=`ls boot/*Image-* 2> /dev/null`
+if [ -n "$img" ] ; then
+	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs"
+	kernel=`basename boot/*Image-*`
+	kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
+	initrd="initrd-${kernel_version}.gz"
 
-# First use the config file specified one, if not set,
-# then find it in ${IMAGESDIR}
-# create both a initrd-<version> and initrd
-if [ -e "$INSTALL_INITRAMFS" ]; then
-	mkdir -p boot
-	cp $INSTALL_INITRAMFS boot/${initrd}
-	cp $INSTALL_INITRAMFS boot/initrd
-else
-	#Generally in deploy/image dir, there will be several initramfs files
-	#with different name, but they are the same file, so here just copy one
-	#of them is ok.
-	for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
+	# First use the config file specified one, if not set,
+	# then find it in ${IMAGESDIR}
+	# create both a initrd-<version> and initrd
+	if [ -e "$INSTALL_INITRAMFS" ]; then
 		mkdir -p boot
-		cp /$i boot/${initrd}
-		cp /$i boot/initrd
-		break
-	done
+		cp $INSTALL_INITRAMFS boot/${initrd}
+		cp $INSTALL_INITRAMFS boot/initrd
+	else
+		#Generally in deploy/image dir, there will be several initramfs files
+		#with different name, but they are the same file, so here just copy one
+		#of them is ok.
+		for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
+			mkdir -p boot
+			cp /$i boot/${initrd}
+			cp /$i boot/initrd
+			break
+		done
+	fi
 fi
 
 if [ $btrfs -eq 1 ]; then
