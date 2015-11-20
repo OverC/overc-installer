@@ -343,7 +343,10 @@ tar --numeric-owner -xpf $rootfs
 
 mount /dev/${fs_dev}1 mnt
 
-cp boot/*Image-* mnt/
+imgs=`echo boot/*Image-*`
+if [ -n "$imgs" ] ; then
+    cp boot/*Image-* mnt/
+fi
 if [ -e boot/uImage-* ]; then
 	cp boot/uImage-* mnt/uImage
 	#create a backup kernel for recovery boot
