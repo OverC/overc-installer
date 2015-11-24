@@ -291,10 +291,6 @@ function deploy_new_container {
 
 	create_autodev_script
 
-	if [ "${cn}" == "dom0" -a "${monitor_container}" != "domE" ]; then
-		sed -i "s/domE/${monitor_container}/" ${pathtocontainer}/rootfs/etc/cube-cmd-server.conf
-	fi
-
 	if [ -n "$vty_num" ]; then
 		#disable the autoTV
 		sed -i "s/#NAutoVTs=.*$/NAutoVTs=0/g" ${pathtocontainer}/rootfs/etc/systemd/logind.conf
