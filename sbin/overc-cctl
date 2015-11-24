@@ -294,7 +294,7 @@ function deploy_new_container {
 		sed -i "s/domE/${monitor_container}/" ${pathtocontainer}/rootfs/etc/cube-cmd-server.conf
 	fi
 
-	if [ -n "vty_num" ]; then
+	if [ -n "$vty_num" ]; then
 		#disable the autoTV
 		sed -i "s/#NAutoVTs=.*$/NAutoVTs=0/g" ${pathtocontainer}/rootfs/etc/systemd/logind.conf
 		sed -i "s/#ReserveVT=.*$/ReserveVT=0/g" ${pathtocontainer}/rootfs/etc/systemd/logind.conf
