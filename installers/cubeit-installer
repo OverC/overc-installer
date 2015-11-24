@@ -390,7 +390,7 @@ fi
 
 if [ $btrfs -eq 1 ]; then
 	# get the subvolume id of /mnt/rootfs using:
-	subvol=`btrfs subvolume list ${TMPMNT}/rootfs | awk '{print $2;}'`
+	subvol=`btrfs subvolume list ${TMPMNT} | awk '{print $2;}'`
 	# set default volume when mounted
 	btrfs subvolume set-default $subvol ${TMPMNT}/rootfs
 
