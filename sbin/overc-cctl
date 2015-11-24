@@ -12,7 +12,7 @@ function print_cmd_help {
 	case "${1}" in
 		add)
 			cat << EOF
-add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-S tty console dev] [-m monitor container] [-v vty number]
+add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-P] [-S tty console dev] [-m monitor container] [-v vty number]
 
 Adds a new container which doesn't already exist.
 EOF
@@ -126,6 +126,7 @@ Options summary:
 -t [arg] : number of lxc ttys, connect with lxc-console.  default is 6
 -a       : set container to autostart
 -p       : set container to peer start
+-P       : set container to be privileged
 -d       : make container discoverable via avahi
 -0       : short form for -n dom0 -g domain0 -a -t 1
 -h       : print help
@@ -314,6 +315,12 @@ function deploy_new_container {
 		else
 			echo "WARNING: container is discoverable, but avahi not found"
 	        fi
+	fi
+
+	if [ $privileged -ne 1 ]; then
+		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd.service
+		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd-kernel.socket
+		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd-control.socket
 	fi
 	
 	if [ ${havettyconsole} == 1  ]; then
@@ -757,6 +764,7 @@ meta=overc-meta
 domain0=0
 autostart=0
 peerstart=0
+privileged=0
 discoverable=0
 removecont=0
 tty_num=6
@@ -781,7 +789,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?Fdhcap0n:m:f:g:i:rt:sS:v:" opt; do
+while getopts "?FdhcapP0n:m:f:g:i:rt:sS:v:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -796,6 +804,8 @@ while getopts "?Fdhcap0n:m:f:g:i:rt:sS:v:" opt; do
 		;;
 	p)
 		peerstart=1
+		;;
+	P)	privileged=1
 		;;
 	d)
 		discoverable=1

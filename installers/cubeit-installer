@@ -82,6 +82,7 @@ cat << EOF
     --finaldev: boot from this block dev. Default is vda
     --ttyconsoledev: set dev used for tty console
     --ttyconsolecn: set container name for providing agetty
+    --privilegedcn: set container name for privileged
 
 EOF
 }
@@ -119,6 +120,9 @@ while [ $# -gt 0 ]; do
             shift
             ;;
     --ttyconsolecn) ttyconsolecn="$2"
+            shift
+            ;;
+    --privilegedcn) privilegedcn="$2"
             shift
             ;;
          *) break
@@ -225,6 +229,13 @@ if [ -z "${ttyconsolecn}" ]; then
     ttyconsolecn=`get_container_name_by_prop console`
     if [ -z "${ttyconsolecn}" ]; then
 	ttyconsolecn="domE"
+    fi
+fi
+
+if [ -z "${privilegedcn}" ]; then
+    privilegedcn=`get_container_name_by_prop privileged`
+    if [ -z "${privilegedcn}" ]; then
+        privilegedcn="domE"
     fi
 fi
 
@@ -544,6 +555,10 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	ttyconsole_opt="-S ${ttyconsoledev}"
 	if [ "${ttyconsolecn}" == "${cname}" ]; then
             ttyconsole_opt="-s ${ttyconsole_opt}"
+	fi
+	
+	if [ "${privilegedcn}" == "${cname}" ]; then
+	    ttyconsole_opt=" -P ${ttyconsole_opt}"
 	fi
 
  	vty_num=`get_prop_value_by_container $cname "vty"`
