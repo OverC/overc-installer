@@ -214,14 +214,14 @@ function create_lxc_fstab {
 		bindmntbase=$bindmntbase_cross
         fi
 
-	# Create the fstab
-	cat << EOF >${pathtocontainer}/fstab
-${bindmntbase}/all	${lxcbase}/${cn}/rootfs${bindmntbase}/all	none ro,bind,create=dir
-${bindmntbase}/${cn}	${lxcbase}/${cn}/rootfs${bindmntbase}/local	none rw,bind,create=dir
-EOF
-
 	# special dom0 mounts (so nested containers can be launched)
 	if [ "${cn}" == "dom0" ]; then
+	    # This makes /opt/container/ available to dom0, so it can populate
+	    # /opt/container/local and /opt/container/all as part of the launch process
+	    # and have /opt/container in its mount namespace
+	    echo "${bindmntbase} ${lxcbase}/${cn}/rootfs${bindmntbase}	none rw,bind,create=dir" >> ${pathtocontainer}/fstab
+	    echo "${bindmntbase}/${cn} ${lxcbase}/${cn}/rootfs${bindmntbase}/local	none rw,bind,create=dir" >> ${pathtocontainer}/fstab
+
 	    # make /var/lib/lxc/* available to dom0
 	    echo "${lxcbase} ${lxcbase}/${cn}/rootfs/${lxcbase} none bind 0 0" >> ${pathtocontainer}/fstab
 	    # make / be available as /essential/
@@ -231,6 +231,10 @@ EOF
 	    # proc for namespace access to essential (required for nested containers)
 	    echo "/proc/ ${lxcbase}/${cn}/rootfs/host/proc/ none rw,bind,create=dir 0 0" >> ${pathtocontainer}/fstab
 	else
+	    # Create the fstab
+	    echo "${bindmntbase}/all	${lxcbase}/${cn}/rootfs${bindmntbase}/all	none ro,bind,create=dir"  >> ${pathtocontainer}/fstab
+	    echo "${bindmntbase}/${cn}	${lxcbase}/${cn}/rootfs${bindmntbase}/local	none rw,bind,create=dir"  >> ${pathtocontainer}/fstab
+
 	    # if we aren't dom0, then we'll be launched by dom0, so we need to have our
 	    # directory created there (for the local container directory), or that nested container
 	    # launch will fail
