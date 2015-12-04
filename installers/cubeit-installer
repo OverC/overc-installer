@@ -59,19 +59,6 @@ if ! [ -e $FUNCTIONS_FILE ]; then
 fi
 source $FUNCTIONS_FILE
 
-OLDIFS=$IFS
-IFS='
-'
-for f in `ls $SBINDIR/functions-*.sh`; do
-    if ! [ -e "${f}" ]; then
-	debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find function definitions (${f})"
-        exit 1
-    fi
-
-    source ${f}
-done
-IFS=$OLDIFS
-
 usage()
 {
 cat << EOF
@@ -156,6 +143,17 @@ for config in ${CONFIG_FILES}; do
     export PATH="$PATH:${colon_separated_config_dirs}:$( dirname $config_to_source )"
     source `basename ${config_to_source}`
 done
+
+OLDIFS=$IFS
+IFS='
+'
+#source the board specific functions
+if [ -e $SBINDIR/functions-${BOARD_NAME}.sh ]; then
+    debugmsg ${DEBUG_CRIT} "[INFO]: load board ${BOARD_NAME} specific functions"
+    source $SBINDIR/functions-${BOARD_NAME}.sh
+fi
+
+IFS=$OLDIFS
 
 if [ ! -d "${IMAGESDIR}" ]; then
     if [ -n "${ARTIFACTS_DIR}" ]; then
