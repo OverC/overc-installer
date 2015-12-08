@@ -117,6 +117,10 @@ while [ $# -gt 0 ]; do
             ;;
     -v) verbose=t
             ;;
+    --partition_layout)
+            FDISK_PARTITION_LAYOUT_INPUT="$2"
+            shift
+            ;;
          *) break
             ;;
     esac
@@ -612,8 +616,17 @@ case $TARGET_TYPE in
 		TARGET_CONFIG_FILE="config-live.sh"
 	    fi
 	fi
-	debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} --config ${TARGET_CONFIG_FILE} $device"
-	$INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} --config ${TARGET_CONFIG_FILE} ${INSTALL_ROOTFS} $device
+
+	if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ];then
+	    debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} \
+		    --config ${TARGET_CONFIG_FILE} $device --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT}"
+	    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
+		    --config ${TARGET_CONFIG_FILE} --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
+	else
+	    debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} --config ${TARGET_CONFIG_FILE} $device"
+	    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
+		    --config ${TARGET_CONFIG_FILE} ${INSTALL_ROOTFS} $device
+	fi
 
 	if [ -n "$NBD" ]; then
 	    qemu-nbd -d $device

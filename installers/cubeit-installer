@@ -112,6 +112,10 @@ while [ $# -gt 0 ]; do
     --privilegedcn) privilegedcn="$2"
             shift
             ;;
+    --partition_layout)
+            FDISK_PARTITION_LAYOUT_INPUT="$2"
+            shift
+            ;;
          *) break
             ;;
     esac
@@ -266,15 +270,25 @@ SWAPLABEL="SWAP"
 ROOTLABEL="OVERCROOTFS"
 LXCLABEL="OVERCCN"
 
-debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (fdisk-4-partition-layout)"
+if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ]; then
+        FDISK_PARTITION_LAYOUT="${FDISK_PARTITION_LAYOUT_INPUT}"
+elif [ -z "${FDISK_PARTITION_LAYOUT}" ]; then
+        FDISK_PARTITION_LAYOUT="${SBINDIR}/fdisk-4-partition-layout.txt"
+fi
+
+debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${FDISK_PARTITION_LAYOUT})"
 debugmsg ${DEBUG_INFO} "          1) boot"
 debugmsg ${DEBUG_INFO} "          2) swap"
 debugmsg ${DEBUG_INFO} "          3) root"
 debugmsg ${DEBUG_INFO} "          4) container (lxc)"
 # We partition the raw device as passed to the script. This is
 # nuke and pave .. so be careful!
-fdisk /dev/${raw_dev} < ${SBINDIR}/fdisk-4-partition-layout.txt >/dev/null 2>&1
-
+if [ -f ${FDISK_PARTITION_LAYOUT} ]; then
+        fdisk /dev/${raw_dev} < ${FDISK_PARTITION_LAYOUT} >/dev/null 2>&1
+else
+        debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find the fdisk partitions file ${FDISK_PARTITION_LAYOUT}"
+        exit 1
+fi
 # For filesystem creation, we need the partitions. But some devices
 # name them differently than a hard disk (i.e mmcblk or nbd) and 
 # have 'p' in the partion names. In that case, we need to create a
