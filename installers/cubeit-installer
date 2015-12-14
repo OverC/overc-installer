@@ -157,6 +157,11 @@ if [ -e $SBINDIR/functions-${BOARD_NAME}.sh ]; then
     source $SBINDIR/functions-${BOARD_NAME}.sh
 fi
 
+#source any local function definitions
+if [ -e "${LOCAL_POST_FUNCTION_DEFS}" ] ; then
+    source ${LOCAL_POST_FUNCTION_DEFS}
+fi
+
 IFS=$OLDIFS
 
 if [ ! -d "${IMAGESDIR}" ]; then
@@ -609,7 +614,11 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
 	fi
     done
-
+    if [ -n "${LOCAL_CUSTOM_HDD_POST_FUNCS}" ]; then
+	for f in ${LOCAL_CUSTOM_HDD_POST_FUNCS}; do
+	    ${f}
+	done
+    fi
     sync
     umount ${TMPMNT}/var/lib/lxc
 fi
