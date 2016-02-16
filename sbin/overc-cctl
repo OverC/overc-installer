@@ -12,7 +12,7 @@ function print_cmd_help {
 	case "${1}" in
 		add)
 			cat << EOF
-add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-P] [-S tty console dev] [-m monitor container] [-v vty number]
+add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-P] [-b] [-S tty console dev] [-m monitor container] [-v vty number]
 
 Adds a new container which doesn't already exist.
 EOF
@@ -127,6 +127,7 @@ Options summary:
 -a       : set container to autostart
 -p       : set container to peer start
 -P       : set container to be privileged
+-b       : use bridged networking
 -d       : make container discoverable via avahi
 -0       : short form for -n dom0 -g domain0 -a -t 1
 -h       : print help
@@ -187,8 +188,9 @@ lxc.tty = ${tty_num}
 lxc.pts = 0
 lxc.mount = ${lxcbase}/${cn}/fstab
 lxc.network.type = veth
-lxc.network.link = br0
 lxc.network.name = eth0
+lxc.network.script.up = /etc/lxc/ovs-up
+lxc.network.script.down = /etc/lxc/ovs-down
 lxc.hook.autodev = ${lxcbase}/${cn}/autodev
 lxc.mount.entry = devpts ${lxcbase}/${cn}/rootfs/dev/pts devpts defaults 0 0
 lxc.mount.entry = proc ${lxcbase}/${cn}/rootfs/proc    proc defaults 0 0
@@ -197,6 +199,11 @@ lxc.group = ${group}
 lxc.start.auto = ${autostart}
 wr.start.auto = ${peerstart}
 EOF
+	if [ ${bridged_net} == 1 ]; then
+		sed -i '/^lxc.network.script.*$/d' ${pathtocontainer}/config
+		sed -i '/^lxc.network.type.*$/a lxc.network.link = br0' \
+		    ${pathtocontainer}/config
+	fi
 	if [ ${domain0} == 1 ]; then
 		# Domain 0 wants to drive X onto a real console
 		echo "lxc.console = none" >>${pathtocontainer}/config
@@ -501,6 +508,14 @@ function add_container {
 		exit 1
 	fi
 	echo "succeeded"
+
+	# Re-use networking configuration in deploy_new_container()
+	if [ ${1} == "upgrade" ] && \
+	   [ "$(grep -c '^lxc.network.link = br0$' ${lxcbase}/${cn}/config 2> /dev/null)" == "1" ]
+	   then
+		bridged_net=1
+	fi
+
 	echo "Deploying new container ${cn}"
 	deploy_new_container
 	# Final action, create the softlink to it
@@ -769,6 +784,7 @@ domain0=0
 autostart=0
 peerstart=0
 privileged=0
+bridged_net=0
 discoverable=0
 removecont=0
 tty_num=6
@@ -793,7 +809,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?FdhcapP0n:m:f:g:i:rt:sS:v:" opt; do
+while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:v:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -810,6 +826,9 @@ while getopts "?FdhcapP0n:m:f:g:i:rt:sS:v:" opt; do
 		peerstart=1
 		;;
 	P)	privileged=1
+		;;
+	b)
+		bridged_net=1
 		;;
 	d)
 		discoverable=1
