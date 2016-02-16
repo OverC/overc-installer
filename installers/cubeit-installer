@@ -564,6 +564,21 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
     mkdir -p ${TMPMNT}/tmp
 
+    # deal with static IPs and the "Networking Prime"
+    network_offsets=()
+
+    # Lookahead to see if a network prime is defined. We need to do this to
+    # determine if we need tell overc-cctl to use bridged networking or not.
+    overc_cctl_bridged_net_opt=" -b "
+    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
+	cname=`${SBINDIR}/cubename $c`
+	net_offset=`get_prop_value_by_container $cname "net"`
+	if [ -n "$net_offset" ] && [ $net_offset -eq 1 ]; then
+	    overc_cctl_bridged_net_opt=" "
+	    break;
+	fi
+    done
+
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	debugmsg ${DEBUG_INFO} "[INFO]: installing $c"
 
@@ -586,6 +601,20 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	if [ -n "$vty_num" ]; then
 	    ttyconsole_opt=" -v $vty_num ${ttyconsole_opt}"
 	fi
+
+	# If a net offset is specified for this container add
+	# it to the network_offsets list in the puppet site.pp
+	# in order to have puppet configure the container.
+	# An offset of '1' will make that container the
+	# "network prime".
+	net_offset=`get_prop_value_by_container $cname "net"`
+	if [ -n "$net_offset" ]; then
+	    if [ $net_offset -eq 1 ]; then
+		network_prime="$cname"
+	    else
+		network_offsets+=("'$cname,$net_offset'")
+	    fi
+	fi
 	# actually install the container
 	export LXCBASE="${TMPMNT}/var/lib/lxc"
 	export BINDMNTBASE="${TMPMNT}/opt/container"
@@ -598,13 +627,13 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 			monitor_container_opt="-m ${monitored_container}"
 		fi
 
-		${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt} ${monitor_container_opt}
+		${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt} ${monitor_container_opt} ${overc_cctl_bridged_net_opt}
 		;;
 	    *-dom1-*)
-		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt}
+		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
 		;;
 	    *)
-		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt}
+		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
 		;;
 	esac
 
@@ -614,6 +643,45 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
 	fi
     done
+
+    # Setup networking prime and static IPs, unless using bridged networking
+    if [ ! -v network_prime ]; then
+	# Fallback to using bridged networking (see overc_bridge_networking DISTRO_FEATURE)
+	sed -i "s/^\(\$configure_network_prime =\).*$/\1 false/"  \
+	    ${TMPMNT}/etc/puppet/manifests/site.pp
+	debugmsg ${DEBUG_INFO} "[INFO]: Using bridged networking."
+    else
+	if [ ! -v NETWORK_DEVICE ]; then
+	    NETWORK_DEVICE="enp0s3"
+	fi
+	pathtocontainer=${TMPMNT}/var/lib/lxc/${network_prime}
+	if [ -e "${pathtocontainer}/config" ]; then
+	    # Pass the network device through to the designated network prime container
+	    grep -q "lxc.network.name = $NETWORK_DEVICE" ${pathtocontainer}/config
+	    if [ $? -eq 0 ]; then
+		sed -i "s/\(lxc\.network\.name = $NETWORK_DEVICE\)/#\1/" \
+		    ${pathtocontainer}/config
+	    fi
+	    echo "lxc.network.type = phys" >> ${pathtocontainer}/config
+	    echo "lxc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
+
+	    # Enable configuring the network prime container by puppet on first boot
+	    sed -i "s/^\(\$network_prime_container *=\).*$/\1 \"${network_prime}\"/" \
+		${TMPMNT}/etc/puppet/manifests/site.pp
+
+	    # Specify any network offsets for containers with static IPs
+	    if [ -v network_offsets ] && [ ${#network_offsets[@]} -gt 0 ]; then
+		network_offsets=$(IFS=,; echo "${network_offsets[*]}")
+		sed -i "s/^\(\$network_offsets =\).*\]$/\1 \[$network_offsets\]/" \
+		    ${TMPMNT}/etc/puppet/manifests/site.pp
+	    fi
+
+	    debugmsg ${DEBUG_INFO} "[INFO]: Set ${network_prime} as the network prime."
+	else
+	    debugmsg ${DEBUG_WARN} "[WARNING]: Invalid network prime defined."
+	fi
+    fi
+
     if [ -n "${LOCAL_CUSTOM_HDD_POST_FUNCS}" ]; then
 	for f in ${LOCAL_CUSTOM_HDD_POST_FUNCS}; do
 	    ${f}
