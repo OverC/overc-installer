@@ -797,6 +797,44 @@ strip_properties()
     echo $extracted_var
 }
 
+# arg1: service name
+# arg2: container name
+service_install()
+{
+    local service="$1"
+    local cname="$2"
+    local sname
+
+    if [ ! -f "${BASEDIR}/../files/${service}" ]; then
+	if [ ! -f "${service}" ]; then
+	    debugmsg ${DEBUG_INFO} "ERROR: Could not locate service ${service}"
+	    false
+	    assert $?
+	fi
+    else
+	service="${BASEDIR}/../files/${service}"
+    fi
+    sname=`basename ${service}`
+
+    # copy service
+    cp -f "${service}" ${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/${sname}
+    # activate service
+    ln -s /usr/lib/systemd/system/${sname} ${LXCBASE}/${cname}/rootfs/etc/systemd/system/multi-user.target.wants/${sname}
+}
+
+# arg1: replacement target
+# arg2: replacement string
+service_modify()
+{
+    local rtarget="$1"
+    local rstring="$2"
+    local cname="$3"
+    local sname="$4"
+
+    # replace
+    eval sed -i -e "s,${rtarget},${rstring}," ${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/${sname}
+}
+
 extract_tarball()
 {
 	local tarball_src="$1"
