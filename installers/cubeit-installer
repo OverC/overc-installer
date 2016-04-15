@@ -700,6 +700,10 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    sed -i "s/^\(\$network_prime_container *=\).*$/\1 \"${network_prime}\"/" \
 		${TMPMNT}/etc/puppet/manifests/site.pp
 
+	    # Set the network prime device for network prime container by puppet on first boot
+	    sed -i "s/^\(\$network_prime_device *=\).*$/\1 \"${NETWORK_DEVICE}\"/" \
+	        ${TMPMNT}/etc/puppet/manifests/site.pp
+
 	    # Specify any network offsets for containers with static IPs
 	    if [ -v network_offsets ] && [ ${#network_offsets[@]} -gt 0 ]; then
 		network_offsets=$(IFS=,; echo "${network_offsets[*]}")
