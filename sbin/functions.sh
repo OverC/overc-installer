@@ -835,6 +835,62 @@ service_modify()
     eval sed -i -e "s,${rtarget},${rstring}," ${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/${sname}
 }
 
+# arg1: services name, could be globs
+# arg2: container name (optional)
+service_disable()
+{
+    local services="$1"
+    local cname="$2"
+    local slinks
+
+    services="${services%.service}.service"
+    local debug_msg="[INFO]: Can not find the service ${services} to disable"
+
+    if [ -z "${cname}" ]; then
+        # For essential
+        slinks=`find ${TMPMNT}/etc/systemd/ -name ${services} 2>/dev/null`
+        debug_msg="${debug_msg} for essential."
+    else
+        # For containers
+        slinks=`find ${LXCBASE}/${cname}/rootfs/etc/systemd/ -name ${services} 2>/dev/null`
+        debug_msg="${debug_msg} for ${cname}."
+    fi
+
+    if [ -z "${slinks}" ]; then
+        debugmsg ${DEBUG_INFO} ${debug_msg}
+        return 1
+    fi
+
+    rm -f ${slinks}
+    return 0
+}
+
+# ConditionVirtualization=!container is added in the service file
+# so it will check whether the system is executed in a container
+#
+# arg1: services name, could be globs
+# arg2: container name
+service_add_condition_for_container()
+{
+    local services="$1"
+    local cname="$2"
+ 
+    services="${services%.service}.service"
+    local spaths=`find ${LXCBASE}/${cname}/rootfs/lib/systemd/ \
+                       ${LXCBASE}/${cname}/rootfs/usr/lib/systemd/ \
+                       -name ${services} 2>/dev/null`
+
+    if [ -z "${spaths}" ]; then
+        debugmsg ${DEBUG_INFO} "[INFO]: Can not find the service ${services} in ${cname}."
+        return 1
+    fi
+
+    for p in ${spaths}; do
+        sed -i -e '/Description/ a\ConditionVirtualization=!container' ${spaths}
+    done
+    return 0
+}
+
 extract_tarball()
 {
 	local tarball_src="$1"

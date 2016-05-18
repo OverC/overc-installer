@@ -555,6 +555,13 @@ for k in ${gettys}; do
 done
 ln -sf /lib/systemd/system/getty@.service ${TMPMNT}/etc/systemd/system/getty.target.wants/getty@tty1.service
 
+# Disable all not needed services in essentail
+if [ -n "${SERVICE_DISABLE_ESSENTIAL}" ]; then
+    for s in ${SERVICE_DISABLE_ESSENTIAL}; do
+        service_disable ${s}
+    done
+fi
+
 if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     debugmsg ${DEBUG_INFO} "[INFO]: installing containers"
     if [ ! -d ${TMPMNT}/var/lib/lxc ]; then
@@ -661,7 +668,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	fi
     done
 
-    # install services
+    # install and modify services
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	container_src=`basename $c`
 	cname=`${SBINDIR}/cubename $c`
@@ -673,6 +680,26 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    service_install chvt.service ${cname}
 	    service_modify "%OVERC_ACTIVE_VT%" ${foreground_vty} ${cname} chvt.service
 	fi
+
+        # Disable all not needed services in dom0
+        if [ -n "${SERVICE_DISABLE_DOM0}" -a "${cname}" = "dom0" ]; then
+            for s in ${SERVICE_DISABLE_DOM0}; do
+                service_disable ${s} ${cname}
+            done
+        fi
+
+        # Disable or add conditon checking for all not needed services in container
+        if [ -n "${SERVICE_DISABLE_CONTAINER}" ]; then
+            for s in ${SERVICE_DISABLE_CONTAINER}; do
+                service_disable ${s} ${cname}
+            done
+        fi
+
+        if [ -n "${SERVICE_CONDITION_CONTAINER}" ]; then
+            for s in ${SERVICE_CONDITION_CONTAINER}; do
+                service_add_condition_for_container ${s} ${cname}
+            done
+        fi
     done
 
     # Setup networking prime and static IPs, unless using bridged networking
