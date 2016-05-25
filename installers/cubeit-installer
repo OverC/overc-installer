@@ -31,6 +31,8 @@ DEBUG_WARN=2
 DEBUG_INFO=4
 DEBUG_VERBOSE=7
 
+FACTORY_SNAPSHOT=".factory"
+
 # Set your default debug level
 : ${DEBUG_DEFAULT:=${DEBUG_INFO}}
 : ${FUNCTIONS_FILE="$SBINDIR/functions.sh"}
@@ -563,6 +565,7 @@ if [ -n "${SERVICE_DISABLE_ESSENTIAL}" ]; then
 fi
 
 if [ -n "${HDINSTALL_CONTAINERS}" ]; then
+    subvol=""
     debugmsg ${DEBUG_INFO} "[INFO]: installing containers"
     if [ ! -d ${TMPMNT}/var/lib/lxc ]; then
         mkdir -p ${TMPMNT}/var/lib/lxc
@@ -570,6 +573,15 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     mount /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
 
     mkdir -p ${TMPMNT}/tmp
+
+    if [ $btrfs -eq 1 ]; then
+        #create a subvolume for container images
+        btrfs subvolume create ${TMPMNT}/var/lib/lxc/workdir
+        subvol=`btrfs subvolume list ${TMPMNT}/var/lib/lxc | awk '{print $2;}'`
+        sync
+        umount ${TMPMNT}/var/lib/lxc
+        mount -o subvol=workdir /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
+    fi
 
     # deal with static IPs and the "Networking Prime"
     network_offsets=()
@@ -759,6 +771,27 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     fi
     sync
     umount ${TMPMNT}/var/lib/lxc
+
+    if [ $btrfs -eq 1 ]; then
+        if [ -z "$subvol" ]; then
+            debugmsg ${DEBUG_WARN} "[WARNING]: Could not get subvolume id, thus cannot create factory reset snapshot"
+        else
+            mount /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
+            btrfs subvolume set-default $subvol ${TMPMNT}/var/lib/lxc
+            btrfs subvolume snapshot ${TMPMNT}/var/lib/lxc/workdir ${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}
+            #snapshot subvolume recursively
+            subvolumes="$(btrfs subvolume list -c ${TMPMNT}/var/lib/lxc/workdir | awk '{print $NF}')"
+            for subvolume in $subvolumes; do
+                snapshot_directory="${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/${subvolume}"
+                if [ -d "${snapshot_directory}" ]; then
+                    rm -rf "${snapshot_directory}"
+                    btrfs subvolume snapshot "${TMPMNT}/var/lib/lxc/workdir/${subvolume}" "${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/$(dirname ${subvolume})"
+                fi
+            done
+            sync 
+            umount ${TMPMNT}/var/lib/lxc
+        fi
+    fi
 fi
 
 if [ -d "${PACKAGESDIR}" ]; then
@@ -818,9 +851,11 @@ if [ $btrfs -eq 0 ]; then
 	:
 else
 	debugmsg ${DEBUG_INFO} "[INFO]: Create snapshot of rootfs for recovery."
-	mount /dev/${fs_dev}3 ${TMPMNT}
+	#mount the root subvolume
+	mount -o subvolid=5 /dev/${fs_dev}3 ${TMPMNT}
 	if [ -e "${TMPMNT}/rootfs" ]; then
 		btrfs subvolume snapshot ${TMPMNT}/rootfs ${TMPMNT}/rootfs_bakup
+		btrfs subvolume snapshot ${TMPMNT}/rootfs ${TMPMNT}/${FACTORY_SNAPSHOT}
 	fi
 	sync
 	umount ${TMPMNT}
