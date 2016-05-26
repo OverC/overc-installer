@@ -712,6 +712,9 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	if [ ! -v NETWORK_DEVICE ]; then
 	    NETWORK_DEVICE="enp0s3"
 	fi
+	if [ ! -v NETWORK_DEVICE_CLASSES ]; then
+	    NETWORK_DEVICE_CLASSES="eth* wl* en*"
+	fi
 	pathtocontainer=${TMPMNT}/var/lib/lxc/${network_prime}
 	if [ -e "${pathtocontainer}/config" ]; then
 	    # Pass the network device through to the designated network prime container
@@ -720,8 +723,13 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		sed -i "s/\(lxc\.network\.name = $NETWORK_DEVICE\)/#\1/" \
 		    ${pathtocontainer}/config
 	    fi
-	    echo "lxc.network.type = phys" >> ${pathtocontainer}/config
-	    echo "lxc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
+	    if [ "$NETWORK_DEVICE" = "all" ] ; then
+		echo "overc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
+		echo "overc.network.linkdevs = $NETWORK_DEVICE_CLASSES" >> ${pathtocontainer}/config
+	    else
+		echo "lxc.network.type = phys" >> ${pathtocontainer}/config
+		echo "lxc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
+	    fi
 
 	    # Enable configuring the network prime container by puppet on first boot
 	    sed -i "s/^\(\$network_prime_container *=\).*$/\1 \"${network_prime}\"/" \
