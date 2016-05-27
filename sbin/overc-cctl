@@ -292,10 +292,6 @@ function deploy_new_container {
 		remove_from_inittab 6
 	fi
 
-	#Set container hostname to reduce confusion when we login
-	host_name=`cat ${HOSTDIR}/etc/hostname`
-	echo ${host_name}-${cn} >${pathtocontainer}/rootfs/etc/hostname
-
 	create_lxc_fstab
 
 	create_lxc_config
