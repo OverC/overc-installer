@@ -231,18 +231,18 @@ fi
 
 # if ttyconsolecn wasn't passed on the command line, check to see
 # if a container in the configuration had the "console" property. If
-# so, set it. Otherwise, assign domE as the default
+# so, set it. Otherwise, assign cube-desktop as the default
 if [ -z "${ttyconsolecn}" ]; then
     ttyconsolecn=`get_container_name_by_prop console`
     if [ -z "${ttyconsolecn}" ]; then
-	ttyconsolecn="domE"
+	ttyconsolecn="cube-desktop"
     fi
 fi
 
 if [ -z "${privilegedcn}" ]; then
     privilegedcn=`get_container_name_by_prop privileged`
     if [ -z "${privilegedcn}" ]; then
-        privilegedcn="domE"
+        privilegedcn="cube-desktop"
     fi
 fi
 

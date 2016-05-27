@@ -136,7 +136,7 @@ Options summary:
 -F       : force option - ie disable prompts
 -s       : container controlling tty console
 -S [arg] : tty console device.  default is ttyS0
--m [arg] : monitor container controlled by dom0, default is domE
+-m [arg] : monitor container controlled by dom0, default is cube-desktop
 -v [arg] : specify the vty number to be used for login
 
 Special container names:
@@ -341,7 +341,7 @@ function deploy_new_container {
 		# is to remove the dependency to dev-%i.device service.
 		sed -i "s:After=dev-%i.device :After=:g" ${pathtocontainer}/rootfs/lib/systemd/system/serial-getty@.service
 
-		# remove serial console in order to make domE login prompt appears
+		# remove serial console in order to make cube-desktop login prompt appears
 		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* )
 		for k in ${serialconsoles}; do
 		        ln -s -f /dev/null ${k}
@@ -792,7 +792,7 @@ cmdhelp=0
 force=0
 ttyconsoledev="ttyS0"
 havettyconsole=0
-monitor_container="domE"
+monitor_container="cube-desktop"
 
 # See if we're using btrfs
 mountpt=`grep ${lxcbase} /proc/mounts`
