@@ -359,6 +359,12 @@ function deploy_new_container {
 	sed -i '/^tmpfs/d' ${pathtocontainer}/rootfs/etc/fstab
 	sed -i '/^usbdevfs/d' ${pathtocontainer}/rootfs/etc/fstab
 
+	#Since lxc.network.name set the veth's name as veth0, thus we should 
+	#Set the match name in 20-wired.network according to veth*.
+	if [ -f ${pathtocontainer}/rootfs/etc/systemd/network/20-wired.network ]; then
+		sed -i "s:^Name=.*$:Name=veth\*:" ${pathtocontainer}/rootfs/etc/systemd/network/20-wired.network
+	fi
+
 }
 
 function get_container_attributes {
