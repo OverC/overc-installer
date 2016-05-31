@@ -678,6 +678,8 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	elif [ -e /${IMAGESDIR}/config.smart ]; then
 	    cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
 	fi
+
+	rm ${TMPMNT}/tmp/$(basename $c)
     done
 
     # install and modify services
