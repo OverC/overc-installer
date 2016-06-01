@@ -816,10 +816,24 @@ service_install()
     fi
     sname=`basename ${service}`
 
-    # copy service
-    cp -f "${service}" ${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/${sname}
-    # activate service
-    ln -s /usr/lib/systemd/system/${sname} ${LXCBASE}/${cname}/rootfs/etc/systemd/system/multi-user.target.wants/${sname}
+    if [ -d "${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/" ]; then
+	tgt="${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/"
+    else
+	if [ -d "${LXCBASE}/${cname}/usr_over" ]; then
+	    tgt="${LXCBASE}/${cname}/usr_over/lib/systemd/system"
+	fi
+    fi
+
+    if [ -n "${tgt}" ]; then
+	mkdir -p ${tgt}
+	# copy service
+	cp -f "${service}" ${tgt}/${sname}
+	# activate service
+	ln -s /usr/lib/systemd/system/${sname} ${LXCBASE}/${cname}/rootfs/etc/systemd/system/multi-user.target.wants/${sname}
+	echo "[INFO] ${cname}: Service ${sname} installed and activated"
+    else
+	echo "[WARNING] ${cname}: could not enable service ${sname}, target directory not found"
+    fi
 }
 
 # arg1: replacement target
@@ -831,8 +845,20 @@ service_modify()
     local cname="$3"
     local sname="$4"
 
-    # replace
-    eval sed -i -e "s,${rtarget},${rstring}," ${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/${sname}
+    if [ -d "${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/" ]; then
+	tgt="${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/"
+    else
+	if [ -d "${LXCBASE}/${cname}/usr_over" ]; then
+	    tgt="${LXCBASE}/${cname}/usr_over/lib/systemd/system"
+	fi
+    fi
+
+    if [ -n "${tgt}" ]; then
+	# replace
+	eval sed -i -e "s,${rtarget},${rstring}," ${tgt}/${sname}
+    else
+	echo "[WARNING] ${cname} could not modify service ${sname}, target directory not found"
+    fi
 }
 
 # arg1: services name, could be globs
