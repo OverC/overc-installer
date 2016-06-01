@@ -19,6 +19,7 @@ CONTAINERSDIR="${BASEDIR}/../images/containers"
 PACKAGESDIR="${BASEDIR}/../packages"
 PUPPETDIR="${BASEDIR}/../files/puppet"
 SBINDIR="${BASEDIR}/../sbin"
+export SBINDIR
 if [ -z "${CONFIG_DIRS}" ] ; then
     CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
 fi
@@ -598,6 +599,31 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	fi
     done
 
+
+    CNRECORD=`mktemp /tmp/hdcontainerXXXXX`
+    export CNRECORD
+
+    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
+	cname=`${SBINDIR}/cubename $c`
+
+	echo -n "Extracting rootfs $cname, with src $c....."
+
+	# untar it into temp, save it to record
+	tmpcontainer=`mktemp -d /tmp/hdcnt_dirXXXXX`
+	mergepatch=`get_prop_value_by_container $cname "mergepath"`
+
+	echo "$cname:$tmpcontainer:$mergepatch" >> ${CNRECORD}
+	mkdir -p $tmpcontainer/rootfs
+	tar --numeric-owner -xjf $c -C $tmpcontainer/rootfs
+
+	if [ $? != 0 ]; then
+		echo "failed!"
+		echo "Error: rootfs file extraction failed"
+		exit 1
+	fi
+	echo "succeeded"
+    done;
+
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	debugmsg ${DEBUG_INFO} "[INFO]: installing $c"
 
@@ -681,6 +707,14 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	rm ${TMPMNT}/tmp/$(basename $c)
     done
+
+    #cleanup temp files
+    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
+        cname=`${SBINDIR}/cubename $c`
+        temp_dir=`cat ${CNRECORD}|awk -F ":" '{if ( $1=="'${cname}'" )print $2}'`
+        rm $temp_dir -r
+    done
+    rm ${CNRECORD}
 
     # install and modify services
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
