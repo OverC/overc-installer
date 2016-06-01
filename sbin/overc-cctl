@@ -270,6 +270,15 @@ EOF
 	chmod 755 ${pathtocontainer}/autodev
 }
 
+
+function get_tmppath_by_container()
+{
+    local cn=$1
+    local ret=""
+    ret=`cat ${CNRECORD}|awk -F ":" '{if ( $1=="'${cn}'" )print $2}'`
+    echo "${ret}"
+}
+
 function deploy_new_container {
 
 	# Record the origin of the rootfs
@@ -502,14 +511,63 @@ function add_container {
 		mkdir -p ${pathtocontainer}
 	fi
 	mkdir -p ${pathtocontainer}/rootfs
-	echo -n "Extracting rootfs....."
-	tar --numeric-owner -xjf ${rootfs_fn} -C ${pathtocontainer}/rootfs
-	if [ $? != 0 ]; then
-		echo "failed!"
-		echo "Error: rootfs file extraction failed"
-		exit 1
-	fi
-	echo "succeeded"
+
+	# Re-use the merged_dir in essential or other containers
+
+	container_tmppath=`get_tmppath_by_container $cn`
+	container_mergedir=`cat ${CNRECORD}|awk -F ":" '{if ( $1=="'${cn}'" )print $3}'`
+
+	# Adding ${cn} with merge option ${container_mergedir}
+	for merge_entry in $(echo ${container_mergedir}|sed 's/;/\n/g'); do
+
+		dir=`echo "$merge_entry"|awk -F "," '{print $1}'`
+		target=`echo "$merge_entry"|sed 's/,/\n/g'|sed '1d'`
+
+		# perform merge container ${TMPMNT}${dir} ${container_tmppath}${merged_dir}
+		fstab_entry="overlay /var/lib/lxc/${cn}/rootfs${dir} overlay lowerdir="
+		# Before merging, copy orignal outof rootfs
+		cp -a ${container_tmppath}/rootfs${dir} ${container_tmppath}${dir}
+
+		fstab_mark=0
+		for target_entry in ${target}; do
+			if [ ${target_entry} == "essential" ]; then
+				lowerdir="${TMPMNT}${dir}"
+				fstab_dir=${dir}
+			else
+				targetbase=`get_tmppath_by_container $target_entry`
+				# Decide lowerdir from other container
+				lowerdir="${targetbase}/rootfs${dir}"
+				if [ ! -e $lowerdir ]; then
+					lowerdir="${targetbase}${dir}"
+				fi
+				fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}"
+			fi
+			if [ $fstab_mark == 0 ]; then
+				fstab_mark=1
+			else
+				fstab_dir=":${fstab_dir}"
+			fi
+
+			# perform merge container ${lowerdir} ${container_tmppath}/rootfs${dir}
+			${SBINDIR}/scanduplicate ${lowerdir} ${container_tmppath}/rootfs${dir}
+
+			fstab_entry="${fstab_entry}${fstab_dir}"
+		done;
+		# After merge, rename the dir with dir_temp in rootfs
+		if [ -d ${container_tmppath}/rootfs${dir} ]; then
+			mv ${container_tmppath}/rootfs${dir} ${container_tmppath}/rootfs${dir}_temp
+		else
+			mkdir ${container_tmppath}/rootfs${dir}_temp
+		fi
+
+		# Add fstab entry in essential
+		mkdir ${pathtocontainer}${dir}_over
+		fstab_entry="${fstab_entry},upperdir=/var/lib/lxc/${cn}/rootfs${dir}_temp,workdir=/var/lib/lxc/${cn}${dir}_over 0       0"
+		echo "${fstab_entry}">> ${TMPMNT}/etc/fstab
+	done;
+
+	# Finally copy $container_tmppath/rootfs/ to ${pathtocontainer}/rootfs
+	cp -a $container_tmppath/rootfs/* ${pathtocontainer}/rootfs
 
 	# Re-use networking configuration in deploy_new_container()
 	if [ ${1} == "upgrade" ] && \
