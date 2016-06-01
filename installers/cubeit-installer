@@ -850,7 +850,7 @@ fi
 if [ $btrfs -eq 0 ]; then
 	:
 else
-	debugmsg ${DEBUG_INFO} "[INFO]: Create snapshot of rootfs for recovery."
+	debugmsg ${DEBUG_INFO} "[INFO]: Creating a snapshot of rootfs for recovery."
 	#mount the root subvolume
 	mount -o subvolid=5 /dev/${fs_dev}3 ${TMPMNT}
 	if [ -e "${TMPMNT}/rootfs" ]; then
