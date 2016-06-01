@@ -533,14 +533,14 @@ disable_automounter()
 		        debugmsg ${DEBUG_INFO} "[INFO]: Disable automounter during install with gsetting."
 			AUTOMOUNT_BACK=`${RUN_LOGNAME} gsettings get ${MEDIA_HANDLING} automount`
 			AUTOMOUNT_OPEN_BACK=`${RUN_LOGNAME} gsettings get ${MEDIA_HANDLING} automount-open`
-			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount "false"
-			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount-open "false"
+			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount "false" 2>/dev/null
+			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount-open "false" 2>/dev/null
 		elif [ ${HAVE_DCONF} -eq 0 ]; then
 		        debugmsg ${DEBUG_INFO} "[INFO]: Disable automounter during install with dconf."
 			AUTOMOUNT_BACK=`${RUN_LOGNAME} dconf read ${MEDIA_HANDLING_PATH}/automount`
 			AUTOMOUNT_OPEN_BACK=`${RUN_LOGNAME} dconf read ${MEDIA_HANDLING_PATH}/automount-open`
-			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount "false"
-			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount-open "false"
+			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount "false" 2>/dev/null
+			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount-open "false" 2>/dev/null
 		fi
 	fi
 }
@@ -550,12 +550,12 @@ restore_automounter()
 	if [ "${DESKTOP_SESSION}" = "gnome" ]; then
 		if [ ${HAVE_GSETTING} -eq 0 ]; then
 		        debugmsg ${DEBUG_INFO} "[INFO]: Restore previous automounter settings with gsetting."
-			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount "${AUTOMOUNT_BACK}"
-			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount-open "${AUTOMOUNT_OPEN_BACK}"
+			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount "${AUTOMOUNT_BACK}" 2>/dev/null
+			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount-open "${AUTOMOUNT_OPEN_BACK}" 2>/dev/null
 		elif [ ${HAVE_DCONF} -eq 0 ]; then
 		        debugmsg ${DEBUG_INFO} "[INFO]: Restore previous automounter settings with gconf."
-			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount "${AUTOMOUNT_BACK}"
-			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount-open "${AUTOMOUNT_OPEN_BACK}"
+			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount "${AUTOMOUNT_BACK}" 2>/dev/null
+			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount-open "${AUTOMOUNT_OPEN_BACK}" 2>/dev/null
 		fi
 	fi
 }
