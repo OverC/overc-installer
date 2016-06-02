@@ -523,6 +523,11 @@ function add_container {
 		dir=`echo "$merge_entry"|awk -F "," '{print $1}'`
 		target=`echo "$merge_entry"|sed 's/,/\n/g'|sed '1d'`
 
+		if [ ! -d ${container_tmppath}/rootfs${dir} ]; then
+			echo "[INFO] There is no ${dir} in container ${cn}"
+			continue
+		fi
+
 		# perform merge container ${TMPMNT}${dir} ${container_tmppath}${merged_dir}
 		fstab_entry="overlay /var/lib/lxc/${cn}/rootfs${dir} overlay lowerdir="
 		# Before merging, copy orignal outof rootfs
@@ -535,6 +540,10 @@ function add_container {
 				fstab_dir=${dir}
 			else
 				targetbase=`get_tmppath_by_container $target_entry`
+				if [ -z ${targetbase} ]; then
+					echo "[INFO] can not find container ${target_entry} when merging"
+					continue
+				fi
 				# Decide lowerdir from other container
 				lowerdir="${targetbase}/rootfs${dir}"
 				if [ ! -e $lowerdir ]; then
@@ -559,6 +568,7 @@ function add_container {
 		else
 			mkdir ${container_tmppath}/rootfs${dir}_temp
 		fi
+		mkdir ${container_tmppath}/rootfs${dir}
 
 		# Add fstab entry in essential
 		mkdir ${pathtocontainer}${dir}_over
