@@ -144,6 +144,7 @@ if [ -n "$ARTIFACTS_DIR" ]; then
 	echo "[INFO]: Artifacts dir $ARTIFACTS_DIR does not exist"
     fi
 fi
+export ARTIFACTS_DIR
 
 # command line parameters can be:
 #   <target> (device, directory or file)

@@ -8,9 +8,11 @@ cat << EOF
 
   example:
 
-      $  scanduplicate essential/usr domE/usr
+      $  scanduplicate essential/usr dom0/usr
 EOF
 }
+
+TARGET_PATH=$2
 
 scandir()
 {
@@ -23,9 +25,13 @@ for entry in $(ls $1 -A); do
             scandir "$1/$entry" "$2/$entry"
         elif [ -f "$2/${entry}" ] && [ -f "$1/${entry}" ]; then
             # Delete when both $1/entry & $2/entry are regular file
+            FILE=`echo "$2/${entry}"|sed "s:${TARGET_PATH}/::g"`
+            echo "removed ${FILE}"
             rm "$2/${entry}"
         elif [ -L "$2/${entry}" ] && [ -L "$1/${entry}" ]; then
             # Delete when both $1/entry & $2/entry are sympol-link
+            FILE=`echo "$2/${entry}"|sed "s:${TARGET_PATH}/::g"`
+            echo "removed ${FILE}"
             rm "$2/${entry}"
         fi
         # Ignore other conditions
@@ -33,6 +39,8 @@ for entry in $(ls $1 -A); do
 done;
 # Remove empty diretory in target_path
 if [ $(ls -Al "$2"|wc -l) -eq 1 ]; then
+    FILE=`echo "$2"|sed "s:${TARGET_PATH}/::g"`
+    echo "removed ${FILE}"
     rmdir "$2"
 fi
 }
