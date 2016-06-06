@@ -545,8 +545,9 @@ function add_container {
 					continue
 				fi
 				# Decide lowerdir from other container
-				lowerdir="${targetbase}/rootfs${dir}"
-				if [ ! -e $lowerdir ]; then
+				if [ ! -d "${targetbase}/rootfs${dir}_temp" ]; then
+					lowerdir="${targetbase}/rootfs${dir}"
+				else
 					lowerdir="${targetbase}${dir}"
 				fi
 				fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}"
