@@ -95,6 +95,13 @@ function extract_container_name
 	esac
     fi
 
+    # Wind River Linux produces container image names
+    # where type == "container", thus:
+    # <prefix>container-<name>-<rest>
+    if [ "$type" = "container" ]; then
+	output=$type-$name
+    fi
+
     echo ${output}
 }
 
