@@ -180,6 +180,10 @@ if ! [ -n "$DISTRIBUTION" ]; then
     DISTRIBUTION="OverC"
 fi
 
+if [ -v CONTAINER_PREFIX -a -n $CONTAINER_PREFIX ] ; then
+    export CNAME_PREFIX="--prefix $CONTAINER_PREFIX"
+fi
+
 get_container_name_by_prop()
 {
     local prop=$1
@@ -394,7 +398,7 @@ mount /dev/${fs_dev}1 ./boot
 
 img=`ls boot/*Image-* 2> /dev/null`
 if [ -n "$img" ] ; then
-	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs"
+	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs ($INSTALL_INITRAMFS)"
 	kernel=`basename boot/*Image-*`
 	kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
 	initrd="initrd-${kernel_version}.gz"
@@ -591,7 +595,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     # determine if we need tell overc-cctl to use bridged networking or not.
     overc_cctl_bridged_net_opt=" -b "
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-	cname=`${SBINDIR}/cubename $c`
+	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 	net_offset=`get_prop_value_by_container $cname "net"`
 	if [ -n "$net_offset" ] && [ $net_offset -eq 1 ]; then
 	    overc_cctl_bridged_net_opt=" "
@@ -629,7 +633,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	# containers names are "prefix-<container name>-<... suffixes >
 	container_src=`basename $c`
-	cname=`${SBINDIR}/cubename $c`
+	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 	cp $c ${TMPMNT}/tmp/
 	cp ${SBINDIR}/overc-cctl ${TMPMNT}/tmp/
 	
@@ -719,7 +723,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     # install and modify services
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	container_src=`basename $c`
-	cname=`${SBINDIR}/cubename $c`
+	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 
 	# if there was a foreground container defined (attribte 'active' on a vty), then we
 	# install a chvt service to make sure it is in the foreground after boot. Note, this
