@@ -608,7 +608,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     export CNRECORD
 
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-	cname=`${SBINDIR}/cubename $c`
+	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 
 	echo -n "Extracting rootfs $cname, with src $c....."
 
@@ -714,7 +714,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
     #cleanup temp files
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-        cname=`${SBINDIR}/cubename $c`
+        cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
         temp_dir=`cat ${CNRECORD}|awk -F ":" '{if ( $1=="'${cname}'" )print $2}'`
         rm $temp_dir -r
     done
