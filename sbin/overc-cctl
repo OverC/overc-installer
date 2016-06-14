@@ -163,6 +163,42 @@ parked   : Any container created without a group specified will use this
 EOF
 }
 
+function array_push {
+        local arrayname=$1  
+        local newitem=$2  
+        #"use to avoid '*' transfer  
+        eval ${arrayname}'=("${'${arrayname}'[@]}" "$newitem" ) '  
+}  
+function array_pop {  
+        local arrayname=$1  
+        eval ${arrayname}'=("${'${arrayname}'[@]:0:$((${#'${arrayname}'[@]}-1))}") '
+}  
+function array_top {   
+        local arrayname=$1  
+        eval echo '"${'${arrayname}'[$((${#'${arrayname}'[@]}-1))]}"'
+}  
+
+function remove_subvol_recursive {
+	local -a items=[]
+	local subvol=$1
+	local subvols=`btrfs subvolume list -o ${subvol} | awk '{print $NF}'`
+	local device=`btrfs device stat ${subvol} | head -1 | sed 's/\[\(\/.*\)\].*/\1/'`
+	local tmpdir=`mktemp -d /tmp/temp.XXXXXX`
+
+	for i in ${subvols}; do
+		array_push items "$i"
+	done
+
+	mount -o subvolid=0 ${device} ${tmpdir}
+	while [ "$(array_top items)" != '[]' ]; do
+		btrfs subvolume delete -C ${tmpdir}/$(array_top items)
+		array_pop items
+	done
+	umount ${tmpdir}
+	rm -rf ${tmpdir}
+	btrfs subvolume delete -C ${subvol}
+}
+
 function remove_from_inittab {
 	if [ ! -e ${pathtocontainer}/rootfs/etc/inittab ]; then
 		# Must be a systemd setup
@@ -451,7 +487,7 @@ function clean_containers {
 	for i in ${contlist}; do
 		get_container_attributes ${i}
 		if [ ${current} == 0 ] && [ ${inhist} == 0 ]; then
-			btrfs subvolume delete -C ${lxcbase}/${containers}/${i}
+			remove_subvol_recursive "${lxcbase}/${containers}/${i}"
 		fi
 	done
 }
@@ -680,7 +716,7 @@ function switch_container {
 	previous=$( readlink -f ${lxcbase}/${cn} )
 	ln -sfTL $(relpath ${pathtocontainer} ${lxcbase}/${cn}) ${lxcbase}/${cn}
 	if [ ${removecont} == 1 ]; then
-		btrfs subvolume delete -C ${previous}
+		remove_subvol_recursive ${previous}
 	fi
 	if [ "${2}" == "delhist" ]; then
 		hist_index=${hist_num}
@@ -732,7 +768,9 @@ function delete_container {
 	fi
 	echo "Removing containers"
 	cd ${lxcbase}/${containers}/${cn}
-	btrfs subvolume delete -C *
+	for i in `ls *`; do
+		remove_subvol_recursive "$i"
+	done
 	cd - >/dev/null
 	rm -rf ${lxcbase}/${containers}/${cn} >/dev/null 2>&1
 	echo "Removing container history and other meta data"
@@ -839,7 +877,7 @@ function delete_history {
 		exit 1
 	fi
 	if [ ${removecont} == 1 ]; then
-		btrfs subvolume delete -C ${pathtohistory}/${hist_index}
+		remove_subvol_recursive "${pathtohistory}/${hist_index}"
 	fi
 	rm ${pathtohistory}/${hist_index}
 }
