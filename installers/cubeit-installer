@@ -180,7 +180,7 @@ if ! [ -n "$DISTRIBUTION" ]; then
     DISTRIBUTION="OverC"
 fi
 
-if [ -v CONTAINER_PREFIX -a -n $CONTAINER_PREFIX ] ; then
+if [ -v CONTAINER_PREFIX -a -n "$CONTAINER_PREFIX" ] ; then
     export CNAME_PREFIX="--prefix $CONTAINER_PREFIX"
 fi
 
