@@ -913,15 +913,16 @@ havettyconsole=0
 monitor_container="cube-desktop"
 
 # See if we're using btrfs
-mountpt=`grep ${lxcbase} /proc/mounts`
 btrfs=0
+mountpts=`grep ${lxcbase} /proc/mounts`
 if [ $? == 0 ]; then
-	fstype=`echo $mountpt | cut -f 3 -d ' '`
-	if [ "${fstype}" == "btrfs" ]; then
-		btrfs=1
-	else
-		btrfs=0
-	fi
+	for mountpt in ${mountpts}; do
+		fstype=$(echo $mountpt | cut -f 3 -d ' ')
+		if [ "${fstype}" == "btrfs" ]; then
+			btrfs=1
+			break
+		fi
+	done
 fi
 
 command=${1}
