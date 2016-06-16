@@ -588,7 +588,7 @@ function add_container {
 				else
 					lowerdir="${targetbase}${dir}"
 				fi
-				fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}"
+				fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}_temp"
 			fi
 			echo "Merge ${dir} with ${target_entry}">>${merge_summary}
 
