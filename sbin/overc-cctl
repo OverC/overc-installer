@@ -3,6 +3,9 @@
 #  it under the terms of the GNU General Public License version 2 as
 #  published by the Free Software Foundation.
 
+if [ -z "${CNRECORD}" ] ; then
+	CNRECORD=/dev/null
+fi
 #  This program is distributed in the hope that it will be useful,
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -547,6 +550,17 @@ function add_container {
 		mkdir -p ${pathtocontainer}
 	fi
 	mkdir -p ${pathtocontainer}/rootfs
+
+	# When the CNRECORD is not set the origin is a compressed tar ball
+	if [ "${CNRECORD}" = "/dev/null" ] ; then
+		echo -n "Extracting rootfs....."
+		tar --numeric-owner -xf ${rootfs_fn} -C ${pathtocontainer}/rootfs
+		if [ $? != 0 ]; then
+			echo "Error: rootfs file extraction failed"
+			exit 1
+		fi
+		echo "succeeded"
+	fi
 
 	# Re-use the merged_dir in essential or other containers
 
