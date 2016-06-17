@@ -599,10 +599,11 @@ function add_container {
 				# Decide lowerdir from other container
 				if [ ! -d "${targetbase}/rootfs${dir}_temp" ]; then
 					lowerdir="${targetbase}/rootfs${dir}"
+					fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}"
 				else
 					lowerdir="${targetbase}${dir}"
+					fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}_temp"
 				fi
-				fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}_temp"
 			fi
 			echo "Merge ${dir} with ${target_entry}">>${merge_summary}
 
