@@ -783,7 +783,7 @@ function delete_container {
 	fi
 	echo "Removing containers"
 	cd ${lxcbase}/${containers}/${cn}
-	for i in `ls *`; do
+	for i in $(ls); do
 		remove_subvol_recursive "$i"
 	done
 	cd - >/dev/null
