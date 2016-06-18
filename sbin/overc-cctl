@@ -638,7 +638,10 @@ function add_container {
 	done;
 
 	# Finally copy $container_tmppath/rootfs/ to ${pathtocontainer}/rootfs
-	cp -a $container_tmppath/rootfs/* ${pathtocontainer}/rootfs
+	# when do use overlayfs to merge container rootfs.
+	if [ -n "$container_tmppath" ]; then
+		cp -a $container_tmppath/rootfs/* ${pathtocontainer}/rootfs
+	fi
 
 	# Re-use networking configuration in deploy_new_container()
 	if [ ${1} == "upgrade" ] && \
