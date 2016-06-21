@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# ensure we get expected and consistent modes for dir creation, etc..
+umask 0022
+
 if [ "$CUBE_DEBUG_SET_X_IF_SET" = 1 ] ; then
     set -x
 fi
