@@ -231,7 +231,7 @@ lxc.network.name = veth0
 lxc.network.script.up = /etc/lxc/ovs-up
 lxc.network.script.down = /etc/lxc/ovs-down
 lxc.hook.autodev = ${lxcbase}/${cn}/autodev
-lxc.mount.entry = devpts ${lxcbase}/${cn}/rootfs/dev/pts devpts defaults 0 0
+lxc.mount.entry = devpts ${lxcbase}/${cn}/rootfs/dev/pts devpts gid=5,mode=620 0 0
 lxc.mount.entry = proc ${lxcbase}/${cn}/rootfs/proc    proc defaults 0 0
 lxc.mount.entry = sysfs ${lxcbase}/${cn}/rootfs/sys     sysfs defaults 0 0
 lxc.group = ${group}
