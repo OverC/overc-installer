@@ -851,6 +851,13 @@ function rollback_container {
 	fi
 	if [ "${result}" == "y" ]; then
 		switch_container ${contver} delhist
+		# Cleanup any stray stnapshots after a rollback
+		for c in $(cd ${lxcbase}/${containers} && ls -1dr ${cn}/* 2>/devnull) ; do
+			get_container_attributes ${c}
+			if [ ${current} == 0 ] && [ ${inhist} == 0 ]; then
+				remove_subvol_recursive "${lxcbase}/${containers}/${c}"
+			fi
+		done
 		exit 0
 	fi
 	echo "No snapshot selected, aborting"
