@@ -372,7 +372,7 @@ function deploy_new_container {
 	    fi
 	fi
 
-	if [ $privileged -ne 1 ]; then
+	if [ $privileged -ne 1 ] && [ -e ${pathtocontainer}/rootfs/etc/systemd/system ] ; then
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd.service
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd-kernel.socket
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd-control.socket
@@ -383,16 +383,18 @@ function deploy_new_container {
 		# systemd fails to start dev-ttyXXXX.device service and this causes
 		# serial-getty@ttyXXXX.service fails to start.  Workaround for now
 		# is to remove the dependency to dev-%i.device service.
-		sed -i "s:After=dev-%i.device :After=:g" ${pathtocontainer}/rootfs/lib/systemd/system/serial-getty@.service
+		if [ -e ${pathtocontainer}/rootfs/lib/systemd/system/serial-getty@.service ] ; then
+			sed -i "s:After=dev-%i.device :After=:g" ${pathtocontainer}/rootfs/lib/systemd/system/serial-getty@.service
+		fi
 
 		# remove serial console in order to make cube-desktop login prompt appears
-		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* )
+		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
 		for k in ${serialconsoles}; do
 		        ln -s -f /dev/null ${k}
 		done
 
 	else
-		serialconsoles=$( ls ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/serial-getty* )
+		serialconsoles=$( ls ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
 		# Mask out the container service serial-getty@${ttyconsoledev}.service
 		for k in ${serialconsoles}; do
 			ln -s -f /dev/null ${k}
@@ -401,12 +403,13 @@ function deploy_new_container {
 
 	#Remove the systemd's costly remount of the root partition from /etc/fstab,
 	#and also remove API filesystems mounting from it, as systemd will mount them itself.
-	sed -i '\/dev\/root/d' ${pathtocontainer}/rootfs/etc/fstab
-	sed -i '/^proc/d' ${pathtocontainer}/rootfs/etc/fstab
-	sed -i '/^devpts/d' ${pathtocontainer}/rootfs/etc/fstab
-	sed -i '/^tmpfs/d' ${pathtocontainer}/rootfs/etc/fstab
-	sed -i '/^usbdevfs/d' ${pathtocontainer}/rootfs/etc/fstab
-
+	if [ -e ${pathtocontainer}/rootfs/etc/fstab ] ; then
+		sed -i '\/dev\/root/d' ${pathtocontainer}/rootfs/etc/fstab
+		sed -i '/^proc/d' ${pathtocontainer}/rootfs/etc/fstab
+		sed -i '/^devpts/d' ${pathtocontainer}/rootfs/etc/fstab
+		sed -i '/^tmpfs/d' ${pathtocontainer}/rootfs/etc/fstab
+		sed -i '/^usbdevfs/d' ${pathtocontainer}/rootfs/etc/fstab
+	fi
 	#Since lxc.network.name set the veth's name as veth0, thus we should 
 	#Set the match name in 20-wired.network according to veth*.
 	if [ -f ${pathtocontainer}/rootfs/etc/systemd/network/20-wired.network ]; then
