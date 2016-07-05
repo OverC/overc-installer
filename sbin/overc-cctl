@@ -309,15 +309,6 @@ EOF
 	chmod 755 ${pathtocontainer}/autodev
 }
 
-
-function get_tmppath_by_container()
-{
-    local cn=$1
-    local ret=""
-    ret=`cat ${CNRECORD}|awk -F ":" '{if ( $1=="'${cn}'" )print $2}'`
-    echo "${ret}"
-}
-
 function deploy_new_container {
 
 	# Record the origin of the rootfs
@@ -554,24 +545,21 @@ function add_container {
 	fi
 	mkdir -p ${pathtocontainer}/rootfs
 
-	# When the CNRECORD is not set the origin is a compressed tar ball
-	if [ "${CNRECORD}" = "/dev/null" ] ; then
-		echo -n "Extracting rootfs....."
-		tar --numeric-owner -xf ${rootfs_fn} -C ${pathtocontainer}/rootfs
-		if [ $? != 0 ]; then
-			echo "Error: rootfs file extraction failed"
-			exit 1
-		fi
-		echo "succeeded"
+	# Extract compressed tar ball
+	echo -n "Extracting rootfs....."
+	tar --numeric-owner -xf ${rootfs_fn} -C ${pathtocontainer}/rootfs
+	if [ $? != 0 ]; then
+		echo "Error: rootfs file extraction failed"
+		exit 1
 	fi
+	echo "succeeded"
 
 	# Re-use the merged_dir in essential or other containers
 
-	container_tmppath=`get_tmppath_by_container $cn`
+	container_tmppath=${pathtocontainer}
 	container_mergedir=`cat ${CNRECORD}|awk -F ":" '{if ( $1=="'${cn}'" )print $3}'`
 
 	merge_summary="${ARTIFACTS_DIR}/merge_summary.${cn}"
-	echo "Merge summary for ${cn}">>${merge_summary}
 	fstab_entry=""
 	# Adding ${cn} with merge option ${container_mergedir}
 	for merge_entry in $(echo ${container_mergedir}|sed 's/;/\n/g'); do
@@ -584,10 +572,10 @@ function add_container {
 			continue
 		fi
 
+		sizeinfo_ori=`du -BM ${container_tmppath}/rootfs${dir} -d 0|awk '{print $1;}'`
+
 		# perform merge container ${TMPMNT}${dir} ${container_tmppath}${merged_dir}
 		fstab_entry="overlay /var/lib/lxc/${cn}/rootfs${dir} overlay lowerdir="
-		# Before merging, copy orignal outof rootfs
-		cp -a ${container_tmppath}/rootfs${dir} ${container_tmppath}${dir}
 
 		fstab_mark=0
 		for target_entry in ${target}; do
@@ -595,8 +583,8 @@ function add_container {
 				lowerdir="${TMPMNT}${dir}"
 				fstab_dir=${dir}
 			else
-				targetbase=`get_tmppath_by_container $target_entry`
-				if [ -z ${targetbase} ]; then
+				targetbase=${lxcbase}/${target_entry}
+				if [ ! -d ${targetbase} ]; then
 					echo "[INFO] can not find container ${target_entry} when merging"
 					continue
 				fi
@@ -605,7 +593,7 @@ function add_container {
 					lowerdir="${targetbase}/rootfs${dir}"
 					fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}"
 				else
-					lowerdir="${targetbase}${dir}"
+					lowerdir="${targetbase}/rootfs${dir}_temp"
 					fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}_temp"
 				fi
 			fi
@@ -633,18 +621,12 @@ function add_container {
 		# Add fstab entry in essential
 		mkdir ${pathtocontainer}${dir}_over
 		fstab_entry="${fstab_entry},upperdir=/var/lib/lxc/${cn}/rootfs${dir}_temp,workdir=/var/lib/lxc/${cn}${dir}_over 0       0"
+		echo "${fstab_entry}">> ${pathtocontainer}/fstab
 
-		sizeinfo=`du -BM ${container_tmppath}${dir} -d 0|awk '{print $1;}'`
-		echo "${dir} size befor merging is ${sizeinfo}">>${merge_summary}
+		echo "${dir} size befor merging is ${sizeinfo_ori}">>${merge_summary}
 		sizeinfo=`du -BM ${container_tmppath}/rootfs${dir}_temp -d 0|awk '{print $1;}'`
 		echo "${dir} size after merging is ${sizeinfo}">>${merge_summary}
 	done;
-
-	# Finally copy $container_tmppath/rootfs/ to ${pathtocontainer}/rootfs
-	# when do use overlayfs to merge container rootfs.
-	if [ -n "$container_tmppath" ]; then
-		cp -a $container_tmppath/rootfs/* ${pathtocontainer}/rootfs
-	fi
 
 	# Re-use networking configuration in deploy_new_container()
 	if [ ${1} == "upgrade" ] && \
@@ -655,9 +637,7 @@ function add_container {
 
 	echo "Deploying new container ${cn}"
 	deploy_new_container
-	if [ -n "$fstab_entry" ]; then
-		echo "${fstab_entry}">> ${pathtocontainer}/fstab
-	fi
+
 	# Final action, create the softlink to it
 	# But first, if it's an upgrade, record the old one
 	# in history for rollback purposes

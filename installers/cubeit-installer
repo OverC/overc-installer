@@ -612,23 +612,10 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
-
-	echo -n "Extracting rootfs $cname, with src $c....."
-
-	# untar it into temp, save it to record
-	tmpcontainer=`mktemp -d /tmp/hdcnt_dirXXXXX`
+	# Just save a record in tmp file
 	mergepatch=`get_prop_value_by_container $cname "mergepath"`
 
-	echo "$cname:$tmpcontainer:$mergepatch" >> ${CNRECORD}
-	mkdir -p $tmpcontainer/rootfs
-	tar --numeric-owner -xjf $c -C $tmpcontainer/rootfs
-
-	if [ $? != 0 ]; then
-		echo "failed!"
-		echo "Error: rootfs file extraction failed"
-		exit 1
-	fi
-	echo "succeeded"
+	echo "$cname::$mergepatch" >> ${CNRECORD}
     done;
 
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
@@ -716,11 +703,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     done
 
     #cleanup temp files
-    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-        cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
-        temp_dir=`cat ${CNRECORD}|awk -F ":" '{if ( $1=="'${cname}'" )print $2}'`
-        rm $temp_dir -r
-    done
     rm ${CNRECORD}
 
     # install and modify services
