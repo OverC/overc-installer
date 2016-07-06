@@ -766,7 +766,8 @@ create_property_map()
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $cn_short`
 
 	all_props=""
-	for prop_count in 1 2 3 4 5 6; do
+	#by now 20 properties is enough
+	for prop_count in {1..20}; do
 	    props=`echo "${c}" | cut -d':' -f$prop_count`
 	    if [ "${cn}" == "${props}" ]; then
 		props=""
