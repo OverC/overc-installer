@@ -820,8 +820,8 @@ service_install()
     if [ -d "${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/" ]; then
 	tgt="${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/"
     else
-	if [ -d "${LXCBASE}/${cname}/usr_over" ]; then
-	    tgt="${LXCBASE}/${cname}/usr_over/lib/systemd/system"
+	if [ -d "${LXCBASE}/${cname}/rootfs/usr_temp" ]; then
+	    tgt="${LXCBASE}/${cname}/rootfs/usr_temp/lib/systemd/system"
 	fi
     fi
 
@@ -836,7 +836,6 @@ service_install()
 	echo "[WARNING] ${cname}: could not enable service ${sname}, target directory not found"
     fi
 }
-
 # arg1: replacement target
 # arg2: replacement string
 service_modify()
@@ -849,8 +848,8 @@ service_modify()
     if [ -d "${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/" ]; then
 	tgt="${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/"
     else
-	if [ -d "${LXCBASE}/${cname}/usr_over" ]; then
-	    tgt="${LXCBASE}/${cname}/usr_over/lib/systemd/system"
+	if [ -d "${LXCBASE}/${cname}/rootfs/usr_temp" ]; then
+	    tgt="${LXCBASE}/${cname}/rootfs/usr_temp/lib/systemd/system"
 	fi
     fi
 
