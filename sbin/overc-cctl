@@ -305,6 +305,22 @@ blacklist="console|core|fd|full|hugepages|initctl|log|lp0|lp1|lp2|lp3|mqueue|nul
 
 # Populate the dev directory, avoiding anything in the blacklist
 cd /dev ; cp -ua \`ls | egrep -v -e "^(\$blacklist)\\\$"\` \$LXC_ROOTFS_MOUNT/dev
+
+# Check for screen getty service
+a=\`ls -f /etc/systemd/system/getty.target.wants/screen-getty* 2>/dev/null\`
+if [ "\$a" != "" ] ; then
+    # 2 seconds to attach console, in practice it is < 100ms
+    for e in 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0; do
+        /usr/bin/screen -S console -wipe -ls console 2> /dev/null > /dev/null
+        if [ \$? = 0 ] ; then
+            /usr/bin/screen -S console -x -X screen -t \$LXC_NAME /usr/bin/lxc-console -e _ -n \$LXC_NAME -t 0
+            break
+        fi
+        sleep 0.1
+    done
+fi
+
+exit 0
 EOF
 	chmod 755 ${pathtocontainer}/autodev
 }
@@ -368,6 +384,15 @@ function deploy_new_container {
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd-kernel.socket
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd-control.socket
 	fi
+
+	# Essential can use the screen getty if available
+	if [ -e lib/systemd/system/screen-getty@.service ] ; then
+		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
+		for k in ${serialconsoles}; do
+		        ln -s -f /dev/null ${k}
+			ln -s -f /lib/systemd/system/screen-getty@.service ${k/serial-getty/screen-getty}
+		done
+	fi
 	
 	if [ ${havettyconsole} == 1  ]; then
 		# If container /dev is mounted by tmpfs (when lxc.autodev=1) then
@@ -383,14 +408,15 @@ function deploy_new_container {
 		for k in ${serialconsoles}; do
 		        ln -s -f /dev/null ${k}
 		done
-
-	else
-		serialconsoles=$( ls ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
-		# Mask out the container service serial-getty@${ttyconsoledev}.service
-		for k in ${serialconsoles}; do
-			ln -s -f /dev/null ${k}
-		done
 	fi
+
+
+	# Mask serial getty in containers
+	serialconsoles=$( ls ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
+	# Mask out the container service serial-getty@${ttyconsoledev}.service
+	for k in ${serialconsoles}; do
+		ln -s -f /dev/null ${k}
+	done
 
 	#Remove the systemd's costly remount of the root partition from /etc/fstab,
 	#and also remove API filesystems mounting from it, as systemd will mount them itself.
