@@ -3,6 +3,10 @@
 #  it under the terms of the GNU General Public License version 2 as
 #  published by the Free Software Foundation.
 
+if [ "$CUBE_DEBUG_SET_X_IF_SET" = 1 ] ; then
+    set -x
+fi
+
 if [ -z "${CNRECORD}" ] ; then
 	CNRECORD=/dev/null
 fi
@@ -15,7 +19,7 @@ function print_cmd_help {
 	case "${1}" in
 		add)
 			cat << EOF
-add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-P] [-b] [-S tty console dev] [-m monitor container] [-v vty number]
+add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-P] [-b] [-T] [-S tty console dev] [-m monitor container] [-v vty number]
 
 Adds a new container which doesn't already exist.
 EOF
@@ -139,6 +143,7 @@ Options summary:
 -F       : force option - ie disable prompts
 -s       : container controlling tty console
 -S [arg] : tty console device.  default is ttyS0
+-T       : Assign physical console device to container using value of -S
 -m [arg] : monitor container controlled by dom0, default is cube-desktop
 -v [arg] : specify the vty number to be used for login
 
@@ -248,6 +253,9 @@ EOF
 		echo "lxc.console = none" >>${pathtocontainer}/config
 	fi
 	lxcbase=$temp_lxcbase
+	if [ ${havettyconsole} == 1 ]; then
+		echo "overc.screen-getty = 1" >>${pathtocontainer}/config
+	fi
 }
 
 function create_lxc_fstab {
@@ -308,7 +316,8 @@ cd /dev ; cp -ua \`ls | egrep -v -e "^(\$blacklist)\\\$"\` \$LXC_ROOTFS_MOUNT/de
 
 # Check for screen getty service
 a=\`ls -f /etc/systemd/system/getty.target.wants/screen-getty* 2>/dev/null\`
-if [ "\$a" != "" ] ; then
+grep -q "^overc.screen-getty = 1" \$LXC_CONFIG_FILE
+if [ \$? = 0 -a "\$a" != "" ] ; then
     # 2 seconds to attach console, in practice it is < 100ms
     for e in 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0; do
         /usr/bin/screen -S console -wipe -ls console 2> /dev/null > /dev/null
@@ -394,7 +403,8 @@ function deploy_new_container {
 		done
 	fi
 	
-	if [ ${havettyconsole} == 1  ]; then
+	# harttyconsole == 1 means the container gets the real device
+	if [ ${hardttyconsole} == 1  ]; then
 		# If container /dev is mounted by tmpfs (when lxc.autodev=1) then
 		# systemd fails to start dev-ttyXXXX.device service and this causes
 		# serial-getty@ttyXXXX.service fails to start.  Workaround for now
@@ -403,20 +413,18 @@ function deploy_new_container {
 			sed -i "s:After=dev-%i.device :After=:g" ${pathtocontainer}/rootfs/lib/systemd/system/serial-getty@.service
 		fi
 
-		# remove serial console in order to make cube-desktop login prompt appears
-		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
+		# remove serial console in the metal in order to pass it to the container
+		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* etc/systemd/system/getty.target.wants/screen-getty* 2> /dev/null)
 		for k in ${serialconsoles}; do
 		        ln -s -f /dev/null ${k}
 		done
+	else
+		# Mask out the container service serial-getty@${ttyconsoledev}.service
+		serialconsoles=$( ls ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
+		for k in ${serialconsoles}; do
+			ln -s -f /dev/null ${k}
+		done
 	fi
-
-
-	# Mask serial getty in containers
-	serialconsoles=$( ls ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
-	# Mask out the container service serial-getty@${ttyconsoledev}.service
-	for k in ${serialconsoles}; do
-		ln -s -f /dev/null ${k}
-	done
 
 	#Remove the systemd's costly remount of the root partition from /etc/fstab,
 	#and also remove API filesystems mounting from it, as systemd will mount them itself.
@@ -947,6 +955,7 @@ cmdhelp=0
 force=0
 ttyconsoledev="ttyS0"
 havettyconsole=0
+hardttyconsole=0
 monitor_container="cube-desktop"
 
 # See if we're using btrfs
@@ -965,7 +974,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:v:" opt; do
+while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:Tv:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -1036,6 +1045,9 @@ while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:v:" opt; do
 		;;
 	S)
 		ttyconsoledev=$OPTARG
+		;;
+	T)
+		hardttyconsole=1
 		;;
 	?)
 		print_help

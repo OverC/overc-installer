@@ -221,6 +221,24 @@ get_prop_value_by_container()
     echo "${ret}"
 }
 
+get_prop_isset_by_container()
+{
+    local cn=$1
+    local prop=$2
+    local ret=""
+
+    props=${container_map[$cn]}
+    for k in $props; do
+        echo $k | grep -q "${prop}"
+        if [ $? = 0 ]; then
+	    ret=1
+            break
+        fi
+    done
+
+    echo "${ret}"
+}
+
 # containers are listed in HDINSTALL_CONTAINERS as:
 #    <full path>/<container tgz>:<properties>
 declare -g -A container_map=()
@@ -627,13 +645,22 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	cp $c ${TMPMNT}/tmp/
 	cp ${SBINDIR}/overc-cctl ${TMPMNT}/tmp/
 	
+	# Any container that has a console attribute gets a virtual console
+	consoleattr=`get_prop_isset_by_container $cname "console"`
+	# hardconsole means a container gets the physical console device
+	hardconsoleattr=`get_prop_isset_by_container $cname "hardconsole"`
+
 	ttyconsole_opt="-S ${ttyconsoledev}"
-	if [ "${ttyconsolecn}" == "${cname}" ]; then
+	if [ "${ttyconsolecn}" == "${cname}" -o -n "$consoleattr" ]; then
             ttyconsole_opt="-s ${ttyconsole_opt}"
 	fi
 	
 	if [ "${privilegedcn}" == "${cname}" ]; then
 	    ttyconsole_opt=" -P ${ttyconsole_opt}"
+	fi
+
+	if [ -n "${hardconsoleattr}" ]; then
+	    ttyconsole_opt="-T ${ttyconsole_opt}"
 	fi
 
 	# vty attributes are: <number>,<properites>
