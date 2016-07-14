@@ -645,8 +645,8 @@ case $TARGET_TYPE in
 	fi
 
 	if [ -z "${TARGET_CONFIG_FILE}" ]; then
-	    if [ -n "${CONFIG_FILE}" ]; then
-		TARGET_CONFIG_FILE=${CONFIG_FILE}
+	    if [ -n "${CONFIG_FILES}" ]; then
+		TARGET_CONFIG_FILE="${CONFIG_FILES}"
 	    else
 		TARGET_CONFIG_FILE="config-live.sh"
 	    fi
