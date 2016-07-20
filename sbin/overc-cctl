@@ -361,7 +361,7 @@ function deploy_new_container {
 	if [ -e "${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf" ]; then
 	    if [ ${discoverable} == 1 ]; then
 		# most of the defaults are good enough in the avahi config file, just minor tweaks here
-		echo "[INFO]: container ${cn} is discoverable via avhai"
+		echo "[INFO]: container ${cn} is discoverable via avahi"
 		sed -i "s/^.*rlimit\-nproc=.*/# rlimit-nproc=3/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
 	    else
 		sed -i "s/^.*disable\-publishing=.*/disable-publishing=yes/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
