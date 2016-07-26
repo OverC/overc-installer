@@ -19,7 +19,7 @@ function print_cmd_help {
 	case "${1}" in
 		add)
 			cat << EOF
-add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-P] [-b] [-T] [-S tty console dev] [-m monitor container] [-v vty number]
+add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-P] [-b] [-T] [-u subuid] [-S tty console dev] [-m monitor container] [-v vty number]
 
 Adds a new container which doesn't already exist.
 EOF
@@ -235,10 +235,6 @@ lxc.network.type = veth
 lxc.network.name = veth0
 lxc.network.script.up = /etc/lxc/ovs-up
 lxc.network.script.down = /etc/lxc/ovs-down
-lxc.hook.autodev = ${lxcbase}/${cn}/autodev
-lxc.mount.entry = devpts ${lxcbase}/${cn}/rootfs/dev/pts devpts gid=5,mode=620 0 0
-lxc.mount.entry = proc ${lxcbase}/${cn}/rootfs/proc    proc defaults 0 0
-lxc.mount.entry = sysfs ${lxcbase}/${cn}/rootfs/sys     sysfs defaults 0 0
 lxc.group = ${group}
 lxc.start.auto = ${autostart}
 wr.start.auto = ${peerstart}
@@ -251,6 +247,21 @@ EOF
 	if [ ${domain0} == 1 ]; then
 		# Domain 0 wants to drive X onto a real console
 		echo "lxc.console = none" >>${pathtocontainer}/config
+	fi
+
+	if [ -n ${subuid} ]; then
+		# for unprivileged containers, we need to use the mixed structure to
+		# isolate the control of the container itself from the upper layer.
+		echo "lxc.mount.auto = cgroup:mixed proc:mixed sys:mixed" >>${pathtocontainer}/config
+		# subuid/subgid configuration for unprivileged container
+		echo "lxc.id_map = u 0 ${subuid} 65536" >>${pathtocontainer}/config
+		echo "lxc.id_map = g 0 ${subuid} 65536" >>${pathtocontainer}/config
+	else
+		# privileged containers
+		echo "lxc.mount.entry = devpts ${lxcbase}/${cn}/rootfs/dev/pts devpts gid=5,mode=620 0 0" >>${pathtocontainer}/config
+		echo "lxc.mount.entry = proc ${lxcbase}/${cn}/rootfs/proc    proc defaults 0 0" >>${pathtocontainer}/config
+		echo "lxc.mount.entry = sysfs ${lxcbase}/${cn}/rootfs/sys     sysfs defaults 0 0" >>${pathtocontainer}/config
+		echo "lxc.hook.autodev = ${lxcbase}/${cn}/autodev" >>${pathtocontainer}/config
 	fi
 	lxcbase=$temp_lxcbase
 	if [ ${havettyconsole} == 1 ]; then
@@ -575,9 +586,9 @@ function add_container {
 	if [ ${btrfs} == 1 ]; then
 		btrfs subvolume create ${pathtocontainer}
 	else
-		mkdir -p ${pathtocontainer}
+		mkdir -p -m 755 ${pathtocontainer}
 	fi
-	mkdir -p ${pathtocontainer}/rootfs
+	mkdir -p -m 755 ${pathtocontainer}/rootfs
 
 	# Extract compressed tar ball
 	echo -n "Extracting rootfs....."
@@ -587,6 +598,8 @@ function add_container {
 		exit 1
 	fi
 	echo "succeeded"
+
+	[[ ! -z ${subuid} ]] && chown -R ${subuid}:${subuid} ${pathtocontainer}/rootfs
 
 	# Re-use the merged_dir in essential or other containers
 
@@ -865,7 +878,7 @@ function rollback_container {
 	fi
 	if [ "${result}" == "y" ]; then
 		switch_container ${contver} delhist
-		# Cleanup any stray stnapshots after a rollback
+		# Cleanup any stray snapshots after a rollback
 		for c in $(cd ${lxcbase}/${containers} && ls -1dr ${cn}/* 2>/devnull) ; do
 			get_container_attributes ${c}
 			if [ ${current} == 0 ] && [ ${inhist} == 0 ]; then
@@ -974,7 +987,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:Tv:" opt; do
+while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:Tu:v:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -1025,6 +1038,17 @@ while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:Tv:" opt; do
 			continue
 		else
 			echo "Error: -t requires a number as argument"
+			exit 1
+		fi
+		;;
+	u)
+		subuid=$OPTARG
+		if [ "${subuid}" -eq "${subuid}" ] 2>/dev/null; then
+			if [ "${subuid}" -lt 100000 ] 2>/dev/null; then
+				echo "Error: -u requires a subuid number no less than 100000"
+			fi
+		else
+			echo "Error: -u requires a number as argument"
 			exit 1
 		fi
 		;;
