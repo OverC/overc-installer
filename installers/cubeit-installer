@@ -695,6 +695,17 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		network_offsets+=("'$cname,$net_offset'")
 	    fi
 	fi
+
+	# if subuid property is specified for this container,
+	# this container is going to be unprivileged.
+	subuid=`get_prop_value_by_container $cname "subuid"`
+	subuid_opt=""
+	if [ -n "${subuid}" ]; then
+		subuid_opt="-u ${subuid}"
+		echo "root:${subuid}:65536" >> ${TMPMNT}/etc/subuid
+		echo "root:${subuid}:65536" >> ${TMPMNT}/etc/subgid
+	fi
+
 	# actually install the container
 	export LXCBASE="${TMPMNT}/var/lib/lxc"
 	export BINDMNTBASE="${TMPMNT}/opt/container"
@@ -716,7 +727,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
 		;;
 	    *)
-		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
+		${SBINDIR}/overc-cctl add ${subuid_opt} -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
 		;;
 	esac
 
