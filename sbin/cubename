@@ -26,83 +26,83 @@ EOF
 }
 
 if [ -z "$1" ]; then
-    usage
-    exit
+	usage
+	exit
 fi
 
 while [ $# -gt 0 ]; do
-    case "$1" in
-	--prefix)
-	    prefix="$2"
-	    shift
-	    ;;
-	--suffix)
-	    suffix="$2"
-	    shift
-	    ;;
-	-v) verbose=t
-            ;;
-        *) break
-            ;;
-    esac
-    shift
+	case "$1" in
+		--prefix)
+			prefix="$2"
+			shift
+			;;
+		--suffix)
+			suffix="$2"
+			shift
+			;;
+		-v) verbose=t
+			;;
+		*) break
+			;;
+	esac
+	shift
 done
 
 # Parms: $1 = filename
 function extract_container_name
 {
-    local fullname=$1
+	local fullname=$1
 
-    # container names follow these rules:
-    #
-    # [<prefix>]<type>-<name>-<rest>
-    #
-    # <prefix>: optional filename prefix
-    # <type>: cube, docker, lxc
-    # <name>: dom or <string>
-    # 
-    # if name is 'dom', the next character or -<string> is the
-    # name of the domain. Strings must be all alpha numeric.
-    #
-    # <rest>: <arch>.tar.bz
-    # <arch>: genericx86-64, ARM, etc.
-    #  
-    #
-    # system container: cube-dom<x>-<rest>
-    # application container: cube-<string>-<rest>
-    # 
+	# container names follow these rules:
+	#
+	# [<prefix>]<type>-<name>-<rest>
+	#
+	# <prefix>: optional filename prefix
+	# <type>: cube, docker, lxc
+	# <name>: dom or <string>
+	#
+	# if name is 'dom', the next character or -<string> is the
+	# name of the domain. Strings must be all alpha numeric.
+	#
+	# <rest>: <arch>.tar.bz
+	# <arch>: genericx86-64, ARM, etc.
+	#
+	#
+	# system container: cube-dom<x>-<rest>
+	# application container: cube-<string>-<rest>
+	#
 
-    container_src=`basename $fullname`
+	container_src=`basename $fullname`
 
-    if [ -v prefix -a -n "$prefix" ]; then
-	container_src=$(echo $container_src | sed "s/^${prefix}//")
-    fi
+	if [ -v prefix -a -n "$prefix" ]; then
+		container_src=$(echo $container_src | sed "s/^${prefix}//")
+	fi
 
-    # read in the parts, split by '-'. keys start with 0 and increase
-    array=(${container_src//\-/ }) 
+	# read in the parts, split by '-'. keys start with 0 and increase
+	array=(${container_src//\-/ })
 
-    type=${array[0]}
-    name=${array[1]}
+	type=${array[0]}
+	name=${array[1]}
 
-    if [ "$type" = "cube" ]; then
-	case $name in
-	    dom*)
-		output=$name
-		;;
-	    *)
+	if [ "$type" = "cube" ]; then
+		case $name in
+			dom*)
+				output=$name
+				;;
+			*)
+				output=$type-$name
+				;;
+		esac
+	fi
+
+	# Wind River Linux produces container image names
+	# where type == "container", thus:
+	# <prefix>container-<name>-<rest>
+	if [ "$type" = "container" ]; then
 		output=$type-$name
-		;;
-	esac
-    fi
+	fi
 
-    # Wind River Linux produces container image names
-    # where type == "container", thus:
-    # <prefix>container-<name>-<rest>
-    if [ "$type" = "container" ]; then
-	output=$type-$name
-    fi
-
-    echo ${output}
+	echo ${output}
 }
 
 extract_container_name $1

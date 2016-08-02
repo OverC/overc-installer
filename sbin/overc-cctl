@@ -4,7 +4,7 @@
 #  published by the Free Software Foundation.
 
 if [ "$CUBE_DEBUG_SET_X_IF_SET" = 1 ] ; then
-    set -x
+	set -x
 fi
 
 if [ -z "${CNRECORD}" ] ; then
@@ -172,18 +172,18 @@ EOF
 }
 
 function array_push {
-        local arrayname=$1  
-        local newitem=$2  
-        #"use to avoid '*' transfer  
-        eval ${arrayname}'=("${'${arrayname}'[@]}" "$newitem" ) '  
+	local arrayname=$1
+	local newitem=$2
+	#"use to avoid '*' transfer
+	eval ${arrayname}'=("${'${arrayname}'[@]}" "$newitem" ) '
 }  
 function array_pop {  
-        local arrayname=$1  
-        eval ${arrayname}'=("${'${arrayname}'[@]:0:$((${#'${arrayname}'[@]}-1))}") '
+	local arrayname=$1
+	eval ${arrayname}'=("${'${arrayname}'[@]:0:$((${#'${arrayname}'[@]}-1))}") '
 }  
 function array_top {   
-        local arrayname=$1  
-        eval echo '"${'${arrayname}'[$((${#'${arrayname}'[@]}-1))]}"'
+	local arrayname=$1
+	eval echo '"${'${arrayname}'[$((${#'${arrayname}'[@]}-1))]}"'
 }  
 
 function remove_subvol_recursive {
@@ -242,7 +242,7 @@ EOF
 	if [ ${bridged_net} == 1 ]; then
 		sed -i '/^lxc.network.script.*$/d' ${pathtocontainer}/config
 		sed -i '/^lxc.network.type.*$/a lxc.network.link = br0' \
-		    ${pathtocontainer}/config
+			${pathtocontainer}/config
 	fi
 	if [ ${domain0} == 1 ]; then
 		# Domain 0 wants to drive X onto a real console
@@ -277,35 +277,35 @@ function create_lxc_fstab {
 	if $host_cross ; then
 		lxcbase=$lxcbase_cross
 		bindmntbase=$bindmntbase_cross
-        fi
+	fi
 
 	# special dom0 mounts (so nested containers can be launched)
 	if [ "${cn}" == "dom0" ]; then
-	    # This makes /opt/container/ available to dom0, so it can populate
-	    # /opt/container/local and /opt/container/all as part of the launch process
-	    # and have /opt/container in its mount namespace
-	    echo "${bindmntbase} ${lxcbase}/${cn}/rootfs${bindmntbase}	none rw,bind,create=dir" >> ${pathtocontainer}/fstab
-	    echo "${bindmntbase}/${cn} ${lxcbase}/${cn}/rootfs${bindmntbase}/local	none rw,bind,create=dir" >> ${pathtocontainer}/fstab
+		# This makes /opt/container/ available to dom0, so it can populate
+		# /opt/container/local and /opt/container/all as part of the launch process
+		# and have /opt/container in its mount namespace
+		echo "${bindmntbase} ${lxcbase}/${cn}/rootfs${bindmntbase}	none rw,bind,create=dir" >> ${pathtocontainer}/fstab
+		echo "${bindmntbase}/${cn} ${lxcbase}/${cn}/rootfs${bindmntbase}/local	none rw,bind,create=dir" >> ${pathtocontainer}/fstab
 
-	    # make /var/lib/lxc/* available to dom0
-	    echo "${lxcbase} ${lxcbase}/${cn}/rootfs/${lxcbase} none bind 0 0" >> ${pathtocontainer}/fstab
-	    # make / be available as /essential/
-	    echo "/ /var/lib/lxc/${cn}/rootfs/essential/ none rw,bind,create=dir 0 0" >> ${pathtocontainer}/fstab
-	    # make /boot be available as to dom0 since the essential system's update/upgrade is done in dom0
-	    echo "/boot /var/lib/lxc/${cn}/rootfs/boot/ none rw,bind 0 0" >> ${pathtocontainer}/fstab
-	    # proc for namespace access to essential (required for nested containers)
-	    echo "/proc/ ${lxcbase}/${cn}/rootfs/host/proc/ none rw,bind,create=dir 0 0" >> ${pathtocontainer}/fstab
+		# make /var/lib/lxc/* available to dom0
+		echo "${lxcbase} ${lxcbase}/${cn}/rootfs/${lxcbase} none bind 0 0" >> ${pathtocontainer}/fstab
+		# make / be available as /essential/
+		echo "/ /var/lib/lxc/${cn}/rootfs/essential/ none rw,bind,create=dir 0 0" >> ${pathtocontainer}/fstab
+		# make /boot be available as to dom0 since the essential system's update/upgrade is done in dom0
+		echo "/boot /var/lib/lxc/${cn}/rootfs/boot/ none rw,bind 0 0" >> ${pathtocontainer}/fstab
+		# proc for namespace access to essential (required for nested containers)
+		echo "/proc/ ${lxcbase}/${cn}/rootfs/host/proc/ none rw,bind,create=dir 0 0" >> ${pathtocontainer}/fstab
 	else
-	    # Create the fstab
-	    echo "${bindmntbase}/all	${lxcbase}/${cn}/rootfs${bindmntbase}/all	none ro,bind,create=dir"  >> ${pathtocontainer}/fstab
-	    echo "${bindmntbase}/${cn}	${lxcbase}/${cn}/rootfs${bindmntbase}/local	none rw,bind,create=dir"  >> ${pathtocontainer}/fstab
+		# Create the fstab
+		echo "${bindmntbase}/all	${lxcbase}/${cn}/rootfs${bindmntbase}/all	none ro,bind,create=dir"  >> ${pathtocontainer}/fstab
+		echo "${bindmntbase}/${cn}	${lxcbase}/${cn}/rootfs${bindmntbase}/local	none rw,bind,create=dir"  >> ${pathtocontainer}/fstab
 
-	    # if we aren't dom0, then we'll be launched by dom0, so we need to have our
-	    # directory created there (for the local container directory), or that nested container
-	    # launch will fail
-	    if [ -d $temp_lxcbase/dom0/rootfs/ ]; then
-		mkdir -p ${temp_lxcbase}/dom0/rootfs/${bindmntbase}/${cn}
-	    fi
+		# if we aren't dom0, then we'll be launched by dom0, so we need to have our
+		# directory created there (for the local container directory), or that nested container
+		# launch will fail
+		if [ -d $temp_lxcbase/dom0/rootfs/ ]; then
+			mkdir -p ${temp_lxcbase}/dom0/rootfs/${bindmntbase}/${cn}
+		fi
 	fi
 
 	lxcbase=$temp_lxcbase
@@ -329,15 +329,15 @@ cd /dev ; cp -ua \`ls | egrep -v -e "^(\$blacklist)\\\$"\` \$LXC_ROOTFS_MOUNT/de
 a=\`ls -f /etc/systemd/system/getty.target.wants/screen-getty* 2>/dev/null\`
 grep -q "^overc.screen-getty = 1" \$LXC_CONFIG_FILE
 if [ \$? = 0 -a "\$a" != "" ] ; then
-    # 2 seconds to attach console, in practice it is < 100ms
-    for e in 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0; do
-        /usr/bin/screen -S console -wipe -ls console 2> /dev/null > /dev/null
-        if [ \$? = 0 ] ; then
-            /usr/bin/screen -S console -x -X screen -t \$LXC_NAME /usr/bin/lxc-console -e _ -n \$LXC_NAME -t 0
-            break
-        fi
-        sleep 0.1
-    done
+	# 2 seconds to attach console, in practice it is < 100ms
+	for e in 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0; do
+		/usr/bin/screen -S console -wipe -ls console 2> /dev/null > /dev/null
+		if [ \$? = 0 ] ; then
+			/usr/bin/screen -S console -x -X screen -t \$LXC_NAME /usr/bin/lxc-console -e _ -n \$LXC_NAME -t 0
+			break
+		fi
+		sleep 0.1
+	done
 fi
 
 exit 0
@@ -386,17 +386,17 @@ function deploy_new_container {
 
 	# is avahi available in the container ?
 	if [ -e "${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf" ]; then
-	    if [ ${discoverable} == 1 ]; then
-		# most of the defaults are good enough in the avahi config file, just minor tweaks here
-		echo "[INFO]: container ${cn} is discoverable via avahi"
-		sed -i "s/^.*rlimit\-nproc=.*/# rlimit-nproc=3/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
-	    else
-		sed -i "s/^.*disable\-publishing=.*/disable-publishing=yes/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
-	    fi
+		if [ ${discoverable} == 1 ]; then
+			# most of the defaults are good enough in the avahi config file, just minor tweaks here
+			echo "[INFO]: container ${cn} is discoverable via avahi"
+			sed -i "s/^.*rlimit\-nproc=.*/# rlimit-nproc=3/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
+		else
+			sed -i "s/^.*disable\-publishing=.*/disable-publishing=yes/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
+		fi
 	else
-	    if [ ${discoverable} == 1 ]; then
-		echo "WARNING: container ${cn} is discoverable, but avahi was not found"
-	    fi
+		if [ ${discoverable} == 1 ]; then
+			echo "WARNING: container ${cn} is discoverable, but avahi was not found"
+		fi
 	fi
 
 	if [ $privileged -ne 1 ] && [ -e ${pathtocontainer}/rootfs/etc/systemd/system ] ; then
@@ -409,11 +409,11 @@ function deploy_new_container {
 	if [ -e lib/systemd/system/screen-getty@.service ] ; then
 		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
 		for k in ${serialconsoles}; do
-		        ln -s -f /dev/null ${k}
+			ln -s -f /dev/null ${k}
 			ln -s -f /lib/systemd/system/screen-getty@.service ${k/serial-getty/screen-getty}
 		done
 	fi
-	
+
 	# harttyconsole == 1 means the container gets the real device
 	if [ ${hardttyconsole} == 1  ]; then
 		# If container /dev is mounted by tmpfs (when lxc.autodev=1) then
@@ -427,7 +427,7 @@ function deploy_new_container {
 		# remove serial console in the metal in order to pass it to the container
 		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* etc/systemd/system/getty.target.wants/screen-getty* 2> /dev/null)
 		for k in ${serialconsoles}; do
-		        ln -s -f /dev/null ${k}
+			ln -s -f /dev/null ${k}
 		done
 	else
 		# Mask out the container service serial-getty@${ttyconsoledev}.service
@@ -552,23 +552,23 @@ function add_container {
 	fi
 
 	case "${1}" in
-	new)
-		if [ -L ${lxcbase}/${cn} ]; then
-			echo "Error: container ${cn} already exists"
+		new)
+			if [ -L ${lxcbase}/${cn} ]; then
+				echo "Error: container ${cn} already exists"
+				exit 1
+			fi
+			;;
+		upgrade)
+			if [ ! -L ${lxcbase}/${cn} ]; then
+				echo "Error: container ${cn} doesn't exist"
+				exit 1
+			fi
+			;;
+		*)
+			echo "Error: unknown command ${1} to add_container"
+			echo "This is an internal script error"
 			exit 1
-		fi
-		;;
-	upgrade)
-		if [ ! -L ${lxcbase}/${cn} ]; then
-			echo "Error: container ${cn} doesn't exist"
-			exit 1
-		fi
-		;;
-	*)
-		echo "Error: unknown command ${1} to add_container"
-		echo "This is an internal script error"
-		exit 1
-		;;
+			;;
 	esac
 
 	if [ ${domain0} == 1 ]; then
@@ -677,24 +677,24 @@ function add_container {
 
 	# Re-use networking configuration in deploy_new_container()
 	if [ ${1} == "upgrade" ] && \
-	   [ "$(grep -c '^lxc.network.link = br0$' ${lxcbase}/${cn}/config 2> /dev/null)" == "1" ]
-	   then
-		bridged_net=1
-	fi
+		[ "$(grep -c '^lxc.network.link = br0$' ${lxcbase}/${cn}/config 2> /dev/null)" == "1" ]
+then
+	bridged_net=1
+fi
 
-	echo "Deploying new container ${cn}"
-	deploy_new_container
+echo "Deploying new container ${cn}"
+deploy_new_container
 
-	# Final action, create the softlink to it
-	# But first, if it's an upgrade, record the old one
-	# in history for rollback purposes
-	if [ ${1} == "upgrade" ]; then
-		get_container_history
-		mkdir -p ${pathtohistory}
-		switch_container ${volname} addhist
-	else
-		ln -sTf $(relpath ${pathtocontainer} ${lxcbase}/${cn}) ${lxcbase}/${cn}
-	fi
+# Final action, create the softlink to it
+# But first, if it's an upgrade, record the old one
+# in history for rollback purposes
+if [ ${1} == "upgrade" ]; then
+	get_container_history
+	mkdir -p ${pathtohistory}
+	switch_container ${volname} addhist
+else
+	ln -sTf $(relpath ${pathtocontainer} ${lxcbase}/${cn}) ${lxcbase}/${cn}
+fi
 }
 
 function get_container_history {
@@ -944,7 +944,7 @@ function delete_history {
 host_cross=false
 lxcbase=${LXCBASE}
 if [ -z "${lxcbase}" ]; then
-    lxcbase=/var/lib/lxc
+	lxcbase=/var/lib/lxc
 fi
 bindmntbase=${BINDMNTBASE}
 if [ -z "${bindmntbase}" ]; then
@@ -989,94 +989,94 @@ shift 1
 
 while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:Tu:v:" opt; do
 	case $opt in
-	0)
-		domain0=1
-		autostart=1
-		cn="dom0"
-		;;
-	a)
-		autostart=1
-		;;
-	c)	
-		host_cross=true
-		;;
-	p)
-		peerstart=1
-		;;
-	P)	privileged=1
-		;;
-	b)
-		bridged_net=1
-		;;
-	d)
-		discoverable=1
-		;;
-	f)
-		rootfs_fn=$OPTARG
-		;;
-	g)
-		group=$OPTARG
-		;;
-	h)
-		cmdhelp=1
-		;;
-	i)
-		hist_index=$OPTARG
-		;;
-	m)
-		monitor_container=$OPTARG
-		;;
-	n)
-		cn=$OPTARG
-		;;
-	r)
-		removecont=1
-		;;
-	t)
-		tty_num=$OPTARG
-		if [ "${tty_num}" -eq "${tty_num}" ] 2>/dev/null; then
-			continue
-		else
-			echo "Error: -t requires a number as argument"
-			exit 1
-		fi
-		;;
-	u)
-		subuid=$OPTARG
-		if [ "${subuid}" -eq "${subuid}" ] 2>/dev/null; then
-			if [ "${subuid}" -lt 100000 ] 2>/dev/null; then
-				echo "Error: -u requires a subuid number no less than 100000"
+		0)
+			domain0=1
+			autostart=1
+			cn="dom0"
+			;;
+		a)
+			autostart=1
+			;;
+		c)
+			host_cross=true
+			;;
+		p)
+			peerstart=1
+			;;
+		P)	privileged=1
+			;;
+		b)
+			bridged_net=1
+			;;
+		d)
+			discoverable=1
+			;;
+		f)
+			rootfs_fn=$OPTARG
+			;;
+		g)
+			group=$OPTARG
+			;;
+		h)
+			cmdhelp=1
+			;;
+		i)
+			hist_index=$OPTARG
+			;;
+		m)
+			monitor_container=$OPTARG
+			;;
+		n)
+			cn=$OPTARG
+			;;
+		r)
+			removecont=1
+			;;
+		t)
+			tty_num=$OPTARG
+			if [ "${tty_num}" -eq "${tty_num}" ] 2>/dev/null; then
+				continue
+			else
+				echo "Error: -t requires a number as argument"
+				exit 1
 			fi
-		else
-			echo "Error: -u requires a number as argument"
-			exit 1
-		fi
-		;;
-	v)
-		vty_num=$OPTARG
-		if [ "${vty_num}" -ge "2" -a "${vty_num}" -le "6" ] 2>/dev/null; then
-			continue
-		else
-			echo "Error: -v requires a number >= 2 and <= 6"
-			exit 1
-		fi
-		;;
-	F)
-		force=1
-		;;
-	s)
-		havettyconsole=1
-		;;
-	S)
-		ttyconsoledev=$OPTARG
-		;;
-	T)
-		hardttyconsole=1
-		;;
-	?)
-		print_help
-		exit 0
-		;;
+			;;
+		u)
+			subuid=$OPTARG
+			if [ "${subuid}" -eq "${subuid}" ] 2>/dev/null; then
+				if [ "${subuid}" -lt 100000 ] 2>/dev/null; then
+					echo "Error: -u requires a subuid number no less than 100000"
+				fi
+			else
+				echo "Error: -u requires a number as argument"
+				exit 1
+			fi
+			;;
+		v)
+			vty_num=$OPTARG
+			if [ "${vty_num}" -ge "2" -a "${vty_num}" -le "6" ] 2>/dev/null; then
+				continue
+			else
+				echo "Error: -v requires a number >= 2 and <= 6"
+				exit 1
+			fi
+			;;
+		F)
+			force=1
+			;;
+		s)
+			havettyconsole=1
+			;;
+		S)
+			ttyconsoledev=$OPTARG
+			;;
+		T)
+			hardttyconsole=1
+			;;
+		?)
+			print_help
+			exit 0
+			;;
 	esac
 done
 if [ ${cmdhelp} == 1 ]; then

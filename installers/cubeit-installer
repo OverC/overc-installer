@@ -4,7 +4,7 @@
 umask 0022
 
 if [ "$CUBE_DEBUG_SET_X_IF_SET" = 1 ] ; then
-    set -x
+	set -x
 fi
 
 #  This program is free software; you can redistribute it and/or modify
@@ -24,7 +24,7 @@ PUPPETDIR="${BASEDIR}/../files/puppet"
 SBINDIR="${BASEDIR}/../sbin"
 export SBINDIR
 if [ -z "${CONFIG_DIRS}" ] ; then
-    CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
+	CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
 fi
 export CONFIG_DIRS
 
@@ -48,20 +48,20 @@ DEBUG_LEVEL=${DEBUG_DEFAULT}
 #get the target's architecture, x86 or not x86?
 export X86_ARCH=true
 if [ $(uname -p 2>/dev/null | grep -ic x86) != '1' ]; then
-    # if the processor type isn't x86, set x86 to false
-    export X86_ARCH=false
+	# if the processor type isn't x86, set x86 to false
+	export X86_ARCH=false
 
-    # but! some emulated platforms (i.e. qemu) report unknown, so we 
-    # double check, and set ourselves back to x86 if unkown is reported
-    if [ $(uname -p 2>/dev/null | grep -ic unknown) = '1' ]; then
-	export X86_ARCH=true
-    fi
+	# but! some emulated platforms (i.e. qemu) report unknown, so we
+	# double check, and set ourselves back to x86 if unkown is reported
+	if [ $(uname -p 2>/dev/null | grep -ic unknown) = '1' ]; then
+		export X86_ARCH=true
+	fi
 fi
 
 ## Load function file(s)
 if ! [ -e $FUNCTIONS_FILE ]; then
-    debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find function definitions (${FUNCTIONS_FILE})"
-    exit 1
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find function definitions (${FUNCTIONS_FILE})"
+	exit 1
 fi
 source $FUNCTIONS_FILE
 
@@ -81,77 +81,77 @@ EOF
 }
 
 if [ -z "$1" ]; then
-    usage
-    exit
+	usage
+	exit
 fi
 
 btrfs=0
 ttyconsolecn=""
 ttyconsoledev="ttyS0"
 while [ $# -gt 0 ]; do
-    case "$1" in
-    --config) 
-            CONFIG_FILES="${CONFIG_FILES} $2"
-	    shift
-            ;;
-    --image)
-            IMAGE="$2"
-	    shift
-            ;;
-    --artifacts)
-            ARTIFACTS_DIR="$2"
-	    shift
-            ;;
-    -v) verbose=t
-            ;;
-    -b) btrfs=1
-            ;;
-    --finaldev) final_dev="$2"
-            shift
-            ;;
-    --ttyconsoledev) ttyconsoledev="$2"
-            shift
-            ;;
-    --ttyconsolecn) ttyconsolecn="$2"
-            shift
-            ;;
-    --privilegedcn) privilegedcn="$2"
-            shift
-            ;;
-    --partition_layout)
-            FDISK_PARTITION_LAYOUT_INPUT="$2"
-            shift
-            ;;
-         *) break
-            ;;
-    esac
-    shift
+	case "$1" in
+		--config)
+			CONFIG_FILES="${CONFIG_FILES} $2"
+			shift
+			;;
+		--image)
+			IMAGE="$2"
+			shift
+			;;
+		--artifacts)
+			ARTIFACTS_DIR="$2"
+			shift
+			;;
+		-v) verbose=t
+			;;
+		-b) btrfs=1
+			;;
+		--finaldev) final_dev="$2"
+			shift
+			;;
+		--ttyconsoledev) ttyconsoledev="$2"
+			shift
+			;;
+		--ttyconsolecn) ttyconsolecn="$2"
+			shift
+			;;
+		--privilegedcn) privilegedcn="$2"
+			shift
+			;;
+		--partition_layout)
+			FDISK_PARTITION_LAYOUT_INPUT="$2"
+			shift
+			;;
+		*) break
+			;;
+	esac
+	shift
 done
 
 if [ -z "${CONFIG_FILES}" ]; then
-    CONFIG_FILES="config-installer.sh"
+	CONFIG_FILES="config-installer.sh"
 fi
 
 colon_separated_config_dirs=`echo ${CONFIG_DIRS} | sed 's/ /:/g'`
 for config in ${CONFIG_FILES}; do
-    config_to_source="${config}"
+	config_to_source="${config}"
 
-    # check to see if the config exists. If it doesn't search the config paths
-    if ! [ -e "${config}" ]; then
-	for d in ${CONFIG_DIRS}; do
-	    if [ -e "${d}/${config}" ]; then
-		config_to_source="${d}/${config}"
-	    fi
-	done
+	# check to see if the config exists. If it doesn't search the config paths
+	if ! [ -e "${config}" ]; then
+		for d in ${CONFIG_DIRS}; do
+			if [ -e "${d}/${config}" ]; then
+				config_to_source="${d}/${config}"
+			fi
+		done
 
-	if [ -z "${config_to_source}" ]; then
-	    echo "ERROR: Could not find configuration file (${config_to_soure})."
-	    echo "Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
-	    exit 1
+		if [ -z "${config_to_source}" ]; then
+			echo "ERROR: Could not find configuration file (${config_to_soure})."
+			echo "Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
+			exit 1
+		fi
 	fi
-    fi
-    export PATH="$PATH:${colon_separated_config_dirs}:$( dirname $config_to_source )"
-    source `basename ${config_to_source}`
+	export PATH="$PATH:${colon_separated_config_dirs}:$( dirname $config_to_source )"
+	source `basename ${config_to_source}`
 done
 
 OLDIFS=$IFS
@@ -159,84 +159,84 @@ IFS='
 '
 #source the board specific functions
 if [ -e $SBINDIR/functions-${BOARD_NAME}.sh ]; then
-    debugmsg ${DEBUG_CRIT} "[INFO]: load board ${BOARD_NAME} specific functions"
-    source $SBINDIR/functions-${BOARD_NAME}.sh
+	debugmsg ${DEBUG_CRIT} "[INFO]: load board ${BOARD_NAME} specific functions"
+	source $SBINDIR/functions-${BOARD_NAME}.sh
 fi
 
 #source any local function definitions
 if [ -e "${LOCAL_POST_FUNCTION_DEFS}" ] ; then
-    source ${LOCAL_POST_FUNCTION_DEFS}
+	source ${LOCAL_POST_FUNCTION_DEFS}
 fi
 
 IFS=$OLDIFS
 
 if [ ! -d "${IMAGESDIR}" ]; then
-    if [ -n "${ARTIFACTS_DIR}" ]; then
-	IMAGESDIR=${ARTIFACTS_DIR}
-    else
-	debugmsg ${DEBUG_CRIT} "[ERROR]: images dir (${IMAGESDIR}) not found"
-	exit 1
-    fi
+	if [ -n "${ARTIFACTS_DIR}" ]; then
+		IMAGESDIR=${ARTIFACTS_DIR}
+	else
+		debugmsg ${DEBUG_CRIT} "[ERROR]: images dir (${IMAGESDIR}) not found"
+		exit 1
+	fi
 fi
 
 if ! [ -n "$DISTRIBUTION" ]; then
-    DISTRIBUTION="OverC"
+	DISTRIBUTION="OverC"
 fi
 
 if [ -v CONTAINER_PREFIX -a -n "$CONTAINER_PREFIX" ] ; then
-    export CNAME_PREFIX="--prefix $CONTAINER_PREFIX"
+	export CNAME_PREFIX="--prefix $CONTAINER_PREFIX"
 fi
 
 get_container_name_by_prop()
 {
-    local prop=$1
-    local ret=""
+	local prop=$1
+	local ret=""
 
-    for i in "${!container_map[@]}"; do
-	#echo "key  : $i"
-	#echo "value: ${container_map[$i]}"
-	echo ${container_map[$i]} | grep -qw $prop
-	if [ $? -eq 0 ]; then
-	    ret="${i}"
-	fi
-    done
+	for i in "${!container_map[@]}"; do
+		#echo "key  : $i"
+		#echo "value: ${container_map[$i]}"
+		echo ${container_map[$i]} | grep -qw $prop
+		if [ $? -eq 0 ]; then
+			ret="${i}"
+		fi
+	done
 
-    echo "${ret}"
+	echo "${ret}"
 }
 
 get_prop_value_by_container()
 {
-    local cn=$1
-    local prop=$2
-    local ret=""
+	local cn=$1
+	local prop=$2
+	local ret=""
 
-    props=${container_map[$cn]}
-    for k in $props; do
-        ret=`echo $k | grep "${prop}=" | sed "s/$prop=//g"`
-        if [ -n "$ret" ]; then
-            break
-        fi 
-    done
+	props=${container_map[$cn]}
+	for k in $props; do
+		ret=`echo $k | grep "${prop}=" | sed "s/$prop=//g"`
+		if [ -n "$ret" ]; then
+			break
+		fi
+	done
 
-    echo "${ret}"
+	echo "${ret}"
 }
 
 get_prop_isset_by_container()
 {
-    local cn=$1
-    local prop=$2
-    local ret=""
+	local cn=$1
+	local prop=$2
+	local ret=""
 
-    props=${container_map[$cn]}
-    for k in $props; do
-        echo $k | grep -q "${prop}"
-        if [ $? = 0 ]; then
-	    ret=1
-            break
-        fi
-    done
+	props=${container_map[$cn]}
+	for k in $props; do
+		echo $k | grep -q "${prop}"
+		if [ $? = 0 ]; then
+			ret=1
+			break
+		fi
+	done
 
-    echo "${ret}"
+	echo "${ret}"
 }
 
 # containers are listed in HDINSTALL_CONTAINERS as:
@@ -244,16 +244,16 @@ get_prop_isset_by_container()
 declare -g -A container_map=()
 containers_to_check=${HDINSTALL_CONTAINERS}
 if [ -n "$containers_to_check" ]; then
-    create_property_map container_map ${HDINSTALL_CONTAINERS}
+	create_property_map container_map ${HDINSTALL_CONTAINERS}
 else
-    # if there's a valid containers directory, we'll install everything
-    # found there. Otherwise, we'll use HDINSTALL_CONTAINERS
-    if [ -d "${CONTAINERSDIR}" ]; then
-	for c in $(ls ${CONTAINERSDIR} | grep '\-dom0\-' ; ls ${CONTAINERSDIR} | grep -v '\-dom0\-' ); do
-	    HDINSTALL_CONTAINERS="$HDINSTALL_CONTAINERS `readlink -f ${CONTAINERSDIR}/$c`"
-	done
-    fi
-    create_property_map container_map ${HDINSTALL_CONTAINERS}
+	# if there's a valid containers directory, we'll install everything
+	# found there. Otherwise, we'll use HDINSTALL_CONTAINERS
+	if [ -d "${CONTAINERSDIR}" ]; then
+		for c in $(ls ${CONTAINERSDIR} | grep '\-dom0\-' ; ls ${CONTAINERSDIR} | grep -v '\-dom0\-' ); do
+			HDINSTALL_CONTAINERS="$HDINSTALL_CONTAINERS `readlink -f ${CONTAINERSDIR}/$c`"
+		done
+	fi
+	create_property_map container_map ${HDINSTALL_CONTAINERS}
 fi
 
 
@@ -261,17 +261,17 @@ fi
 # if a container in the configuration had the "console" property. If
 # so, set it. Otherwise, assign cube-desktop as the default
 if [ -z "${ttyconsolecn}" ]; then
-    ttyconsolecn=`get_container_name_by_prop console`
-    if [ -z "${ttyconsolecn}" ]; then
-	ttyconsolecn="cube-desktop"
-    fi
+	ttyconsolecn=`get_container_name_by_prop console`
+	if [ -z "${ttyconsolecn}" ]; then
+		ttyconsolecn="cube-desktop"
+	fi
 fi
 
 if [ -z "${privilegedcn}" ]; then
-    privilegedcn=`get_container_name_by_prop privileged`
-    if [ -z "${privilegedcn}" ]; then
-        privilegedcn="cube-desktop"
-    fi
+	privilegedcn=`get_container_name_by_prop privileged`
+	if [ -z "${privilegedcn}" ]; then
+		privilegedcn="cube-desktop"
+	fi
 fi
 
 ## typical qemu disk is vdb
@@ -279,13 +279,13 @@ rootfs=$1
 raw_dev=$2
 
 if [ -e "$rootfs" ]; then
-    rootfs=`readlink -f $rootfs`
+	rootfs=`readlink -f $rootfs`
 else
-    if [ ! -f "${IMAGESDIR}/$rootfs" ]; then
-	debugmsg ${DEBUG_CRIT} "[ERROR]: install rootfs ($rootfs) not found"
-	exit 1
-    fi
-    rootfs="${IMAGESDIR}/$rootfs"
+	if [ ! -f "${IMAGESDIR}/$rootfs" ]; then
+		debugmsg ${DEBUG_CRIT} "[ERROR]: install rootfs ($rootfs) not found"
+		exit 1
+	fi
+	rootfs="${IMAGESDIR}/$rootfs"
 fi
 
 # remove /dev/ if specified
@@ -304,9 +304,9 @@ ROOTLABEL="OVERCROOTFS"
 LXCLABEL="OVERCCN"
 
 if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ]; then
-        FDISK_PARTITION_LAYOUT="${FDISK_PARTITION_LAYOUT_INPUT}"
+	FDISK_PARTITION_LAYOUT="${FDISK_PARTITION_LAYOUT_INPUT}"
 elif [ -z "${FDISK_PARTITION_LAYOUT}" ]; then
-        FDISK_PARTITION_LAYOUT="${SBINDIR}/fdisk-4-partition-layout.txt"
+	FDISK_PARTITION_LAYOUT="${SBINDIR}/fdisk-4-partition-layout.txt"
 fi
 
 debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${FDISK_PARTITION_LAYOUT})"
@@ -317,10 +317,10 @@ debugmsg ${DEBUG_INFO} "          4) container (lxc)"
 # We partition the raw device as passed to the script. This is
 # nuke and pave .. so be careful!
 if [ -f ${FDISK_PARTITION_LAYOUT} ]; then
-        fdisk /dev/${raw_dev} < ${FDISK_PARTITION_LAYOUT} >/dev/null 2>&1
+	fdisk /dev/${raw_dev} < ${FDISK_PARTITION_LAYOUT} >/dev/null 2>&1
 else
-        debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find the fdisk partitions file ${FDISK_PARTITION_LAYOUT}"
-        exit 1
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find the fdisk partitions file ${FDISK_PARTITION_LAYOUT}"
+	exit 1
 fi
 # For filesystem creation, we need the partitions. But some devices
 # name them differently than a hard disk (i.e mmcblk or nbd) and 
@@ -329,16 +329,16 @@ fi
 # creation.
 fs_dev=${raw_dev}
 if [ $(echo $raw_dev | grep -c 'mmcblk') ==  "1" ]; then
-       fs_dev="${raw_dev}p"
+	fs_dev="${raw_dev}p"
 fi
 if [ $(echo $raw_dev | grep -c 'nbd') ==  "1" ]; then
-       loop_device=t
-       fs_dev="${raw_dev}p"
+	loop_device=t
+	fs_dev="${raw_dev}p"
 fi
 if [ $(echo $raw_dev | grep -c 'loop') ==  "1" ]; then
-       loop_device=t
-       fs_dev="${raw_dev}p"
-       partprobe /dev/${raw_dev}
+	loop_device=t
+	fs_dev="${raw_dev}p"
+	partprobe /dev/${raw_dev}
 fi
 
 ## create filesystems
@@ -350,22 +350,22 @@ set -e
 debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
 mkfs.vfat -I -n $BOOTLABEL /dev/${fs_dev}1
 if [ $btrfs -eq 0 ]; then
-    debugmsg ${DEBUG_INFO} "[INFO]: creating / (ext4)"
-    mkfs.ext4 -v -L $ROOTLABEL /dev/${fs_dev}3
-    mkfs.ext4 -v -L $LXCLABEL /dev/${fs_dev}4
+	debugmsg ${DEBUG_INFO} "[INFO]: creating / (ext4)"
+	mkfs.ext4 -v -L $ROOTLABEL /dev/${fs_dev}3
+	mkfs.ext4 -v -L $LXCLABEL /dev/${fs_dev}4
 else
-    debugmsg ${DEBUG_INFO} "[INFO]: creating / (btrfs)"
-    set +e
-    has_f=`mkfs.btrfs 2>&1 |grep -q '^.*\-f' && echo -f`
-    set -e
-    mkfs.btrfs $has_f -L $ROOTLABEL /dev/${fs_dev}3
-    mkfs.btrfs $has_f -L $LXCLABEL /dev/${fs_dev}4
+	debugmsg ${DEBUG_INFO} "[INFO]: creating / (btrfs)"
+	set +e
+	has_f=`mkfs.btrfs 2>&1 |grep -q '^.*\-f' && echo -f`
+	set -e
+	mkfs.btrfs $has_f -L $ROOTLABEL /dev/${fs_dev}3
+	mkfs.btrfs $has_f -L $LXCLABEL /dev/${fs_dev}4
 fi
 set +e
 
 if [ -z "${TMPMNT}" ]; then
-    TMPMNT=`mktemp -d /tmp/pulsarmountXXXXX`
-    export TMPMNT
+	TMPMNT=`mktemp -d /tmp/pulsarmountXXXXX`
+	export TMPMNT
 fi
 mkdir -p ${TMPMNT}
 mount /dev/${fs_dev}3 ${TMPMNT}
@@ -401,7 +401,7 @@ mount /dev/${fs_dev}1 mnt
 
 imgs=`ls boot/*Image-* 2>/dev/null`
 if [ -n "$imgs" ] ; then
-    cp boot/*Image-* mnt/
+	cp boot/*Image-* mnt/
 fi
 if [ -e boot/uImage-* ]; then
 	cp boot/uImage-* mnt/uImage
@@ -412,7 +412,7 @@ elif [ -e boot/bzImage-* ]; then
 	#create a backup kernel for recovery boot
 	cp boot/bzImage-* mnt/bzImage_bakup
 fi
- 
+
 sync
 umount ./mnt
 mount /dev/${fs_dev}1 ./boot
@@ -465,23 +465,23 @@ fi
 # the install. In that case, vdb becomes vda. So we switch it below
 # here to avoid fixups during first boot.
 if [ -z ${final_dev} ]; then
-    final_dev=${raw_dev}
-    if [ "${raw_dev}" = "vdb" ]; then
-	final_dev="vda"
-    fi
+	final_dev=${raw_dev}
+	if [ "${raw_dev}" = "vdb" ]; then
+		final_dev="vda"
+	fi
 fi
 
 if ${X86_ARCH}; then
-    debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
+	debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
 
-    chroot ${TMPMNT} /bin/bash -c "mount -t devtmpfs none /dev"
-    chroot ${TMPMNT} /bin/bash -c "mount -t proc none /proc"
+	chroot ${TMPMNT} /bin/bash -c "mount -t devtmpfs none /dev"
+	chroot ${TMPMNT} /bin/bash -c "mount -t proc none /proc"
 
-    if [ -n "$loop_device" ]; then
-	chroot ${TMPMNT} /bin/bash -c "grub-install --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search\" /dev/${raw_dev}"
-    else
-	chroot ${TMPMNT} /bin/bash -c "grub-install --force /dev/${raw_dev}"
-    fi
+	if [ -n "$loop_device" ]; then
+		chroot ${TMPMNT} /bin/bash -c "grub-install --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search\" /dev/${raw_dev}"
+	else
+		chroot ${TMPMNT} /bin/bash -c "grub-install --force /dev/${raw_dev}"
+	fi
 
     cat <<EOF >${TMPMNT}/boot/grub/grub.cfg
 set default="0"
@@ -503,57 +503,57 @@ menuentry "$DISTRIBUTION" {
 }
 
 menuentry "$DISTRIBUTION recovery" {
-        insmod gzio
-        insmod ext2
-        insmod fat
-        search --no-floppy --label OVERCBOOT --set=root 
-        echo    'Loading Linux ...'
-        linux   /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait
-        echo    'Loading initial ramdisk ...'
-        initrd  /initrd
+	insmod gzio
+	insmod ext2
+	insmod fat
+	search --no-floppy --label OVERCBOOT --set=root
+	echo    'Loading Linux ...'
+	linux   /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait
+	echo    'Loading initial ramdisk ...'
+	initrd  /initrd
 }
 
 EOF
 
-    debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
-    # fixups for virtual installs
-    if [ "${raw_dev}" = "vdb" ]; then
-	sed -i "s/${raw_dev}/${final_dev}/" ${TMPMNT}/boot/grub/grub.cfg
-    fi
-
-    if [ -e /${IMAGESDIR}/boot*.efi ]; then
-	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI"
-	mkdir -p boot/EFI/BOOT
-	cp /${IMAGESDIR}/boot*.efi boot/EFI/BOOT
-	# remove those sections that are supported by uefi grub,
-	# such as if/else statement and functions and only keep
-	# grub menuentry section.
-	cat ${TMPMNT}/boot/grub/grub.cfg | sed '/insmod\|terminal\|echo/d' >boot/EFI/BOOT/grub.cfg
-	    
-	echo `basename boot/EFI/BOOT/boot*.efi` >boot/startup.nsh
-	chmod +x boot/startup.nsh
-    else
-	install -m 0755 ${SBINDIR}/startup.nsh boot/
-	sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" boot/startup.nsh
-	sed -i "s/%INITRD%/${initrd}/" boot/startup.nsh
-	sed -i "s/%BZIMAGE%/bzImage/" boot/startup.nsh
-    fi
-else # arm architecture
-    if [ -e "${INSTALL_DTB}" ]; then
-        install_dtb "./boot" "${INSTALL_DTB}"
-    elif [ -e "${IMAGESDIR}/dtb" ]; then
-        install_dtb "./boot" "${IMAGESDIR}/dtb"
-    fi
-    if [ -e "${INSTALL_BOOTLOADER}" ]; then
-        if [ -e "${INSTALL_BOOTLOADER_ENV}" ]; then
-	    install_bootloader "${raw_dev}" "./boot" ${INSTALL_BOOTLOADER} "${BOARD_NAME}" ${INSTALL_BOOTLOADER_ENV}
-        else
-	    install_bootloader "${raw_dev}" "./boot" ${INSTALL_BOOTLOADER} "${BOARD_NAME}"
+	debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
+	# fixups for virtual installs
+	if [ "${raw_dev}" = "vdb" ]; then
+		sed -i "s/${raw_dev}/${final_dev}/" ${TMPMNT}/boot/grub/grub.cfg
 	fi
-    elif [ -e ${IMAGESDIR}/*_boot.bin ]; then
-	BOARD_NAME=`basename ${IMAGESDIR}/*_boot.bin | sed 's/_boot\.bin//'`
-	install_bootloader "${raw_dev}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
-    fi
+
+	if [ -e /${IMAGESDIR}/boot*.efi ]; then
+		debugmsg ${DEBUG_INFO} "[INFO]: installing EFI"
+		mkdir -p boot/EFI/BOOT
+		cp /${IMAGESDIR}/boot*.efi boot/EFI/BOOT
+		# remove those sections that are supported by uefi grub,
+		# such as if/else statement and functions and only keep
+		# grub menuentry section.
+		cat ${TMPMNT}/boot/grub/grub.cfg | sed '/insmod\|terminal\|echo/d' >boot/EFI/BOOT/grub.cfg
+
+		echo `basename boot/EFI/BOOT/boot*.efi` >boot/startup.nsh
+		chmod +x boot/startup.nsh
+	else
+		install -m 0755 ${SBINDIR}/startup.nsh boot/
+		sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" boot/startup.nsh
+		sed -i "s/%INITRD%/${initrd}/" boot/startup.nsh
+		sed -i "s/%BZIMAGE%/bzImage/" boot/startup.nsh
+	fi
+else # arm architecture
+	if [ -e "${INSTALL_DTB}" ]; then
+		install_dtb "./boot" "${INSTALL_DTB}"
+	elif [ -e "${IMAGESDIR}/dtb" ]; then
+		install_dtb "./boot" "${IMAGESDIR}/dtb"
+	fi
+	if [ -e "${INSTALL_BOOTLOADER}" ]; then
+		if [ -e "${INSTALL_BOOTLOADER_ENV}" ]; then
+			install_bootloader "${raw_dev}" "./boot" ${INSTALL_BOOTLOADER} "${BOARD_NAME}" ${INSTALL_BOOTLOADER_ENV}
+		else
+			install_bootloader "${raw_dev}" "./boot" ${INSTALL_BOOTLOADER} "${BOARD_NAME}"
+		fi
+	elif [ -e ${IMAGESDIR}/*_boot.bin ]; then
+		BOARD_NAME=`basename ${IMAGESDIR}/*_boot.bin | sed 's/_boot\.bin//'`
+		install_bootloader "${raw_dev}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
+	fi
 fi
 
 #Remove the systemd's costly remount of the root partition from /etc/fstab,
@@ -585,307 +585,307 @@ ln -sf /lib/systemd/system/getty@.service ${TMPMNT}/etc/systemd/system/getty.tar
 
 # Disable all not needed services in essentail
 if [ -n "${SERVICE_DISABLE_ESSENTIAL}" ]; then
-    for s in ${SERVICE_DISABLE_ESSENTIAL}; do
-        service_disable ${s}
-    done
+	for s in ${SERVICE_DISABLE_ESSENTIAL}; do
+		service_disable ${s}
+	done
 fi
 
 if [ -n "${HDINSTALL_CONTAINERS}" ]; then
-    subvol=""
-    debugmsg ${DEBUG_INFO} "[INFO]: installing containers"
-    if [ ! -d ${TMPMNT}/var/lib/lxc ]; then
-        mkdir -p ${TMPMNT}/var/lib/lxc
-    fi
-    mount /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
-
-    mkdir -p ${TMPMNT}/tmp
-
-    if [ $btrfs -eq 1 ]; then
-        #create a subvolume for container images
-        btrfs subvolume create ${TMPMNT}/var/lib/lxc/workdir
-        subvol=`btrfs subvolume list ${TMPMNT}/var/lib/lxc | awk '{print $2;}'`
-        sync
-        umount ${TMPMNT}/var/lib/lxc
-        mount -o subvol=workdir /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
-    fi
-
-    # deal with static IPs and the "Networking Prime"
-    network_offsets=()
-
-    # Lookahead to see if a network prime is defined. We need to do this to
-    # determine if we need tell overc-cctl to use bridged networking or not.
-    overc_cctl_bridged_net_opt=" -b "
-    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
-	net_offset=`get_prop_value_by_container $cname "net"`
-	if [ -n "$net_offset" ] && [ $net_offset -eq 1 ]; then
-	    overc_cctl_bridged_net_opt=" "
-	    break;
+	subvol=""
+	debugmsg ${DEBUG_INFO} "[INFO]: installing containers"
+	if [ ! -d ${TMPMNT}/var/lib/lxc ]; then
+		mkdir -p ${TMPMNT}/var/lib/lxc
 	fi
-    done
+	mount /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
 
+	mkdir -p ${TMPMNT}/tmp
 
-    CNRECORD=`mktemp /tmp/hdcontainerXXXXX`
-    export CNRECORD
-
-    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
-	# Just save a record in tmp file
-	mergepatch=`get_prop_value_by_container $cname "mergepath"`
-
-	echo "$cname::$mergepatch" >> ${CNRECORD}
-    done;
-
-    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-	debugmsg ${DEBUG_INFO} "[INFO]: installing $c"
-
-	# containers names are "prefix-<container name>-<... suffixes >
-	container_src=`basename $c`
-	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
-	cp $c ${TMPMNT}/tmp/
-	cp ${SBINDIR}/overc-cctl ${TMPMNT}/tmp/
-	
-	# Any container that has a console attribute gets a virtual console
-	consoleattr=`get_prop_isset_by_container $cname "console"`
-	# hardconsole means a container gets the physical console device
-	hardconsoleattr=`get_prop_isset_by_container $cname "hardconsole"`
-
-	ttyconsole_opt="-S ${ttyconsoledev}"
-	if [ "${ttyconsolecn}" == "${cname}" -o -n "$consoleattr" ]; then
-            ttyconsole_opt="-s ${ttyconsole_opt}"
-	fi
-	
-	if [ "${privilegedcn}" == "${cname}" ]; then
-	    ttyconsole_opt=" -P ${ttyconsole_opt}"
+	if [ $btrfs -eq 1 ]; then
+		#create a subvolume for container images
+		btrfs subvolume create ${TMPMNT}/var/lib/lxc/workdir
+		subvol=`btrfs subvolume list ${TMPMNT}/var/lib/lxc | awk '{print $2;}'`
+		sync
+		umount ${TMPMNT}/var/lib/lxc
+		mount -o subvol=workdir /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
 	fi
 
-	if [ -n "${hardconsoleattr}" ]; then
-	    ttyconsole_opt="-T ${ttyconsole_opt}"
-	fi
+	# deal with static IPs and the "Networking Prime"
+	network_offsets=()
 
-	# vty attributes are: <number>,<properites>
-	# properties: active or <empty>
-	vty_num=`get_prop_value_by_container $cname "vty"`
-	if [ -n "$vty_num" ]; then
-	    attribute1=`echo $vty_num | cut -f1 -d,`
-	    attribute2=`echo $vty_num | cut -f2 -d,`
-	    if [ "$attribute1" != "$attribute2" ]; then
-		# they are different, so ther's a number,<attribute>
-		vty_num="${attribute1}"
-		vty_prop="${attribute2}"
-		if [ "${vty_prop}" == "active" ]; then
-		    foreground_container="${cname}"
-		    foreground_vty="${vty_num}"
+	# Lookahead to see if a network prime is defined. We need to do this to
+	# determine if we need tell overc-cctl to use bridged networking or not.
+	overc_cctl_bridged_net_opt=" -b "
+	for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
+		cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
+		net_offset=`get_prop_value_by_container $cname "net"`
+		if [ -n "$net_offset" ] && [ $net_offset -eq 1 ]; then
+			overc_cctl_bridged_net_opt=" "
+			break;
 		fi
-	    fi
-
-	    ttyconsole_opt=" -v $vty_num ${ttyconsole_opt}"
-	fi
-
-	# If a net offset is specified for this container add
-	# it to the network_offsets list in the puppet site.pp
-	# in order to have puppet configure the container.
-	# An offset of '1' will make that container the
-	# "network prime".
-	net_offset=`get_prop_value_by_container $cname "net"`
-	if [ -n "$net_offset" ]; then
-	    if [ $net_offset -eq 1 ]; then
-		network_prime="$cname"
-	    else
-		network_offsets+=("'$cname,$net_offset'")
-	    fi
-	fi
-
-	# if subuid property is specified for this container,
-	# this container is going to be unprivileged.
-	subuid=`get_prop_value_by_container $cname "subuid"`
-	subuid_opt=""
-	if [ -n "${subuid}" ]; then
-		subuid_opt="-u ${subuid}"
-		echo "root:${subuid}:65536" >> ${TMPMNT}/etc/subuid
-		echo "root:${subuid}:65536" >> ${TMPMNT}/etc/subgid
-	fi
-
-	# actually install the container
-	export LXCBASE="${TMPMNT}/var/lib/lxc"
-	export BINDMNTBASE="${TMPMNT}/opt/container"
-	export HOSTDIR="${TMPMNT}"
-	case $container_src in
-	    *-dom0-*)
-		monitor_container_opt=""
-		monitored_container=`get_container_name_by_prop monitored`
-		if [ -n "${monitored_container}" ]; then
-			monitor_container_opt="-m ${monitored_container}"
-		fi
-
-		## TODO. make overc-cctl into smaller commands that manipulate the containers
-		##       on a more granular basis.
-		##       like: extract, configure, add service, etc.
-		${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt} ${monitor_container_opt} ${overc_cctl_bridged_net_opt}
-		;;
-	    *-dom1-*)
-		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
-		;;
-	    *)
-		${SBINDIR}/overc-cctl add ${subuid_opt} -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
-		;;
-	esac
-
-	if [ -e "$INSTALL_SMARTCONFIG" ]; then
-	    cp $INSTALL_SMARTCONFIG ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
-	elif [ -e /${IMAGESDIR}/config.smart ]; then
-	    cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
-	fi
-
-	rm ${TMPMNT}/tmp/$(basename $c)
-    done
-
-    #cleanup temp files
-    rm ${CNRECORD}
-
-    # install and modify services
-    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-	container_src=`basename $c`
-	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
-
-	# if there was a foreground container defined (attribte 'active' on a vty), then we
-	# install a chvt service to make sure it is in the foreground after boot. Note, this
-	# currently does not touch essential, but could in the future.
-	if [ -n "${foreground_container}" ]; then
-	    service_install chvt.service ${cname}
-	    service_modify "%OVERC_ACTIVE_VT%" ${foreground_vty} ${cname} chvt.service
-	fi
-
-        # Disable all not needed services in dom0
-        if [ -n "${SERVICE_DISABLE_DOM0}" -a "${cname}" = "dom0" ]; then
-            for s in ${SERVICE_DISABLE_DOM0}; do
-                service_disable ${s} ${cname}
-            done
-        fi
-
-        # Disable or add conditon checking for all not needed services in container
-        if [ -n "${SERVICE_DISABLE_CONTAINER}" ]; then
-            for s in ${SERVICE_DISABLE_CONTAINER}; do
-                service_disable ${s} ${cname}
-            done
-        fi
-
-        if [ -n "${SERVICE_CONDITION_CONTAINER}" ]; then
-            for s in ${SERVICE_CONDITION_CONTAINER}; do
-                service_add_condition_for_container ${s} ${cname}
-            done
-        fi
-    done
-
-    # Setup networking prime and static IPs, unless using bridged networking
-    if [ ! -v network_prime ]; then
-	# Fallback to using bridged networking (see overc_bridge_networking DISTRO_FEATURE)
-	sed -i "s/^\(\$configure_network_prime =\).*$/\1 false/"  \
-	    ${TMPMNT}/etc/puppet/manifests/site.pp
-	debugmsg ${DEBUG_INFO} "[INFO]: Using bridged networking."
-    else
-	if [ ! -v NETWORK_DEVICE ]; then
-	    NETWORK_DEVICE="enp0s3"
-	fi
-	if [ ! -v NETWORK_DEVICE_CLASSES ]; then
-	    NETWORK_DEVICE_CLASSES="eth* wl* en*"
-	fi
-	pathtocontainer=${TMPMNT}/var/lib/lxc/${network_prime}
-	if [ -e "${pathtocontainer}/config" ]; then
-	    # Pass the network device through to the designated network prime container
-	    grep -q "lxc.network.name = $NETWORK_DEVICE" ${pathtocontainer}/config
-	    if [ $? -eq 0 ]; then
-		sed -i "s/\(lxc\.network\.name = $NETWORK_DEVICE\)/#\1/" \
-		    ${pathtocontainer}/config
-	    fi
-	    if [ "$NETWORK_DEVICE" = "all" ] ; then
-		echo "overc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
-		echo "overc.network.linkdevs = $NETWORK_DEVICE_CLASSES" >> ${pathtocontainer}/config
-	    else
-		echo "lxc.network.type = phys" >> ${pathtocontainer}/config
-		echo "lxc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
-	    fi
-
-	    # Enable configuring the network prime container by puppet on first boot
-	    sed -i "s/^\(\$network_prime_container *=\).*$/\1 \"${network_prime}\"/" \
-		${TMPMNT}/etc/puppet/manifests/site.pp
-
-	    # Set the network prime device for network prime container by puppet on first boot
-	    sed -i "s/^\(\$network_prime_device *=\).*$/\1 \"${NETWORK_DEVICE}\"/" \
-	        ${TMPMNT}/etc/puppet/manifests/site.pp
-
-	    # Specify any network offsets for containers with static IPs
-	    if [ -v network_offsets ] && [ ${#network_offsets[@]} -gt 0 ]; then
-		network_offsets=$(IFS=,; echo "${network_offsets[*]}")
-		sed -i "s/^\(\$network_offsets =\).*\]$/\1 \[$network_offsets\]/" \
-		    ${TMPMNT}/etc/puppet/manifests/site.pp
-	    fi
-
-	    debugmsg ${DEBUG_INFO} "[INFO]: Set ${network_prime} as the network prime."
-	else
-	    debugmsg ${DEBUG_WARN} "[WARNING]: Invalid network prime defined."
-	fi
-    fi
-
-    if [ -n "${LOCAL_CUSTOM_HDD_POST_FUNCS}" ]; then
-	for f in ${LOCAL_CUSTOM_HDD_POST_FUNCS}; do
-	    ${f}
 	done
-    fi
-    sync
-    umount ${TMPMNT}/var/lib/lxc
 
-    if [ $btrfs -eq 1 ]; then
-        if [ -z "$subvol" ]; then
-            debugmsg ${DEBUG_WARN} "[WARNING]: Could not get subvolume id, thus cannot create factory reset snapshot"
-        else
-            mount /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
-            btrfs subvolume set-default $subvol ${TMPMNT}/var/lib/lxc
-            btrfs subvolume snapshot ${TMPMNT}/var/lib/lxc/workdir ${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}
-            #snapshot subvolume recursively
-            subvolumes="$(btrfs subvolume list -c ${TMPMNT}/var/lib/lxc/workdir | awk '{print $NF}')"
-            for subvolume in $subvolumes; do
-                snapshot_directory="${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/${subvolume}"
-                if [ -d "${snapshot_directory}" ]; then
-                    rm -rf "${snapshot_directory}"
-                    btrfs subvolume snapshot "${TMPMNT}/var/lib/lxc/workdir/${subvolume}" "${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/$(dirname ${subvolume})"
-                fi
-            done
-            sync 
-            umount ${TMPMNT}/var/lib/lxc
-        fi
-    fi
+
+	CNRECORD=`mktemp /tmp/hdcontainerXXXXX`
+	export CNRECORD
+
+	for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
+		cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
+		# Just save a record in tmp file
+		mergepatch=`get_prop_value_by_container $cname "mergepath"`
+
+		echo "$cname::$mergepatch" >> ${CNRECORD}
+	done;
+
+	for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
+		debugmsg ${DEBUG_INFO} "[INFO]: installing $c"
+
+		# containers names are "prefix-<container name>-<... suffixes >
+		container_src=`basename $c`
+		cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
+		cp $c ${TMPMNT}/tmp/
+		cp ${SBINDIR}/overc-cctl ${TMPMNT}/tmp/
+
+		# Any container that has a console attribute gets a virtual console
+		consoleattr=`get_prop_isset_by_container $cname "console"`
+		# hardconsole means a container gets the physical console device
+		hardconsoleattr=`get_prop_isset_by_container $cname "hardconsole"`
+
+		ttyconsole_opt="-S ${ttyconsoledev}"
+		if [ "${ttyconsolecn}" == "${cname}" -o -n "$consoleattr" ]; then
+			ttyconsole_opt="-s ${ttyconsole_opt}"
+		fi
+
+		if [ "${privilegedcn}" == "${cname}" ]; then
+			ttyconsole_opt=" -P ${ttyconsole_opt}"
+		fi
+
+		if [ -n "${hardconsoleattr}" ]; then
+			ttyconsole_opt="-T ${ttyconsole_opt}"
+		fi
+
+		# vty attributes are: <number>,<properites>
+		# properties: active or <empty>
+		vty_num=`get_prop_value_by_container $cname "vty"`
+		if [ -n "$vty_num" ]; then
+			attribute1=`echo $vty_num | cut -f1 -d,`
+			attribute2=`echo $vty_num | cut -f2 -d,`
+			if [ "$attribute1" != "$attribute2" ]; then
+				# they are different, so ther's a number,<attribute>
+				vty_num="${attribute1}"
+				vty_prop="${attribute2}"
+				if [ "${vty_prop}" == "active" ]; then
+					foreground_container="${cname}"
+					foreground_vty="${vty_num}"
+				fi
+			fi
+
+			ttyconsole_opt=" -v $vty_num ${ttyconsole_opt}"
+		fi
+
+		# If a net offset is specified for this container add
+		# it to the network_offsets list in the puppet site.pp
+		# in order to have puppet configure the container.
+		# An offset of '1' will make that container the
+		# "network prime".
+		net_offset=`get_prop_value_by_container $cname "net"`
+		if [ -n "$net_offset" ]; then
+			if [ $net_offset -eq 1 ]; then
+				network_prime="$cname"
+			else
+				network_offsets+=("'$cname,$net_offset'")
+			fi
+		fi
+
+		# if subuid property is specified for this container,
+		# this container is going to be unprivileged.
+		subuid=`get_prop_value_by_container $cname "subuid"`
+		subuid_opt=""
+		if [ -n "${subuid}" ]; then
+			subuid_opt="-u ${subuid}"
+			echo "root:${subuid}:65536" >> ${TMPMNT}/etc/subuid
+			echo "root:${subuid}:65536" >> ${TMPMNT}/etc/subgid
+		fi
+
+		# actually install the container
+		export LXCBASE="${TMPMNT}/var/lib/lxc"
+		export BINDMNTBASE="${TMPMNT}/opt/container"
+		export HOSTDIR="${TMPMNT}"
+		case $container_src in
+			*-dom0-*)
+				monitor_container_opt=""
+				monitored_container=`get_container_name_by_prop monitored`
+				if [ -n "${monitored_container}" ]; then
+					monitor_container_opt="-m ${monitored_container}"
+				fi
+
+				## TODO. make overc-cctl into smaller commands that manipulate the containers
+				##       on a more granular basis.
+				##       like: extract, configure, add service, etc.
+				${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt} ${monitor_container_opt} ${overc_cctl_bridged_net_opt}
+				;;
+			*-dom1-*)
+				${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
+				;;
+			*)
+				${SBINDIR}/overc-cctl add ${subuid_opt} -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
+				;;
+		esac
+
+		if [ -e "$INSTALL_SMARTCONFIG" ]; then
+			cp $INSTALL_SMARTCONFIG ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
+		elif [ -e /${IMAGESDIR}/config.smart ]; then
+			cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
+		fi
+
+		rm ${TMPMNT}/tmp/$(basename $c)
+	done
+
+	#cleanup temp files
+	rm ${CNRECORD}
+
+	# install and modify services
+	for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
+		container_src=`basename $c`
+		cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
+
+		# if there was a foreground container defined (attribte 'active' on a vty), then we
+		# install a chvt service to make sure it is in the foreground after boot. Note, this
+		# currently does not touch essential, but could in the future.
+		if [ -n "${foreground_container}" ]; then
+			service_install chvt.service ${cname}
+			service_modify "%OVERC_ACTIVE_VT%" ${foreground_vty} ${cname} chvt.service
+		fi
+
+		# Disable all not needed services in dom0
+		if [ -n "${SERVICE_DISABLE_DOM0}" -a "${cname}" = "dom0" ]; then
+			for s in ${SERVICE_DISABLE_DOM0}; do
+				service_disable ${s} ${cname}
+			done
+		fi
+
+		# Disable or add conditon checking for all not needed services in container
+		if [ -n "${SERVICE_DISABLE_CONTAINER}" ]; then
+			for s in ${SERVICE_DISABLE_CONTAINER}; do
+				service_disable ${s} ${cname}
+			done
+		fi
+
+		if [ -n "${SERVICE_CONDITION_CONTAINER}" ]; then
+			for s in ${SERVICE_CONDITION_CONTAINER}; do
+				service_add_condition_for_container ${s} ${cname}
+			done
+		fi
+	done
+
+	# Setup networking prime and static IPs, unless using bridged networking
+	if [ ! -v network_prime ]; then
+		# Fallback to using bridged networking (see overc_bridge_networking DISTRO_FEATURE)
+		sed -i "s/^\(\$configure_network_prime =\).*$/\1 false/"  \
+			${TMPMNT}/etc/puppet/manifests/site.pp
+		debugmsg ${DEBUG_INFO} "[INFO]: Using bridged networking."
+	else
+		if [ ! -v NETWORK_DEVICE ]; then
+			NETWORK_DEVICE="enp0s3"
+		fi
+		if [ ! -v NETWORK_DEVICE_CLASSES ]; then
+			NETWORK_DEVICE_CLASSES="eth* wl* en*"
+		fi
+		pathtocontainer=${TMPMNT}/var/lib/lxc/${network_prime}
+		if [ -e "${pathtocontainer}/config" ]; then
+			# Pass the network device through to the designated network prime container
+			grep -q "lxc.network.name = $NETWORK_DEVICE" ${pathtocontainer}/config
+			if [ $? -eq 0 ]; then
+				sed -i "s/\(lxc\.network\.name = $NETWORK_DEVICE\)/#\1/" \
+					${pathtocontainer}/config
+			fi
+			if [ "$NETWORK_DEVICE" = "all" ] ; then
+				echo "overc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
+				echo "overc.network.linkdevs = $NETWORK_DEVICE_CLASSES" >> ${pathtocontainer}/config
+			else
+				echo "lxc.network.type = phys" >> ${pathtocontainer}/config
+				echo "lxc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
+			fi
+
+			# Enable configuring the network prime container by puppet on first boot
+			sed -i "s/^\(\$network_prime_container *=\).*$/\1 \"${network_prime}\"/" \
+				${TMPMNT}/etc/puppet/manifests/site.pp
+
+			# Set the network prime device for network prime container by puppet on first boot
+			sed -i "s/^\(\$network_prime_device *=\).*$/\1 \"${NETWORK_DEVICE}\"/" \
+				${TMPMNT}/etc/puppet/manifests/site.pp
+
+			# Specify any network offsets for containers with static IPs
+			if [ -v network_offsets ] && [ ${#network_offsets[@]} -gt 0 ]; then
+				network_offsets=$(IFS=,; echo "${network_offsets[*]}")
+				sed -i "s/^\(\$network_offsets =\).*\]$/\1 \[$network_offsets\]/" \
+					${TMPMNT}/etc/puppet/manifests/site.pp
+			fi
+
+			debugmsg ${DEBUG_INFO} "[INFO]: Set ${network_prime} as the network prime."
+		else
+			debugmsg ${DEBUG_WARN} "[WARNING]: Invalid network prime defined."
+		fi
+	fi
+
+	if [ -n "${LOCAL_CUSTOM_HDD_POST_FUNCS}" ]; then
+		for f in ${LOCAL_CUSTOM_HDD_POST_FUNCS}; do
+			${f}
+		done
+	fi
+	sync
+	umount ${TMPMNT}/var/lib/lxc
+
+	if [ $btrfs -eq 1 ]; then
+		if [ -z "$subvol" ]; then
+			debugmsg ${DEBUG_WARN} "[WARNING]: Could not get subvolume id, thus cannot create factory reset snapshot"
+		else
+			mount /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
+			btrfs subvolume set-default $subvol ${TMPMNT}/var/lib/lxc
+			btrfs subvolume snapshot ${TMPMNT}/var/lib/lxc/workdir ${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}
+			#snapshot subvolume recursively
+			subvolumes="$(btrfs subvolume list -c ${TMPMNT}/var/lib/lxc/workdir | awk '{print $NF}')"
+			for subvolume in $subvolumes; do
+				snapshot_directory="${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/${subvolume}"
+				if [ -d "${snapshot_directory}" ]; then
+					rm -rf "${snapshot_directory}"
+					btrfs subvolume snapshot "${TMPMNT}/var/lib/lxc/workdir/${subvolume}" "${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/$(dirname ${subvolume})"
+				fi
+			done
+			sync
+			umount ${TMPMNT}/var/lib/lxc
+		fi
+	fi
 fi
 
 if [ -d "${PACKAGESDIR}" ]; then
-    debugmsg ${DEBUG_INFO} "[INFO]: Copying packages to installation as /opt/packages"
-    mkdir -p opt/
-    cp -r ${PACKAGESDIR} opt/
+	debugmsg ${DEBUG_INFO} "[INFO]: Copying packages to installation as /opt/packages"
+	mkdir -p opt/
+	cp -r ${PACKAGESDIR} opt/
 
-    chroot . /bin/bash -c "\\
-smart channel -y --add all type=rpm-md baseurl=file://opt/packages/rpm/all/; \\
-smart channel -y --add core2_64 type=rpm-md baseurl=file://opt/packages/rpm/core2_64/; \\
-smart channel -y --add genericx86_64 type=rpm-md baseurl=file://opt/packages/rpm/genericx86_64; \\
-smart channel -y --add lib32_x86 type=rpm-md baseurl=file://opt/packages/rpm/lib32_x86/; \\
-smart update"
+	chroot . /bin/bash -c "\\
+	smart channel -y --add all type=rpm-md baseurl=file://opt/packages/rpm/all/; \\
+	smart channel -y --add core2_64 type=rpm-md baseurl=file://opt/packages/rpm/core2_64/; \\
+	smart channel -y --add genericx86_64 type=rpm-md baseurl=file://opt/packages/rpm/genericx86_64; \\
+	smart channel -y --add lib32_x86 type=rpm-md baseurl=file://opt/packages/rpm/lib32_x86/; \\
+	smart update"
 
 fi
 
 if [ -d ${PUPPETDIR} ]; then
-    verify_utility puppet
-    if [ $? -eq 0 ]; then
-	debugmsg ${DEBUG_INFO} "[INFO]: Running puppet"
-	cd ${TMPMNT}
-	cp -r ${PUPPETDIR} tmp/.
+	verify_utility puppet
+	if [ $? -eq 0 ]; then
+		debugmsg ${DEBUG_INFO} "[INFO]: Running puppet"
+		cd ${TMPMNT}
+		cp -r ${PUPPETDIR} tmp/.
 
-	chroot . /bin/bash -c " \\
-if [ \$(which puppet 2> /dev/null) ]; then \\
-    puppet apply /tmp/puppet/init.pp ; \\
-else \\
-    echo \"Puppet not found on rootfs. Not applying puppet configuration.\" ; \\
-fi ; \\
-"
-    fi
+		chroot . /bin/bash -c " \\
+		if [ \$(which puppet 2> /dev/null) ]; then \\
+			puppet apply /tmp/puppet/init.pp ; \\
+		else \\
+			echo \"Puppet not found on rootfs. Not applying puppet configuration.\" ; \\
+		fi ; \\
+		"
+	fi
 fi
 
 debugmsg ${DEBUG_INFO} "[INFO]: performing cleanup"
@@ -905,8 +905,8 @@ fi
 
 umount ${TMPMNT}
 if [ $? -ne 0 ]; then
-    echo ERROR: umount ${TMPMNT} failed
-    exit 1
+	echo ERROR: umount ${TMPMNT} failed
+	exit 1
 fi
 
 #create a backup snapshot for rootfs
@@ -923,13 +923,13 @@ else
 	sync
 	umount ${TMPMNT}
 	if [ $? -ne 0 ]; then 
-	    echo ERROR: umount ${TMPMNT} failed
-	    exit             
+		echo ERROR: umount ${TMPMNT} failed
+		exit
 	fi
 fi
 
 rmdir ${TMPMNT}
-	
+
 # don't run this on a host!!
 # sync ; sync ; echo 3> /proc/sys/vm/drop_caches
 # echo o > /proc/sysrq-trigger

@@ -68,7 +68,7 @@ custom_install_rules()
 	debugmsg ${DEBUG_INFO} "Extracting root filesystem "
 	extract_tarball "${INSTALL_ROOTFS}" "${mnt_rootfs}"
 	assert_return $?
-	
+
 	debugmsg ${DEBUG_INFO} "Extracting kernel modules "
 	extract_tarball "${INSTALL_MODULES}" "${mnt_rootfs}"
 	assert_return $?
