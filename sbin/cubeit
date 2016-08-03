@@ -206,6 +206,18 @@ for config in ${CONFIG_FILES}; do
     source `basename ${config_to_source}`
 done
 
+# config sanity check
+if [ "${#ROOTFS_LABEL}" -gt 16 ]; then
+	echo "The length of the ROOTFS_LABEL is greater than 16, will be stipped to: ${ROOTFS_LABEL:0:16}"
+	read -p "Do you wish to continue? [y/n] " -n 1
+	echo
+	if [[ $REPLY =~ ^[Yy]$ ]]; then
+		ROOTFS_LABEL=${ROOTFS_LABEL:0:16}
+	else
+		exit 1
+	fi
+fi
+
 if ! [ -n "$DISTRIBUTION" ]; then
     DISTRIBUTION="OverC"
 fi
