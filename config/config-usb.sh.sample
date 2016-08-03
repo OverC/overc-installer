@@ -49,12 +49,12 @@ DISTRIBUTION="OverC"
 BOOTPART_START="63s"
 BOOTPART_END="250M"
 BOOTPART_FSTYPE="fat32"
-BOOTPART_LABEL="boot"
+BOOTPART_LABEL="OVERCBOOT"
 
 ROOTFS_START="250M"
 ROOTFS_END="-1"	# Specify -1 to use the rest of drive
 ROOTFS_FSTYPE="ext2"
-ROOTFS_LABEL="rootfs"
+ROOTFS_LABEL="OVERCINSTROOTFS"
 
 USBSTORAGE_BANNER="USB Creator for the Hard Drive Installer
 --------------------------------------------------------------------------------

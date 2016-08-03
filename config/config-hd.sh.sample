@@ -27,12 +27,12 @@ HARDDRIVE_MODEL="ST9120822SB     "
 BOOTPART_START="0"
 BOOTPART_END="250M"
 BOOTPART_FSTYPE="fat32"
-BOOTPART_LABEL="boot"
+BOOTPART_LABEL="OVERCBOOT"
 
 ROOTFS_START="250M"
 ROOTFS_END="-1"	# Specify -1 to use the rest of drive
 ROOTFS_FSTYPE="ext2"
-ROOTFS_LABEL="rootfs"
+ROOTFS_LABEL="OVERCINSTROOTFS"
 
 HARDDRIVE_BANNER="Wind River Hard Drive Installer
 --------------------------------------------------------------------------------
