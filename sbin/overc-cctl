@@ -2,6 +2,23 @@
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License version 2 as
 #  published by the Free Software Foundation.
+CGROUP_NAME="cpuset"
+
+function get_cn_name_from_init_pid {
+    local init_pid=${1}
+
+    cn_name=$(cat /proc/${init_pid}/cgroup | grep ":${CGROUP_NAME}:" |\
+            cut -d ":" -f 3 | xargs basename)
+    echo "${cn_name}"
+}
+
+function is_current_cn {
+    local cn_name=${1}
+
+    current_cn_name=$(get_cn_name_from_init_pid 1)
+    [ "${current_cn_name}" == "${cn_name}" ] && return 1
+    return 0
+}
 
 if [ "$CUBE_DEBUG_SET_X_IF_SET" = 1 ] ; then
     set -x
@@ -70,12 +87,14 @@ EOF
 			;;
 		rollback)
 			cat << EOF
-rollback -n <container name> [-r]
+rollback -n <container name> [-r] [-l]
 
 Switches the current container version to be the one at the top of
 the history rollback list.  On success, the entry is removed
 from the history list.  If -r is given, the previous container version that
 was just switched out, is completely removed from the system.
+If -l is given, and rollback container dom0 at the same time, it will reboot 
+the system immediately.
 EOF
 			;;
 		snapshot)
@@ -767,7 +786,14 @@ function switch_container {
 	previous=$( readlink -f ${lxcbase}/${cn} )
 	ln -sfTL $(relpath ${pathtocontainer} ${lxcbase}/${cn}) ${lxcbase}/${cn}
 	if [ ${removecont} == 1 ]; then
-		remove_subvol_recursive ${previous}
+		#we cannot cleanup himself at present, and
+		#delay the cleanup in the next boot up.
+		is_current_cn $cn
+		if [ $? -eq 1 ]; then
+			ln -sf /lib/systemd/system/overc_cleanup.service ${lxcbase}/${cn}/rootfs/etc/systemd/system/multi-user.target.wants/overc_cleanup.service
+		else
+			remove_subvol_recursive ${previous}
+		fi
 	fi
 	if [ "${2}" == "delhist" ]; then
 		hist_index=${hist_num}
@@ -878,13 +904,13 @@ function rollback_container {
 	fi
 	if [ "${result}" == "y" ]; then
 		switch_container ${contver} delhist
-		# Cleanup any stray snapshots after a rollback
-		for c in $(cd ${lxcbase}/${containers} && ls -1dr ${cn}/* 2>/devnull) ; do
-			get_container_attributes ${c}
-			if [ ${current} == 0 ] && [ ${inhist} == 0 ]; then
-				remove_subvol_recursive "${lxcbase}/${containers}/${c}"
+		if [ "${relaunch}" -eq 1 ]; then
+			is_current_cn $cn
+			if [ "$?" -eq 1 ]; then
+				reboot		
 			fi
-		done
+		fi
+		echo "Warning: please reboot the system as soon as possible."
 		exit 0
 	fi
 	echo "No snapshot selected, aborting"
@@ -963,6 +989,7 @@ privileged=0
 bridged_net=0
 discoverable=0
 removecont=0
+relaunch=0
 tty_num=6
 cmdhelp=0
 force=0
@@ -987,7 +1014,7 @@ fi
 command=${1}
 shift 1
 
-while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:Tu:v:" opt; do
+while getopts "?FdhcapPb0n:m:f:g:i:rlt:sS:Tu:v:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -1031,6 +1058,9 @@ while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:Tu:v:" opt; do
 		;;
 	r)
 		removecont=1
+		;;
+	l)
+		relaunch=1
 		;;
 	t)
 		tty_num=$OPTARG

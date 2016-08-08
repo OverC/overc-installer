@@ -1,0 +1,11 @@
+[Unit]
+Description=Clean up the unused container snapshots
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/overc-installer/overc-cctl clean
+ExecStop=/bin/systemctl disable overc_cleanup.service
+
+[Install]
+WantedBy=multi-user.target
