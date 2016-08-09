@@ -1,6 +1,6 @@
 set fs fs0
 set root LABEL=%ROOTLABEL%
-set args "initrd=%INITRD% rootwait rootdelay=3"
+set args "initrd=%INITRD% rootwait"
 
 %fs%:
 cd %fs%:\

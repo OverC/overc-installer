@@ -2,9 +2,10 @@ source config-usb.sh
 
 HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/cube-essential-genericx86-64.tar.bz2"
 
-HDINSTALL_CONTAINERS="${ARTIFACTS_DIR}/cube-dom0-genericx86-64.tar.bz2:vty=2 \
-                      ${ARTIFACTS_DIR}/cube-dom1-genericx86-64.tar.bz2:vty=3 \
-                      ${ARTIFACTS_DIR}/cube-domE-genericx86-64.tar.bz2:vty=4:net=1"
+HDINSTALL_CONTAINERS="${ARTIFACTS_DIR}/cube-dom0-genericx86-64.tar.bz2:vty=2:mergepath=/usr,essential \
+                      ${ARTIFACTS_DIR}/cube-dom1-genericx86-64.tar.bz2:vty=3:mergepath=/usr,essential,dom0 \
+                      ${ARTIFACTS_DIR}/cube-desktop-genericx86-64.tar.bz2:vty=4:net=1:mergepath=/usr,essential,dom0,dom1 \
+                      ${ARTIFACTS_DIR}/cube-server-genericx86-64.tar.bz2:subuid=800000"
 
 NETWORK_DEVICE="enp0s3"
 

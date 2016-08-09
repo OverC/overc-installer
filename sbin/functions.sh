@@ -763,10 +763,11 @@ create_property_map()
 
 	cn=`echo "${c}" | cut -d':' -f1`
 	cn_short=`basename ${cn}`
-	cname=`${SBINDIR}/cubename $cn_short`
+	cname=`${SBINDIR}/cubename $CNAME_PREFIX $cn_short`
 
 	all_props=""
-	for prop_count in 1 2 3 4 5 6; do
+	#by now 20 properties is enough
+	for prop_count in {1..20}; do
 	    props=`echo "${c}" | cut -d':' -f$prop_count`
 	    if [ "${cn}" == "${props}" ]; then
 		props=""
@@ -795,6 +796,125 @@ strip_properties()
     done
 
     echo $extracted_var
+}
+
+# arg1: service name
+# arg2: container name
+service_install()
+{
+    local service="$1"
+    local cname="$2"
+    local sname
+
+    if [ ! -f "${BASEDIR}/../files/${service}" ]; then
+	if [ ! -f "${service}" ]; then
+	    debugmsg ${DEBUG_INFO} "ERROR: Could not locate service ${service}"
+	    false
+	    assert $?
+	fi
+    else
+	service="${BASEDIR}/../files/${service}"
+    fi
+    sname=`basename ${service}`
+
+    if [ -d "${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/" ]; then
+	tgt="${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/"
+    else
+	if [ -d "${LXCBASE}/${cname}/rootfs/usr_temp" ]; then
+	    tgt="${LXCBASE}/${cname}/rootfs/usr_temp/lib/systemd/system"
+	fi
+    fi
+
+    if [ -n "${tgt}" ]; then
+	mkdir -p ${tgt}
+	# copy service
+	cp -f "${service}" ${tgt}/${sname}
+	# activate service
+	ln -s /usr/lib/systemd/system/${sname} ${LXCBASE}/${cname}/rootfs/etc/systemd/system/multi-user.target.wants/${sname}
+	echo "[INFO] ${cname}: Service ${sname} installed and activated"
+    else
+	echo "[WARNING] ${cname}: could not enable service ${sname}, target directory not found"
+    fi
+}
+# arg1: replacement target
+# arg2: replacement string
+service_modify()
+{
+    local rtarget="$1"
+    local rstring="$2"
+    local cname="$3"
+    local sname="$4"
+
+    if [ -d "${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/" ]; then
+	tgt="${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/"
+    else
+	if [ -d "${LXCBASE}/${cname}/rootfs/usr_temp" ]; then
+	    tgt="${LXCBASE}/${cname}/rootfs/usr_temp/lib/systemd/system"
+	fi
+    fi
+
+    if [ -n "${tgt}" ]; then
+	# replace
+	eval sed -i -e "s,${rtarget},${rstring}," ${tgt}/${sname}
+    else
+	echo "[WARNING] ${cname} could not modify service ${sname}, target directory not found"
+    fi
+}
+
+# arg1: services name, could be globs
+# arg2: container name (optional)
+service_disable()
+{
+    local services="$1"
+    local cname="$2"
+    local slinks
+
+    services="${services%.service}.service"
+    local debug_msg="[INFO]: Can not find the service ${services} to disable"
+
+    if [ -z "${cname}" ]; then
+        # For essential
+        slinks=`find ${TMPMNT}/etc/systemd/ -name ${services} 2>/dev/null`
+        debug_msg="${debug_msg} for essential."
+    else
+        # For containers
+        slinks=`find ${LXCBASE}/${cname}/rootfs/etc/systemd/ -name ${services} 2>/dev/null`
+        debug_msg="${debug_msg} for ${cname}."
+    fi
+
+    if [ -z "${slinks}" ]; then
+        debugmsg ${DEBUG_INFO} ${debug_msg}
+        return 1
+    fi
+
+    rm -f ${slinks}
+    return 0
+}
+
+# ConditionVirtualization=!container is added in the service file
+# so it will check whether the system is executed in a container
+#
+# arg1: services name, could be globs
+# arg2: container name
+service_add_condition_for_container()
+{
+    local services="$1"
+    local cname="$2"
+ 
+    services="${services%.service}.service"
+    local spaths=`find ${LXCBASE}/${cname}/rootfs/lib/systemd/ \
+                       ${LXCBASE}/${cname}/rootfs/usr/lib/systemd/ \
+                       -name ${services} 2>/dev/null`
+
+    if [ -z "${spaths}" ]; then
+        debugmsg ${DEBUG_INFO} "[INFO]: Can not find the service ${services} in ${cname}."
+        return 1
+    fi
+
+    for p in ${spaths}; do
+        sed -i -e '/Description/ a\ConditionVirtualization=!container' ${spaths}
+    done
+    return 0
 }
 
 extract_tarball()

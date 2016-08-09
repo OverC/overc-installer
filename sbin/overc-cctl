@@ -3,6 +3,13 @@
 #  it under the terms of the GNU General Public License version 2 as
 #  published by the Free Software Foundation.
 
+if [ "$CUBE_DEBUG_SET_X_IF_SET" = 1 ] ; then
+    set -x
+fi
+
+if [ -z "${CNRECORD}" ] ; then
+	CNRECORD=/dev/null
+fi
 #  This program is distributed in the hope that it will be useful,
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -12,7 +19,7 @@ function print_cmd_help {
 	case "${1}" in
 		add)
 			cat << EOF
-add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-P] [-b] [-S tty console dev] [-m monitor container] [-v vty number]
+add -n <container name> -f <rootfs tarball> [-a] [-g group] [-t num] [-s] [-P] [-b] [-T] [-u subuid] [-S tty console dev] [-m monitor container] [-v vty number]
 
 Adds a new container which doesn't already exist.
 EOF
@@ -136,7 +143,8 @@ Options summary:
 -F       : force option - ie disable prompts
 -s       : container controlling tty console
 -S [arg] : tty console device.  default is ttyS0
--m [arg] : monitor container controlled by dom0, default is domE
+-T       : Assign physical console device to container using value of -S
+-m [arg] : monitor container controlled by dom0, default is cube-desktop
 -v [arg] : specify the vty number to be used for login
 
 Special container names:
@@ -161,6 +169,42 @@ onboot   : Any containers in this group will be automatically launched at
 parked   : Any container created without a group specified will use this
            group.  It is not considered for launching at host startup.
 EOF
+}
+
+function array_push {
+        local arrayname=$1  
+        local newitem=$2  
+        #"use to avoid '*' transfer  
+        eval ${arrayname}'=("${'${arrayname}'[@]}" "$newitem" ) '  
+}  
+function array_pop {  
+        local arrayname=$1  
+        eval ${arrayname}'=("${'${arrayname}'[@]:0:$((${#'${arrayname}'[@]}-1))}") '
+}  
+function array_top {   
+        local arrayname=$1  
+        eval echo '"${'${arrayname}'[$((${#'${arrayname}'[@]}-1))]}"'
+}  
+
+function remove_subvol_recursive {
+	local -a items=[]
+	local subvol=$1
+	local subvols=`btrfs subvolume list -o ${subvol} | awk '{print $NF}'`
+	local device=`btrfs device stat ${subvol} | head -1 | sed 's/\[\(\/.*\)\].*/\1/'`
+	local tmpdir=`mktemp -d /tmp/temp.XXXXXX`
+
+	for i in ${subvols}; do
+		array_push items "$i"
+	done
+
+	mount -o subvolid=0 ${device} ${tmpdir}
+	while [ "$(array_top items)" != '[]' ]; do
+		btrfs subvolume delete -C ${tmpdir}/$(array_top items)
+		array_pop items
+	done
+	umount ${tmpdir}
+	rm -rf ${tmpdir}
+	btrfs subvolume delete -C ${subvol}
 }
 
 function remove_from_inittab {
@@ -188,13 +232,9 @@ lxc.tty = ${tty_num}
 lxc.pts = 0
 lxc.mount = ${lxcbase}/${cn}/fstab
 lxc.network.type = veth
-lxc.network.name = eth0
+lxc.network.name = veth0
 lxc.network.script.up = /etc/lxc/ovs-up
 lxc.network.script.down = /etc/lxc/ovs-down
-lxc.hook.autodev = ${lxcbase}/${cn}/autodev
-lxc.mount.entry = devpts ${lxcbase}/${cn}/rootfs/dev/pts devpts defaults 0 0
-lxc.mount.entry = proc ${lxcbase}/${cn}/rootfs/proc    proc defaults 0 0
-lxc.mount.entry = sysfs ${lxcbase}/${cn}/rootfs/sys     sysfs defaults 0 0
 lxc.group = ${group}
 lxc.start.auto = ${autostart}
 wr.start.auto = ${peerstart}
@@ -208,7 +248,25 @@ EOF
 		# Domain 0 wants to drive X onto a real console
 		echo "lxc.console = none" >>${pathtocontainer}/config
 	fi
+
+	if [ -n "${subuid}" ]; then
+		# for unprivileged containers, we need to use the mixed structure to
+		# isolate the control of the container itself from the upper layer.
+		echo "lxc.mount.auto = cgroup:mixed proc:mixed sys:mixed" >>${pathtocontainer}/config
+		# subuid/subgid configuration for unprivileged container
+		echo "lxc.id_map = u 0 ${subuid} 65536" >>${pathtocontainer}/config
+		echo "lxc.id_map = g 0 ${subuid} 65536" >>${pathtocontainer}/config
+	else
+		# privileged containers
+		echo "lxc.mount.entry = devpts ${lxcbase}/${cn}/rootfs/dev/pts devpts gid=5,mode=620 0 0" >>${pathtocontainer}/config
+		echo "lxc.mount.entry = proc ${lxcbase}/${cn}/rootfs/proc    proc defaults 0 0" >>${pathtocontainer}/config
+		echo "lxc.mount.entry = sysfs ${lxcbase}/${cn}/rootfs/sys     sysfs defaults 0 0" >>${pathtocontainer}/config
+		echo "lxc.hook.autodev = ${lxcbase}/${cn}/autodev" >>${pathtocontainer}/config
+	fi
 	lxcbase=$temp_lxcbase
+	if [ ${havettyconsole} == 1 ]; then
+		echo "overc.screen-getty = 1" >>${pathtocontainer}/config
+	fi
 }
 
 function create_lxc_fstab {
@@ -266,6 +324,23 @@ blacklist="console|core|fd|full|hugepages|initctl|log|lp0|lp1|lp2|lp3|mqueue|nul
 
 # Populate the dev directory, avoiding anything in the blacklist
 cd /dev ; cp -ua \`ls | egrep -v -e "^(\$blacklist)\\\$"\` \$LXC_ROOTFS_MOUNT/dev
+
+# Check for screen getty service
+a=\`ls -f /etc/systemd/system/getty.target.wants/screen-getty* 2>/dev/null\`
+grep -q "^overc.screen-getty = 1" \$LXC_CONFIG_FILE
+if [ \$? = 0 -a "\$a" != "" ] ; then
+    # 2 seconds to attach console, in practice it is < 100ms
+    for e in 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0; do
+        /usr/bin/screen -S console -wipe -ls console 2> /dev/null > /dev/null
+        if [ \$? = 0 ] ; then
+            /usr/bin/screen -S console -x -X screen -t \$LXC_NAME /usr/bin/lxc-console -e _ -n \$LXC_NAME -t 0
+            break
+        fi
+        sleep 0.1
+    done
+fi
+
+exit 0
 EOF
 	chmod 755 ${pathtocontainer}/autodev
 }
@@ -292,10 +367,6 @@ function deploy_new_container {
 		remove_from_inittab 6
 	fi
 
-	#Set container hostname to reduce confusion when we login
-	host_name=`cat ${HOSTDIR}/etc/hostname`
-	echo ${host_name}-${cn} >${pathtocontainer}/rootfs/etc/hostname
-
 	create_lxc_fstab
 
 	create_lxc_config
@@ -317,7 +388,7 @@ function deploy_new_container {
 	if [ -e "${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf" ]; then
 	    if [ ${discoverable} == 1 ]; then
 		# most of the defaults are good enough in the avahi config file, just minor tweaks here
-		echo "[INFO]: container ${cn} is discoverable via avhai"
+		echo "[INFO]: container ${cn} is discoverable via avahi"
 		sed -i "s/^.*rlimit\-nproc=.*/# rlimit-nproc=3/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
 	    else
 		sed -i "s/^.*disable\-publishing=.*/disable-publishing=yes/" ${pathtocontainer}/rootfs/etc/avahi/avahi-daemon.conf
@@ -328,28 +399,39 @@ function deploy_new_container {
 	    fi
 	fi
 
-	if [ $privileged -ne 1 ]; then
+	if [ $privileged -ne 1 ] && [ -e ${pathtocontainer}/rootfs/etc/systemd/system ] ; then
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd.service
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd-kernel.socket
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd-control.socket
 	fi
+
+	# Essential can use the screen getty if available
+	if [ -e lib/systemd/system/screen-getty@.service ] ; then
+		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
+		for k in ${serialconsoles}; do
+		        ln -s -f /dev/null ${k}
+			ln -s -f /lib/systemd/system/screen-getty@.service ${k/serial-getty/screen-getty}
+		done
+	fi
 	
-	if [ ${havettyconsole} == 1  ]; then
+	# harttyconsole == 1 means the container gets the real device
+	if [ ${hardttyconsole} == 1  ]; then
 		# If container /dev is mounted by tmpfs (when lxc.autodev=1) then
 		# systemd fails to start dev-ttyXXXX.device service and this causes
 		# serial-getty@ttyXXXX.service fails to start.  Workaround for now
 		# is to remove the dependency to dev-%i.device service.
-		sed -i "s:After=dev-%i.device :After=:g" ${pathtocontainer}/rootfs/lib/systemd/system/serial-getty@.service
+		if [ -e ${pathtocontainer}/rootfs/lib/systemd/system/serial-getty@.service ] ; then
+			sed -i "s:After=dev-%i.device :After=:g" ${pathtocontainer}/rootfs/lib/systemd/system/serial-getty@.service
+		fi
 
-		# remove serial console in order to make domE login prompt appears
-		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* )
+		# remove serial console in the metal in order to pass it to the container
+		serialconsoles=$( ls etc/systemd/system/getty.target.wants/serial-getty* etc/systemd/system/getty.target.wants/screen-getty* 2> /dev/null)
 		for k in ${serialconsoles}; do
 		        ln -s -f /dev/null ${k}
 		done
-
 	else
-		serialconsoles=$( ls ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/serial-getty* )
 		# Mask out the container service serial-getty@${ttyconsoledev}.service
+		serialconsoles=$( ls ${pathtocontainer}/rootfs/etc/systemd/system/getty.target.wants/serial-getty* 2> /dev/null)
 		for k in ${serialconsoles}; do
 			ln -s -f /dev/null ${k}
 		done
@@ -357,11 +439,18 @@ function deploy_new_container {
 
 	#Remove the systemd's costly remount of the root partition from /etc/fstab,
 	#and also remove API filesystems mounting from it, as systemd will mount them itself.
-	sed -i '\/dev\/root/d' ${pathtocontainer}/rootfs/etc/fstab
-	sed -i '/^proc/d' ${pathtocontainer}/rootfs/etc/fstab
-	sed -i '/^devpts/d' ${pathtocontainer}/rootfs/etc/fstab
-	sed -i '/^tmpfs/d' ${pathtocontainer}/rootfs/etc/fstab
-	sed -i '/^usbdevfs/d' ${pathtocontainer}/rootfs/etc/fstab
+	if [ -e ${pathtocontainer}/rootfs/etc/fstab ] ; then
+		sed -i '\/dev\/root/d' ${pathtocontainer}/rootfs/etc/fstab
+		sed -i '/^proc/d' ${pathtocontainer}/rootfs/etc/fstab
+		sed -i '/^devpts/d' ${pathtocontainer}/rootfs/etc/fstab
+		sed -i '/^tmpfs/d' ${pathtocontainer}/rootfs/etc/fstab
+		sed -i '/^usbdevfs/d' ${pathtocontainer}/rootfs/etc/fstab
+	fi
+	#Since lxc.network.name set the veth's name as veth0, thus we should 
+	#Set the match name in 20-wired.network according to veth*.
+	if [ -f ${pathtocontainer}/rootfs/etc/systemd/network/20-wired.network ]; then
+		sed -i "s:^Name=.*$:Name=veth\*:" ${pathtocontainer}/rootfs/etc/systemd/network/20-wired.network
+	fi
 
 }
 
@@ -440,7 +529,7 @@ function clean_containers {
 	for i in ${contlist}; do
 		get_container_attributes ${i}
 		if [ ${current} == 0 ] && [ ${inhist} == 0 ]; then
-			btrfs subvolume delete -C ${lxcbase}/${containers}/${i}
+			remove_subvol_recursive "${lxcbase}/${containers}/${i}"
 		fi
 	done
 }
@@ -497,17 +586,94 @@ function add_container {
 	if [ ${btrfs} == 1 ]; then
 		btrfs subvolume create ${pathtocontainer}
 	else
-		mkdir -p ${pathtocontainer}
+		mkdir -p -m 755 ${pathtocontainer}
 	fi
-	mkdir -p ${pathtocontainer}/rootfs
+	mkdir -p -m 755 ${pathtocontainer}/rootfs
+
+	# Extract compressed tar ball
 	echo -n "Extracting rootfs....."
-	tar --numeric-owner -xjf ${rootfs_fn} -C ${pathtocontainer}/rootfs
+	tar --numeric-owner -xf ${rootfs_fn} -C ${pathtocontainer}/rootfs
 	if [ $? != 0 ]; then
-		echo "failed!"
 		echo "Error: rootfs file extraction failed"
 		exit 1
 	fi
 	echo "succeeded"
+
+	[[ -n "${subuid}" ]] && chown -R ${subuid}:${subuid} ${pathtocontainer}/rootfs
+
+	# Re-use the merged_dir in essential or other containers
+
+	container_tmppath=${pathtocontainer}
+	container_mergedir=`cat ${CNRECORD}|awk -F ":" '{if ( $1=="'${cn}'" )print $3}'`
+
+	merge_summary="${ARTIFACTS_DIR}/merge_summary.${cn}"
+	fstab_entry=""
+	# Adding ${cn} with merge option ${container_mergedir}
+	for merge_entry in $(echo ${container_mergedir}|sed 's/;/\n/g'); do
+
+		dir=`echo "$merge_entry"|awk -F "," '{print $1}'`
+		target=`echo "$merge_entry"|sed 's/,/\n/g'|sed '1d'`
+
+		if [ ! -d ${container_tmppath}/rootfs${dir} ]; then
+			echo "[INFO] There is no ${dir} in container ${cn}"
+			continue
+		fi
+
+		sizeinfo_ori=`du -BM ${container_tmppath}/rootfs${dir} -d 0|awk '{print $1;}'`
+
+		# perform merge container ${TMPMNT}${dir} ${container_tmppath}${merged_dir}
+		fstab_entry="overlay /var/lib/lxc/${cn}/rootfs${dir} overlay lowerdir="
+
+		fstab_mark=0
+		for target_entry in ${target}; do
+			if [ ${target_entry} == "essential" ]; then
+				lowerdir="${TMPMNT}${dir}"
+				fstab_dir=${dir}
+			else
+				targetbase=${lxcbase}/${target_entry}
+				if [ ! -d ${targetbase} ]; then
+					echo "[INFO] can not find container ${target_entry} when merging"
+					continue
+				fi
+				# Decide lowerdir from other container
+				if [ ! -d "${targetbase}/rootfs${dir}_temp" ]; then
+					lowerdir="${targetbase}/rootfs${dir}"
+					fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}"
+				else
+					lowerdir="${targetbase}/rootfs${dir}_temp"
+					fstab_dir="/var/lib/lxc/${target_entry}/rootfs${dir}_temp"
+				fi
+			fi
+			echo "Merge ${dir} with ${target_entry}">>${merge_summary}
+
+			if [ $fstab_mark == 0 ]; then
+				fstab_mark=1
+			else
+				fstab_dir=":${fstab_dir}"
+			fi
+
+			# perform merge container ${lowerdir} ${container_tmppath}/rootfs${dir}
+			${SBINDIR}/scanduplicate ${lowerdir} ${container_tmppath}/rootfs${dir} >> ${merge_summary}
+
+			fstab_entry="${fstab_entry}${fstab_dir}"
+		done;
+		# After merge, rename the dir with dir_temp in rootfs
+		if [ -d ${container_tmppath}/rootfs${dir} ]; then
+			mv ${container_tmppath}/rootfs${dir} ${container_tmppath}/rootfs${dir}_temp
+		else
+			mkdir ${container_tmppath}/rootfs${dir}_temp
+		fi
+		mkdir ${container_tmppath}/rootfs${dir}
+
+		# Add fstab entry in essential
+		mkdir ${pathtocontainer}${dir}_over
+		fstab_entry="${fstab_entry},upperdir=/var/lib/lxc/${cn}/rootfs${dir}_temp,workdir=/var/lib/lxc/${cn}${dir}_over 0       0"
+		echo "${fstab_entry}">> ${pathtocontainer}/fstab
+
+		echo "${dir} size befor merging is ${sizeinfo_ori}">>${merge_summary}
+		sizeinfo=`du -BM ${container_tmppath}/rootfs${dir}_temp -d 0|awk '{print $1;}'`
+		echo "${dir} size after merging is ${sizeinfo}">>${merge_summary}
+	done;
 
 	# Re-use networking configuration in deploy_new_container()
 	if [ ${1} == "upgrade" ] && \
@@ -518,6 +684,7 @@ function add_container {
 
 	echo "Deploying new container ${cn}"
 	deploy_new_container
+
 	# Final action, create the softlink to it
 	# But first, if it's an upgrade, record the old one
 	# in history for rollback purposes
@@ -600,7 +767,7 @@ function switch_container {
 	previous=$( readlink -f ${lxcbase}/${cn} )
 	ln -sfTL $(relpath ${pathtocontainer} ${lxcbase}/${cn}) ${lxcbase}/${cn}
 	if [ ${removecont} == 1 ]; then
-		btrfs subvolume delete -C ${previous}
+		remove_subvol_recursive ${previous}
 	fi
 	if [ "${2}" == "delhist" ]; then
 		hist_index=${hist_num}
@@ -652,7 +819,9 @@ function delete_container {
 	fi
 	echo "Removing containers"
 	cd ${lxcbase}/${containers}/${cn}
-	btrfs subvolume delete -C *
+	for i in $(ls); do
+		remove_subvol_recursive "$i"
+	done
 	cd - >/dev/null
 	rm -rf ${lxcbase}/${containers}/${cn} >/dev/null 2>&1
 	echo "Removing container history and other meta data"
@@ -709,6 +878,13 @@ function rollback_container {
 	fi
 	if [ "${result}" == "y" ]; then
 		switch_container ${contver} delhist
+		# Cleanup any stray snapshots after a rollback
+		for c in $(cd ${lxcbase}/${containers} && ls -1dr ${cn}/* 2>/devnull) ; do
+			get_container_attributes ${c}
+			if [ ${current} == 0 ] && [ ${inhist} == 0 ]; then
+				remove_subvol_recursive "${lxcbase}/${containers}/${c}"
+			fi
+		done
 		exit 0
 	fi
 	echo "No snapshot selected, aborting"
@@ -759,7 +935,7 @@ function delete_history {
 		exit 1
 	fi
 	if [ ${removecont} == 1 ]; then
-		btrfs subvolume delete -C ${pathtohistory}/${hist_index}
+		remove_subvol_recursive "${pathtohistory}/${hist_index}"
 	fi
 	rm ${pathtohistory}/${hist_index}
 }
@@ -792,24 +968,26 @@ cmdhelp=0
 force=0
 ttyconsoledev="ttyS0"
 havettyconsole=0
-monitor_container="domE"
+hardttyconsole=0
+monitor_container="cube-desktop"
 
 # See if we're using btrfs
-mountpt=`grep ${lxcbase} /proc/mounts`
 btrfs=0
+mountpts=`grep ${lxcbase} /proc/mounts`
 if [ $? == 0 ]; then
-	fstype=`echo $mountpt | cut -f 3 -d ' '`
-	if [ "${fstype}" == "btrfs" ]; then
-		btrfs=1
-	else
-		btrfs=0
-	fi
+	for mountpt in ${mountpts}; do
+		fstype=$(echo $mountpt | cut -f 3 -d ' ')
+		if [ "${fstype}" == "btrfs" ]; then
+			btrfs=1
+			break
+		fi
+	done
 fi
 
 command=${1}
 shift 1
 
-while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:v:" opt; do
+while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:Tu:v:" opt; do
 	case $opt in
 	0)
 		domain0=1
@@ -863,6 +1041,17 @@ while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:v:" opt; do
 			exit 1
 		fi
 		;;
+	u)
+		subuid=$OPTARG
+		if [ "${subuid}" -eq "${subuid}" ] 2>/dev/null; then
+			if [ "${subuid}" -lt 100000 ] 2>/dev/null; then
+				echo "Error: -u requires a subuid number no less than 100000"
+			fi
+		else
+			echo "Error: -u requires a number as argument"
+			exit 1
+		fi
+		;;
 	v)
 		vty_num=$OPTARG
 		if [ "${vty_num}" -ge "2" -a "${vty_num}" -le "6" ] 2>/dev/null; then
@@ -880,6 +1069,9 @@ while getopts "?FdhcapPb0n:m:f:g:i:rt:sS:v:" opt; do
 		;;
 	S)
 		ttyconsoledev=$OPTARG
+		;;
+	T)
+		hardttyconsole=1
 		;;
 	?)
 		print_help

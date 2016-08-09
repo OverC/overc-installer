@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# ensure we get expected and consistent modes for dir creation, etc..
+umask 0022
+
 if [ "$CUBE_DEBUG_SET_X_IF_SET" = 1 ] ; then
     set -x
 fi
@@ -19,6 +22,7 @@ CONTAINERSDIR="${BASEDIR}/../images/containers"
 PACKAGESDIR="${BASEDIR}/../packages"
 PUPPETDIR="${BASEDIR}/../files/puppet"
 SBINDIR="${BASEDIR}/../sbin"
+export SBINDIR
 if [ -z "${CONFIG_DIRS}" ] ; then
     CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
 fi
@@ -30,6 +34,8 @@ DEBUG_CRIT=1
 DEBUG_WARN=2
 DEBUG_INFO=4
 DEBUG_VERBOSE=7
+
+FACTORY_SNAPSHOT=".factory"
 
 # Set your default debug level
 : ${DEBUG_DEFAULT:=${DEBUG_INFO}}
@@ -177,6 +183,10 @@ if ! [ -n "$DISTRIBUTION" ]; then
     DISTRIBUTION="OverC"
 fi
 
+if [ -v CONTAINER_PREFIX -a -n "$CONTAINER_PREFIX" ] ; then
+    export CNAME_PREFIX="--prefix $CONTAINER_PREFIX"
+fi
+
 get_container_name_by_prop()
 {
     local prop=$1
@@ -211,6 +221,24 @@ get_prop_value_by_container()
     echo "${ret}"
 }
 
+get_prop_isset_by_container()
+{
+    local cn=$1
+    local prop=$2
+    local ret=""
+
+    props=${container_map[$cn]}
+    for k in $props; do
+        echo $k | grep -q "${prop}"
+        if [ $? = 0 ]; then
+	    ret=1
+            break
+        fi
+    done
+
+    echo "${ret}"
+}
+
 # containers are listed in HDINSTALL_CONTAINERS as:
 #    <full path>/<container tgz>:<properties>
 declare -g -A container_map=()
@@ -231,18 +259,18 @@ fi
 
 # if ttyconsolecn wasn't passed on the command line, check to see
 # if a container in the configuration had the "console" property. If
-# so, set it. Otherwise, assign domE as the default
+# so, set it. Otherwise, assign cube-desktop as the default
 if [ -z "${ttyconsolecn}" ]; then
     ttyconsolecn=`get_container_name_by_prop console`
     if [ -z "${ttyconsolecn}" ]; then
-	ttyconsolecn="domE"
+	ttyconsolecn="cube-desktop"
     fi
 fi
 
 if [ -z "${privilegedcn}" ]; then
     privilegedcn=`get_container_name_by_prop privileged`
     if [ -z "${privilegedcn}" ]; then
-        privilegedcn="domE"
+        privilegedcn="cube-desktop"
     fi
 fi
 
@@ -391,7 +419,7 @@ mount /dev/${fs_dev}1 ./boot
 
 img=`ls boot/*Image-* 2> /dev/null`
 if [ -n "$img" ] ; then
-	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs"
+	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs ($INSTALL_INITRAMFS)"
 	kernel=`basename boot/*Image-*`
 	kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
 	initrd="initrd-${kernel_version}.gz"
@@ -469,7 +497,7 @@ menuentry "$DISTRIBUTION" {
 	insmod fat
 	search --no-floppy --label OVERCBOOT --set=root 
 	echo	'Loading Linux ...'
-	linux	/bzImage root=LABEL=OVERCROOTFS ro rootdelay=3
+	linux	/bzImage root=LABEL=OVERCROOTFS ro rootwait
 	echo	'Loading initial ramdisk ...'
 	initrd	/initrd
 }
@@ -480,7 +508,7 @@ menuentry "$DISTRIBUTION recovery" {
         insmod fat
         search --no-floppy --label OVERCBOOT --set=root 
         echo    'Loading Linux ...'
-        linux   /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootdelay=3
+        linux   /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait
         echo    'Loading initial ramdisk ...'
         initrd  /initrd
 }
@@ -555,7 +583,15 @@ for k in ${gettys}; do
 done
 ln -sf /lib/systemd/system/getty@.service ${TMPMNT}/etc/systemd/system/getty.target.wants/getty@tty1.service
 
+# Disable all not needed services in essentail
+if [ -n "${SERVICE_DISABLE_ESSENTIAL}" ]; then
+    for s in ${SERVICE_DISABLE_ESSENTIAL}; do
+        service_disable ${s}
+    done
+fi
+
 if [ -n "${HDINSTALL_CONTAINERS}" ]; then
+    subvol=""
     debugmsg ${DEBUG_INFO} "[INFO]: installing containers"
     if [ ! -d ${TMPMNT}/var/lib/lxc ]; then
         mkdir -p ${TMPMNT}/var/lib/lxc
@@ -564,6 +600,15 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
     mkdir -p ${TMPMNT}/tmp
 
+    if [ $btrfs -eq 1 ]; then
+        #create a subvolume for container images
+        btrfs subvolume create ${TMPMNT}/var/lib/lxc/workdir
+        subvol=`btrfs subvolume list ${TMPMNT}/var/lib/lxc | awk '{print $2;}'`
+        sync
+        umount ${TMPMNT}/var/lib/lxc
+        mount -o subvol=workdir /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
+    fi
+
     # deal with static IPs and the "Networking Prime"
     network_offsets=()
 
@@ -571,7 +616,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     # determine if we need tell overc-cctl to use bridged networking or not.
     overc_cctl_bridged_net_opt=" -b "
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-	cname=`${SBINDIR}/cubename $c`
+	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 	net_offset=`get_prop_value_by_container $cname "net"`
 	if [ -n "$net_offset" ] && [ $net_offset -eq 1 ]; then
 	    overc_cctl_bridged_net_opt=" "
@@ -579,17 +624,34 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	fi
     done
 
+
+    CNRECORD=`mktemp /tmp/hdcontainerXXXXX`
+    export CNRECORD
+
+    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
+	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
+	# Just save a record in tmp file
+	mergepatch=`get_prop_value_by_container $cname "mergepath"`
+
+	echo "$cname::$mergepatch" >> ${CNRECORD}
+    done;
+
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	debugmsg ${DEBUG_INFO} "[INFO]: installing $c"
 
 	# containers names are "prefix-<container name>-<... suffixes >
 	container_src=`basename $c`
-	cname=`${SBINDIR}/cubename $c`
+	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 	cp $c ${TMPMNT}/tmp/
 	cp ${SBINDIR}/overc-cctl ${TMPMNT}/tmp/
 	
+	# Any container that has a console attribute gets a virtual console
+	consoleattr=`get_prop_isset_by_container $cname "console"`
+	# hardconsole means a container gets the physical console device
+	hardconsoleattr=`get_prop_isset_by_container $cname "hardconsole"`
+
 	ttyconsole_opt="-S ${ttyconsoledev}"
-	if [ "${ttyconsolecn}" == "${cname}" ]; then
+	if [ "${ttyconsolecn}" == "${cname}" -o -n "$consoleattr" ]; then
             ttyconsole_opt="-s ${ttyconsole_opt}"
 	fi
 	
@@ -597,8 +659,26 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    ttyconsole_opt=" -P ${ttyconsole_opt}"
 	fi
 
- 	vty_num=`get_prop_value_by_container $cname "vty"`
+	if [ -n "${hardconsoleattr}" ]; then
+	    ttyconsole_opt="-T ${ttyconsole_opt}"
+	fi
+
+	# vty attributes are: <number>,<properites>
+	# properties: active or <empty>
+	vty_num=`get_prop_value_by_container $cname "vty"`
 	if [ -n "$vty_num" ]; then
+	    attribute1=`echo $vty_num | cut -f1 -d,`
+	    attribute2=`echo $vty_num | cut -f2 -d,`
+	    if [ "$attribute1" != "$attribute2" ]; then
+		# they are different, so ther's a number,<attribute>
+		vty_num="${attribute1}"
+		vty_prop="${attribute2}"
+		if [ "${vty_prop}" == "active" ]; then
+		    foreground_container="${cname}"
+		    foreground_vty="${vty_num}"
+		fi
+	    fi
+
 	    ttyconsole_opt=" -v $vty_num ${ttyconsole_opt}"
 	fi
 
@@ -615,6 +695,17 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		network_offsets+=("'$cname,$net_offset'")
 	    fi
 	fi
+
+	# if subuid property is specified for this container,
+	# this container is going to be unprivileged.
+	subuid=`get_prop_value_by_container $cname "subuid"`
+	subuid_opt=""
+	if [ -n "${subuid}" ]; then
+		subuid_opt="-u ${subuid}"
+		echo "root:${subuid}:65536" >> ${TMPMNT}/etc/subuid
+		echo "root:${subuid}:65536" >> ${TMPMNT}/etc/subgid
+	fi
+
 	# actually install the container
 	export LXCBASE="${TMPMNT}/var/lib/lxc"
 	export BINDMNTBASE="${TMPMNT}/opt/container"
@@ -627,13 +718,16 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 			monitor_container_opt="-m ${monitored_container}"
 		fi
 
+		## TODO. make overc-cctl into smaller commands that manipulate the containers
+		##       on a more granular basis.
+		##       like: extract, configure, add service, etc.
 		${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt} ${monitor_container_opt} ${overc_cctl_bridged_net_opt}
 		;;
 	    *-dom1-*)
 		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
 		;;
 	    *)
-		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
+		${SBINDIR}/overc-cctl add ${subuid_opt} -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
 		;;
 	esac
 
@@ -642,6 +736,45 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	elif [ -e /${IMAGESDIR}/config.smart ]; then
 	    cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
 	fi
+
+	rm ${TMPMNT}/tmp/$(basename $c)
+    done
+
+    #cleanup temp files
+    rm ${CNRECORD}
+
+    # install and modify services
+    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
+	container_src=`basename $c`
+	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
+
+	# if there was a foreground container defined (attribte 'active' on a vty), then we
+	# install a chvt service to make sure it is in the foreground after boot. Note, this
+	# currently does not touch essential, but could in the future.
+	if [ -n "${foreground_container}" ]; then
+	    service_install chvt.service ${cname}
+	    service_modify "%OVERC_ACTIVE_VT%" ${foreground_vty} ${cname} chvt.service
+	fi
+
+        # Disable all not needed services in dom0
+        if [ -n "${SERVICE_DISABLE_DOM0}" -a "${cname}" = "dom0" ]; then
+            for s in ${SERVICE_DISABLE_DOM0}; do
+                service_disable ${s} ${cname}
+            done
+        fi
+
+        # Disable or add conditon checking for all not needed services in container
+        if [ -n "${SERVICE_DISABLE_CONTAINER}" ]; then
+            for s in ${SERVICE_DISABLE_CONTAINER}; do
+                service_disable ${s} ${cname}
+            done
+        fi
+
+        if [ -n "${SERVICE_CONDITION_CONTAINER}" ]; then
+            for s in ${SERVICE_CONDITION_CONTAINER}; do
+                service_add_condition_for_container ${s} ${cname}
+            done
+        fi
     done
 
     # Setup networking prime and static IPs, unless using bridged networking
@@ -654,6 +787,9 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	if [ ! -v NETWORK_DEVICE ]; then
 	    NETWORK_DEVICE="enp0s3"
 	fi
+	if [ ! -v NETWORK_DEVICE_CLASSES ]; then
+	    NETWORK_DEVICE_CLASSES="eth* wl* en*"
+	fi
 	pathtocontainer=${TMPMNT}/var/lib/lxc/${network_prime}
 	if [ -e "${pathtocontainer}/config" ]; then
 	    # Pass the network device through to the designated network prime container
@@ -662,12 +798,21 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		sed -i "s/\(lxc\.network\.name = $NETWORK_DEVICE\)/#\1/" \
 		    ${pathtocontainer}/config
 	    fi
-	    echo "lxc.network.type = phys" >> ${pathtocontainer}/config
-	    echo "lxc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
+	    if [ "$NETWORK_DEVICE" = "all" ] ; then
+		echo "overc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
+		echo "overc.network.linkdevs = $NETWORK_DEVICE_CLASSES" >> ${pathtocontainer}/config
+	    else
+		echo "lxc.network.type = phys" >> ${pathtocontainer}/config
+		echo "lxc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
+	    fi
 
 	    # Enable configuring the network prime container by puppet on first boot
 	    sed -i "s/^\(\$network_prime_container *=\).*$/\1 \"${network_prime}\"/" \
 		${TMPMNT}/etc/puppet/manifests/site.pp
+
+	    # Set the network prime device for network prime container by puppet on first boot
+	    sed -i "s/^\(\$network_prime_device *=\).*$/\1 \"${NETWORK_DEVICE}\"/" \
+	        ${TMPMNT}/etc/puppet/manifests/site.pp
 
 	    # Specify any network offsets for containers with static IPs
 	    if [ -v network_offsets ] && [ ${#network_offsets[@]} -gt 0 ]; then
@@ -689,6 +834,27 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     fi
     sync
     umount ${TMPMNT}/var/lib/lxc
+
+    if [ $btrfs -eq 1 ]; then
+        if [ -z "$subvol" ]; then
+            debugmsg ${DEBUG_WARN} "[WARNING]: Could not get subvolume id, thus cannot create factory reset snapshot"
+        else
+            mount /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
+            btrfs subvolume set-default $subvol ${TMPMNT}/var/lib/lxc
+            btrfs subvolume snapshot ${TMPMNT}/var/lib/lxc/workdir ${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}
+            #snapshot subvolume recursively
+            subvolumes="$(btrfs subvolume list -c ${TMPMNT}/var/lib/lxc/workdir | awk '{print $NF}')"
+            for subvolume in $subvolumes; do
+                snapshot_directory="${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/${subvolume}"
+                if [ -d "${snapshot_directory}" ]; then
+                    rm -rf "${snapshot_directory}"
+                    btrfs subvolume snapshot "${TMPMNT}/var/lib/lxc/workdir/${subvolume}" "${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/$(dirname ${subvolume})"
+                fi
+            done
+            sync 
+            umount ${TMPMNT}/var/lib/lxc
+        fi
+    fi
 fi
 
 if [ -d "${PACKAGESDIR}" ]; then
@@ -747,10 +913,12 @@ fi
 if [ $btrfs -eq 0 ]; then
 	:
 else
-	debugmsg ${DEBUG_INFO} "[INFO]: Create snapshot of rootfs for recovery."
-	mount /dev/${fs_dev}3 ${TMPMNT}
+	debugmsg ${DEBUG_INFO} "[INFO]: Creating a snapshot of rootfs for recovery."
+	#mount the root subvolume
+	mount -o subvolid=5 /dev/${fs_dev}3 ${TMPMNT}
 	if [ -e "${TMPMNT}/rootfs" ]; then
 		btrfs subvolume snapshot ${TMPMNT}/rootfs ${TMPMNT}/rootfs_bakup
+		btrfs subvolume snapshot ${TMPMNT}/rootfs ${TMPMNT}/${FACTORY_SNAPSHOT}
 	fi
 	sync
 	umount ${TMPMNT}

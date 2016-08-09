@@ -49,12 +49,12 @@ DISTRIBUTION="OverC"
 BOOTPART_START="63s"
 BOOTPART_END="250M"
 BOOTPART_FSTYPE="fat32"
-BOOTPART_LABEL="boot"
+BOOTPART_LABEL="OVERCBOOT"
 
 ROOTFS_START="250M"
 ROOTFS_END="-1"	# Specify -1 to use the rest of drive
 ROOTFS_FSTYPE="ext2"
-ROOTFS_LABEL="rootfs"
+ROOTFS_LABEL="OVERCINSTROOTFS"
 
 USBSTORAGE_BANNER="USB Creator for the Hard Drive Installer
 --------------------------------------------------------------------------------
@@ -73,6 +73,29 @@ CONFIRM_INSTALL=1
 CONFIRM_REBOOT=0
 
 CMD_GRUB_INSTALL="/usr/sbin/grub-install"
+
+# List of services to be disabled for each components
+# It could be the service name, service file name or
+# file globs. e.g. xinetd, named.service, nfs-*
+#
+# For essential and dom0
+SERVICE_DISABLE_ESSENTIAL=" \
+  xinetd \
+"
+SERVICE_DISABLE_DOM0=" \
+  tcf-agent \
+  xinetd \
+  crond \
+"
+
+# For all containers
+SERVICE_DISABLE_CONTAINER=" \
+  nfs-* \
+  named \
+"
+SERVICE_CONDITION_CONTAINER=" \
+  watchdog \
+"
 
 ######################################################################
 # Define some debug output variables
