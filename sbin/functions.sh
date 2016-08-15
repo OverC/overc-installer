@@ -676,7 +676,7 @@ install_kernel()
 
 function extract_container_name
 {
-    # Parms: $1 = filename
+    # Params: $1 = filename
     #
     # Container file names typically look like:
     # a-b-c-...-z-some-arch.tar.bz

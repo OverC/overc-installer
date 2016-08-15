@@ -12,7 +12,7 @@ install_bootloader()
 		return 0
 	fi
 
-	#put the bootloader into the locaton from 8th section of boot device.
+	#put the bootloader into the location from 8th section of boot device.
 	BS=512
 	SEEK=8
 	dd if=$bootloader of=/dev/$device bs=$BS seek=$SEEK conv=notrunc oflag=sync
