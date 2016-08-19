@@ -748,7 +748,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	container_src=`basename $c`
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 
-	# if there was a foreground container defined (attribte 'active' on a vty), then we
+	# if there was a foreground container defined (attribute 'active' on a vty), then we
 	# install a chvt service to make sure it is in the foreground after boot. Note, this
 	# currently does not touch essential, but could in the future.
 	if [ -n "${foreground_container}" ]; then
@@ -763,7 +763,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
             done
         fi
 
-        # Disable or add conditon checking for all not needed services in container
+        # Disable or add condition checking for all not needed services in container
         if [ -n "${SERVICE_DISABLE_CONTAINER}" ]; then
             for s in ${SERVICE_DISABLE_CONTAINER}; do
                 service_disable ${s} ${cname}

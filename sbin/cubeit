@@ -23,7 +23,7 @@ cat << EOF
 
   cubeit [--config <config script>] [--target-config <config script>] [--force] --artifacts [<artifacts dir>] <target>
 
-  cubeit is capable of creating a "cube capable" installer + paylaod, or image.
+  cubeit is capable of creating a "cube capable" installer + payload, or image.
 
   Default configuration is: ~/.overc/config-usb.sh, or the command line
   specified configuration script.
@@ -208,7 +208,7 @@ done
 
 # config sanity check
 if [ "${#ROOTFS_LABEL}" -gt 16 ]; then
-	echo "The length of the ROOTFS_LABEL is greater than 16, will be stipped to: ${ROOTFS_LABEL:0:16}"
+	echo "The length of the ROOTFS_LABEL is greater than 16, will be stripped to: ${ROOTFS_LABEL:0:16}"
 	read -p "Do you wish to continue? [y/n] " -n 1
 	echo
 	if [[ $REPLY =~ ^[Yy]$ ]]; then
