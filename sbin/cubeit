@@ -134,6 +134,7 @@ SBINDIR="${BASEDIR}/../sbin"
 # installers that will go on the usb stick, and install to the HD
 INSTALLERS_DIR="${BASEDIR}/../installers"
 # configuration for this script
+DEFAULT_CONFIG="${BASEDIR}/../config/default-conf.sh"
 if [ -z "${CONFIG_DIRS}" ] ; then
     CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
 fi
@@ -169,7 +170,6 @@ if [ "$TARGET_TYPE" = "block" ]; then
     USBSTORAGE_DEVICE=/sys/block/$(basename "$target")
 fi
 
-
 ## Load functions file
 if ! [ -e $FUNCTIONS_FILE ]
 then
@@ -183,6 +183,8 @@ if [ -z ${CONFIG_FILES} ]; then
     echo "ERROR: no configuration was provided via --config"
     exit 1
 fi
+
+source ${DEFAULT_CONFIG}
 
 colon_separated_config_dirs=`echo ${CONFIG_DIRS} | sed 's/ /:/g'`
 for config in ${CONFIG_FILES}; do
@@ -218,9 +220,9 @@ if [ "${#ROOTFS_LABEL}" -gt 16 ]; then
 	fi
 fi
 
-if ! [ -n "$DISTRIBUTION" ]; then
-    DISTRIBUTION="OverC"
-fi
+# These files are prerequisite ones that need to be checked for existence
+PREREQ_FILES="${INSTALL_KERNEL} ${INSTALL_ROOTFS} ${INSTALL_MODULES} ${INSTALL_GRUBCFG} \
+	${HDINSTALL_ROOTFS} `strip_properties ${HDINSTALL_CONTAINERS}`"
 
 # Find the grub configuration
 for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
@@ -318,7 +320,11 @@ install_summary()
         echo "             `basename ${i}`"
     done
     echo "   packages: "
+    if [ -d "${PACKAGES_DIR}" ]; then
     echo "             $package_count packages available from: ${PACKAGES_DIR}"
+	else
+		echo "             0"
+	fi
     echo "   containers: "
     for i in ${HDINSTALL_CONTAINERS}; do
         echo "             `basename ${i}`"
@@ -415,6 +421,13 @@ IFS=$OLDIFS
 	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
 	assert_return $?
 
+	#get the target's architecture, x86 or not x86?
+	export X86_ARCH=true
+	file -L $INSTALL_KERNEL | grep -i x86 >/dev/null 2>&1
+	if [ $? -ne 0 ]; then
+		export X86_ARCH=false
+	fi
+
 	if ${X86_ARCH}; then
 		## Copy the hard drive GRUB configuration
 		for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
@@ -479,24 +492,20 @@ IFS=$OLDIFS
 
 	    # drop any properties and copy the containers to the installer
 	    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-		cp ${c} ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/containers/
+		cp ${c} ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/
 	    done
 
+	    # copy default config
+		cat ${DEFAULT_CONFIG} |
+			sed "s|ARTIFACTS_DIR=.*|ARTIFACTS_DIR=${INSTALLER_TARGET_IMAGES_DIR}|" > \
+			${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/`basename ${DEFAULT_CONFIG}`
+
 	    # create a configuration that can be read by the cubeit-installer
-	    if [ -v TARGET_CONFIG_FILE -a -n "$TARGET_CONFIG_FILE" ]; then
+	    if [ -v TARGET_CONFIG_FILE -a -e "$TARGET_CONFIG_FILE" ]; then
 		cat $TARGET_CONFIG_FILE |
-			sed "s|\${ARTIFACTS_DIR}|${INSTALLER_TARGET_IMAGES_DIR}/containers|g" > \
+			sed "s|ARTIFACTS_DIR=.*|ARTIFACTS_DIR=${INSTALLER_TARGET_IMAGES_DIR}|" > \
 			${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-	    else
-		echo "HDINSTALL_CONTAINERS=\"\\" > ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-		for c in ${HDINSTALL_CONTAINERS}; do
-		    echo -n "${INSTALLER_TARGET_IMAGES_DIR}/containers/" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-		    echo -n `basename ${c}` >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-		    echo " \\" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-		done
-		echo "\"" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 	    fi
-	    echo "DISTRIBUTION=\"$DISTRIBUTION\"" >>${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 	fi
 
 	if [ -n "${HD_MODULES}" ]; then
