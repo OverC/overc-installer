@@ -146,6 +146,32 @@ if [ -n "$ARTIFACTS_DIR" ]; then
 fi
 export ARTIFACTS_DIR
 
+## Load functions file
+if ! [ -e $FUNCTIONS_FILE ]
+then
+	echo "ERROR: Could not find function definitions (${FUNCTIONS_FILE})"
+	exit 1
+fi
+source $FUNCTIONS_FILE
+
+######################################################################
+# Define some debug output variables
+
+# Debug Levels - fixed values
+DEBUG_SILENT=0
+DEBUG_CRIT=1
+DEBUG_WARN=2
+DEBUG_INFO=4
+DEBUG_VERBOSE=7
+
+# Set your default debug level
+: ${DEBUG_DEFAULT:=${DEBUG_INFO}}
+
+# Dynamic debug level
+DEBUG_LEVEL=${DEBUG_DEFAULT}
+
+: ${TRACE:=0}
+
 # command line parameters can be:
 #   <target> (device, directory or file)
 target=$1
@@ -168,15 +194,6 @@ fi
 if [ "$TARGET_TYPE" = "block" ]; then
     USBSTORAGE_DEVICE=/sys/block/$(basename "$target")
 fi
-
-
-## Load functions file
-if ! [ -e $FUNCTIONS_FILE ]
-then
-	echo "ERROR: Could not find function definitions (${FUNCTIONS_FILE})"
-	exit 1
-fi
-source $FUNCTIONS_FILE
 
 ## Load configuration file(s)
 if [ -z ${CONFIG_FILES} ]; then
