@@ -50,20 +50,4 @@ CONFIRM_REBOOT=1
 
 CMD_GRUB_INSTALL="/bin/bash /sbin/grub-install"
 
-######################################################################
-# Define some debug output variables
-
-# Debug Levels - fixed values
-DEBUG_SILENT=0
-DEBUG_CRIT=1
-DEBUG_WARN=2
-DEBUG_INFO=4
-DEBUG_VERBOSE=7
-
-# Set your default debug level
-: ${DEBUG_DEFAULT:=${DEBUG_INFO}}
-
-# Dynamic debug level
-DEBUG_LEVEL=${DEBUG_DEFAULT}
-
-: ${TRACE:=0}
+DEBUG_LEVEL=${DEBUG_VERBOSE}
