@@ -23,6 +23,7 @@ PACKAGESDIR="${BASEDIR}/../packages"
 PUPPETDIR="${BASEDIR}/../files/puppet"
 SBINDIR="${BASEDIR}/../sbin"
 export SBINDIR
+DEFAULT_CONFIG="${BASEDIR}/../config/default-conf.sh"
 if [ -z "${CONFIG_DIRS}" ] ; then
     CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
 fi
@@ -132,6 +133,7 @@ if [ -z "${CONFIG_FILES}" ]; then
     CONFIG_FILES="config-installer.sh"
 fi
 
+source ${DEFAULT_CONFIG}
 colon_separated_config_dirs=`echo ${CONFIG_DIRS} | sed 's/ /:/g'`
 for config in ${CONFIG_FILES}; do
     config_to_source="${config}"
@@ -338,8 +340,8 @@ fi
 if [ $(echo $raw_dev | grep -c 'loop') ==  "1" ]; then
        loop_device=t
        fs_dev="${raw_dev}p"
-       partprobe /dev/${raw_dev}
 fi
+partprobe /dev/${raw_dev}
 
 ## create filesystems
 debugmsg ${DEBUG_INFO} "[INFO]: creating filesystems"
@@ -631,9 +633,9 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 	# Just save a record in tmp file
-	mergepatch=`get_prop_value_by_container $cname "mergepath"`
+	mergepath=`get_prop_value_by_container $cname "mergepath"`
 
-	echo "$cname::$mergepatch" >> ${CNRECORD}
+	echo "$cname::$mergepath" >> ${CNRECORD}
     done;
 
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
@@ -785,7 +787,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: Using bridged networking."
     else
 	if [ ! -v NETWORK_DEVICE ]; then
-	    NETWORK_DEVICE="enp0s3"
+	    NETWORK_DEVICE="enp1s0"
 	fi
 	if [ ! -v NETWORK_DEVICE_CLASSES ]; then
 	    NETWORK_DEVICE_CLASSES="eth* wl* en*"
