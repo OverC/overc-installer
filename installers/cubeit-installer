@@ -631,9 +631,9 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 	# Just save a record in tmp file
-	mergepatch=`get_prop_value_by_container $cname "mergepath"`
+	mergepath=`get_prop_value_by_container $cname "mergepath"`
 
-	echo "$cname::$mergepatch" >> ${CNRECORD}
+	echo "$cname::$mergepath" >> ${CNRECORD}
     done;
 
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
