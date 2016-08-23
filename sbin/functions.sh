@@ -622,7 +622,7 @@ install_grub()
 	
 	#install efi boot
 
-	if [ -n "${INSTALL_EFIBOOT}" ]; then
+	if [ -n "${INSTALL_EFIBOOT}" ] && [ -e "${INSTALL_EFIBOOT}" ]; then
 		debugmsg ${DEBUG_INFO} "Installing the EFI bootloader"
 		mkdir -p ${mountpoint}/EFI/BOOT/
 		cp $INSTALL_EFIBOOT ${mountpoint}/EFI/BOOT/
