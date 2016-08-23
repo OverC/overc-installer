@@ -35,7 +35,7 @@ debugmsg()
 	local msg_level=$1
 	shift
 
-	if [ -z $msg_level ]
+	if [ -z "$msg_level" ]
 	then
 		echo "debugmsg: No debug level specified with message." >&2
 	fi
