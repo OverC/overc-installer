@@ -301,7 +301,7 @@ validate_harddrive()
 
 	if [ -z ${harddrive_device} ] || [ -z ${harddrive_model} ]
 	then
-		debugmsg ${DEBUG_CRIT} "ERROR: Input parameters not provided"
+		debugmsg ${DEBUG_CRIT} "ERROR: validate_harddrive input parameters not provided"
 		return 1
 	fi
 
@@ -332,7 +332,7 @@ remove_partitions()
 
 	if [ -z $device ]
 	then
-		debugmsg ${DEBUG_CRIT} "ERROR: Input parameters not provided"
+		debugmsg ${DEBUG_CRIT} "ERROR: remove_partitions input parameters not provided"
 	fi
 
 	debugmsg ${DEBUG_INFO} "Removing all partitions"
@@ -369,7 +369,7 @@ create_partition()
 
 	if [ -z $device ]
 	then
-		debugmsg ${DEBUG_CRIT} "ERROR: Input parameters not provided"
+		debugmsg ${DEBUG_CRIT} "ERROR: create_partition input parameters not provided"
 	fi
 
 	debugmsg ${DEBUG_INFO} "Creating partition ${device}${partnum}"
@@ -403,7 +403,7 @@ create_filesystem()
 
 	if [ -z $partition ]
 	then
-		debugmsg ${DEBUG_CRIT} "ERROR: Input parameters not provided"
+		debugmsg ${DEBUG_CRIT} "ERROR: create_filesystem input parameters not provided"
 		return 1
 	fi
 
@@ -503,7 +503,7 @@ umount_partitions()
 
 	if [ -z $device ]
 	then
-		debugmsg ${DEBUG_CRIT} "ERROR: Input parameters not provided"
+		debugmsg ${DEBUG_CRIT} "ERROR: umount_partitions input parameters not provided"
 	fi
 
 	sync
