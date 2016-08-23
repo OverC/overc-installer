@@ -282,6 +282,11 @@ EOF
 		echo "lxc.mount.entry = sysfs ${lxcbase}/${cn}/rootfs/sys     sysfs defaults 0 0" >>${pathtocontainer}/config
 		echo "lxc.hook.autodev = ${lxcbase}/${cn}/autodev" >>${pathtocontainer}/config
 	fi
+
+	if [ -f "etc/system-id" -o -f "/etc/system-id"]; then
+		echo "lxc.mount.entry = /etc/system-id ${lxcbase}/${cn}/rootfs/etc/system-id none ro,bind,optional,create=file" >>${pathtocontainer}/config
+	fi
+
 	lxcbase=$temp_lxcbase
 	if [ ${havettyconsole} == 1 ]; then
 		echo "overc.screen-getty = 1" >>${pathtocontainer}/config
