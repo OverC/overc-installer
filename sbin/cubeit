@@ -254,9 +254,7 @@ for d in ${CONFIG_DIRS} $BASEDIR; do
 done
 
 ## Set up trap handler
-
-trap_cmd='trap_handler $?'
-trap "${trap_cmd}" EXIT
+trap_with_name "trap_handler" EXIT SIGINT
 
 case $TARGET_TYPE in
     block)

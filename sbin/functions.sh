@@ -75,11 +75,33 @@ assert_return()
 
 trap_handler()
 {
-    if [ $1 -ne 0 ]; then
-	debugmsg ${DEBUG_CRIT} "######################################################################"
-        debugmsg ${DEBUG_CRIT} "ERROR: An unexpected condition occurred: $1"
-	debugmsg ${DEBUG_CRIT} "######################################################################"
-    fi
+	case $1 in
+		SIGINT)
+			debugmsg ${DEBUG_INFO} "Installation cancelled by user."
+			;;
+		EXIT)
+			if [ $2 -ne 0 ]; then
+				debugmsg ${DEBUG_CRIT} "######################################################################"
+				debugmsg ${DEBUG_CRIT} "ERROR: An unexpected condition occurred: $1"
+				debugmsg ${DEBUG_CRIT} "######################################################################"
+			fi
+			;;
+		*)
+			;;
+	esac
+
+	# Clean up temporary things
+	clean_up
+
+	exit 0
+}
+
+trap_with_name() {
+	func="$1"
+	shift
+	for sig; do
+		trap "$func $sig $?" "$sig"
+	done
 }
 
 exit()
@@ -935,6 +957,15 @@ extract_tarball()
 	return 0
 }
 
+clean_up()
+{
+	# Cleanup
+	debugmsg ${DEBUG_INFO} "Cleaning up..."
+	sync
+	[ -n "${mnt1}" ] && umount ${mnt1}
+	[ -n "${mnt2}" ] && umount ${mnt2}
+}
+
 installer_main()
 {
 	local device="$1"
@@ -1038,13 +1069,9 @@ installer_main()
 		custom_install_rules "${mnt1}" "${mnt2}"
 		assert $?
 	fi
-	
-	# Cleanup
-	debugmsg ${DEBUG_INFO} "Unmounting all partitions"
-	sync
-	umount ${mnt1}
-	umount ${mnt2}
-	
+
+	clean_up
+
 	# Finish Installation
 	display_finalmsg
 	
