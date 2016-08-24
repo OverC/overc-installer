@@ -981,16 +981,29 @@ installer_main()
 
 	local p1
 	local p2
+	local try_cnt=0
 	# XXX: TODO. the partition name should be returned by create_partition
-	if [ -e /dev/${dev}1 ]; then
-	    p1="${dev}1"
-	    p2="${dev}2"
+	# The propagation of the partitions to devfs will sometimes causes a delay
+	# Give the system 30 seconds to do the job
+	while [ ${try_cnt} -lt 30 ];
+	do
+		if [ -e /dev/${dev}1 ]; then
+			p1="${dev}1"
+			p2="${dev}2"
+		fi
+		if [ -e /dev/${dev}p1 ]; then
+			p1="${dev}p1"
+			p2="${dev}p2"
+		fi
+		if [ -n ${p1} ] && [ -n ${p2} ]; then break; fi
+		let try_cnt++
+		sleep 1
+	done
+	if [ -z ${p1} ] || [ -z ${p2} ]; then
+		debugmsg ${DEBUG_CRIT} "The newly created partition is not propagated by the system. Please retry."
+		exit 1
 	fi
-	if [ -e /dev/${dev}p1 ]; then
-	    p1="${dev}p1"
-	    p2="${dev}p2"
-	fi
-	
+
 	## Create new filesystems
 	debugmsg ${DEBUG_INFO} "Creating new filesystems "
 	create_filesystem "${p1}" "${BOOTPART_FSTYPE}" "${BOOTPART_LABEL}"
