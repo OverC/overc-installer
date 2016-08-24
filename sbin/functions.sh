@@ -976,6 +976,9 @@ installer_main()
 	create_partition "${dev}" 2 ${ROOTFS_FSTYPE} ${ROOTFS_START} ${ROOTFS_END}
 	assert $?
 
+	# make first partition bootable
+	/sbin/parted /dev/${device} set 1 boot on > /dev/null 2>&1
+
 	local p1
 	local p2
 	# XXX: TODO. the partition name should be returned by create_partition
