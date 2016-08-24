@@ -982,6 +982,8 @@ installer_main()
 	local p1
 	local p2
 	# XXX: TODO. the partition name should be returned by create_partition
+	while ([ -z ${p1} ] || [ -z ${p2} ])
+	do
 	if [ -e /dev/${dev}1 ]; then
 	    p1="${dev}1"
 	    p2="${dev}2"
@@ -990,7 +992,8 @@ installer_main()
 	    p1="${dev}p1"
 	    p2="${dev}p2"
 	fi
-	
+	done
+
 	## Create new filesystems
 	debugmsg ${DEBUG_INFO} "Creating new filesystems "
 	create_filesystem "${p1}" "${BOOTPART_FSTYPE}" "${BOOTPART_LABEL}"
