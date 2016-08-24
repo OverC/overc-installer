@@ -283,7 +283,7 @@ EOF
 		echo "lxc.hook.autodev = ${lxcbase}/${cn}/autodev" >>${pathtocontainer}/config
 	fi
 
-	if [ -f "etc/system-id" -o -f "/etc/system-id"]; then
+	if [ -f "etc/system-id" ] || [ -f "/etc/system-id" ]; then
 		echo "lxc.mount.entry = /etc/system-id ${lxcbase}/${cn}/rootfs/etc/system-id none ro,bind,optional,create=file" >>${pathtocontainer}/config
 	fi
 
