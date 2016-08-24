@@ -935,6 +935,42 @@ extract_tarball()
 	return 0
 }
 
+source_conffiles()
+{
+	colon_separated_config_dirs=`echo ${CONFIG_DIRS} | sed 's/ /:/g'`
+	for config in ${CONFIG_FILES}; do
+		config_to_source="${config}"
+
+		# check to see if the config exists. If it doesn't search the config paths
+		if ! [ -e "${config}" ]; then
+			for d in ${CONFIG_DIRS}; do
+				if [ -e "${d}/${config}" ]; then
+					config_to_source="${d}/${config}"
+				fi
+			done
+
+			if [ -z "${config_to_source}" ]; then
+				echo "ERROR: Could not find configuration file (${config_to_soure})."
+				echo "Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
+				exit 1
+			fi
+		fi
+		export PATH="$PATH:${colon_separated_config_dirs}:$(dirname ${config_to_source})"
+		source `basename ${config_to_source}`
+	done
+	# config sanity check
+	if [ "${#ROOTFS_LABEL}" -gt 16 ]; then
+		echo "The length of the ROOTFS_LABEL is greater than 16, will be stripped to: ${ROOTFS_LABEL:0:16}"
+		read -p "Do you wish to continue? [y/n] " -n 1
+		echo
+		if [[ $REPLY =~ ^[Yy]$ ]]; then
+			ROOTFS_LABEL=${ROOTFS_LABEL:0:16}
+		else
+			exit 1
+		fi
+	fi
+}
+
 clean_up()
 {
 	# Cleanup
