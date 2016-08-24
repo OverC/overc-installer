@@ -935,6 +935,21 @@ extract_tarball()
 	return 0
 }
 
+clean_up()
+{
+	# Cleanup
+	debugmsg ${DEBUG_INFO} "Unmounting all partitions"
+	sync
+	[ -n "${mnt1}" ] && umount ${mnt1}
+	[ -n "${mnt2}" ] && umount ${mnt2}
+
+	# parameters passed by the SIGINT handle command
+	if [ -n "$1" ]; then
+		debugmsg ${DEBUG_INFO} $1
+		exit 0
+	fi
+}
+
 installer_main()
 {
 	local device="$1"
@@ -1028,13 +1043,9 @@ installer_main()
 		custom_install_rules "${mnt1}" "${mnt2}"
 		assert $?
 	fi
-	
-	# Cleanup
-	debugmsg ${DEBUG_INFO} "Unmounting all partitions"
-	sync
-	umount ${mnt1}
-	umount ${mnt2}
-	
+
+	clean_up
+
 	# Finish Installation
 	display_finalmsg
 	

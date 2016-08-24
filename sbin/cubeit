@@ -257,6 +257,7 @@ done
 
 trap_cmd='trap_handler $?'
 trap "${trap_cmd}" EXIT
+trap "clean_up \"Action cancelled by user.\"" SIGINT
 
 case $TARGET_TYPE in
     block)
