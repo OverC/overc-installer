@@ -97,23 +97,7 @@ SERVICE_CONDITION_CONTAINER=" \
   watchdog \
 "
 
-######################################################################
-# Define some debug output variables
-
-# Debug Levels - fixed values
-DEBUG_SILENT=0
-DEBUG_CRIT=1
-DEBUG_WARN=2
-DEBUG_INFO=4
-DEBUG_VERBOSE=7
-
-# Set your default debug level
-: ${DEBUG_DEFAULT:=${DEBUG_INFO}}
-
-# Dynamic debug level
 DEBUG_LEVEL=${DEBUG_DEFAULT}
-
-: ${TRACE:=0}
 
 CONFIG_FILE_ARM="config-usb-arm.sh"
 export X86_ARCH=true
