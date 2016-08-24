@@ -785,7 +785,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: Using bridged networking."
     else
 	if [ ! -v NETWORK_DEVICE ]; then
-	    NETWORK_DEVICE="enp1s0"
+	    NETWORK_DEVICE="enp0s3"
 	fi
 	if [ ! -v NETWORK_DEVICE_CLASSES ]; then
 	    NETWORK_DEVICE_CLASSES="eth* wl* en*"
