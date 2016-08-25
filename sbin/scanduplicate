@@ -4,11 +4,11 @@ usage()
 {
 cat << EOF
 
-  scanduplicate <base_path> <target_path>
+  scanduplicate <base_path> <target_path> <mask_path>
 
   example:
 
-      $  scanduplicate essential/usr dom0/usr
+      $  scanduplicate essential/usr dom0/usr dom0/mask
 EOF
 }
 
@@ -18,11 +18,11 @@ scandir()
 {
 # Search each entry in base_path, delete same file in target_path.
 for entry in $(ls $1 -A); do
-    if [ -e "$2/${entry}" ]; then
+    if [ -e "$2/${entry}" ] || [ -L "$2/${entry}" ]; then
         if [ -d "$2/${entry}" ] && [ ! -L "$2/${entry}" ] && \
             [ -d "$1/${entry}" ] && [ ! -L "$1/${entry}" ]; then
             # Only enter dir when both $1/entry & $2/entry are directory
-            scandir "$1/$entry" "$2/$entry"
+            scandir "$1/$entry" "$2/$entry" "$3/$entry"
         elif [ -f "$2/${entry}" ] && [ ! -L "$2/${entry}" ] && \
               [ -f "$1/${entry}" ] && [ ! -L "$1/${entry}" ]; then
             # Delete when both $1/entry & $2/entry are regular file
@@ -36,6 +36,13 @@ for entry in $(ls $1 -A); do
             rm "$2/${entry}"
         fi
         # Ignore other conditions
+    elif [ ! -e "$3/${entry}" ]; then
+        # Create a mask file in mask_path
+	pathname=`dirname $3/${entry}`
+	if [ ! -d ${pathname} ]; then
+		mkdir -p ${pathname}
+	fi
+	mknod $3/${entry} c 0 0 --mode=000
     fi
 done;
 # Remove empty diretory in target_path
@@ -46,9 +53,14 @@ if [ $(ls -Al "$2"|wc -l) -eq 1 ]; then
 fi
 }
 
-if [ -z "$2" ]; then
+if [ -z "$3" ]; then
     usage
     exit
 fi
 
-scandir $1 $2
+if [ ! -d "$3" ]; then
+    usage
+    exit
+fi
+
+scandir $1 $2 $3

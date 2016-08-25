@@ -646,9 +646,11 @@ function add_container {
 		sizeinfo_ori=`du -BM ${container_tmppath}/rootfs${dir} -d 0|awk '{print $1;}'`
 
 		# perform merge container ${TMPMNT}${dir} ${container_tmppath}${merged_dir}
-		fstab_entry="overlay /var/lib/lxc/${cn}/rootfs${dir} overlay lowerdir="
+		fstab_entry="overlay /var/lib/lxc/${cn}/rootfs${dir} overlay lowerdir=/var/lib/lxc/${cn}${dir}_mask"
 
-		fstab_mark=0
+		# create a mask dir
+		mkdir ${pathtocontainer}${dir}_mask
+
 		for target_entry in ${target}; do
 			if [ ${target_entry} == "essential" ]; then
 				lowerdir="${TMPMNT}${dir}"
@@ -670,16 +672,10 @@ function add_container {
 			fi
 			echo "Merge ${dir} with ${target_entry}">>${merge_summary}
 
-			if [ $fstab_mark == 0 ]; then
-				fstab_mark=1
-			else
-				fstab_dir=":${fstab_dir}"
-			fi
-
 			# perform merge container ${lowerdir} ${container_tmppath}/rootfs${dir}
-			${SBINDIR}/scanduplicate ${lowerdir} ${container_tmppath}/rootfs${dir} >> ${merge_summary}
+			${SBINDIR}/scanduplicate ${lowerdir} ${container_tmppath}/rootfs${dir} ${pathtocontainer}${dir}_mask>> ${merge_summary}
 
-			fstab_entry="${fstab_entry}${fstab_dir}"
+			fstab_entry="${fstab_entry}:${fstab_dir}"
 		done;
 		# After merge, rename the dir with dir_temp in rootfs
 		if [ -d ${container_tmppath}/rootfs${dir} ]; then
