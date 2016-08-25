@@ -35,7 +35,7 @@ debugmsg()
 	local msg_level=$1
 	shift
 
-	if [ -z $msg_level ]
+	if [ -z "$msg_level" ]
 	then
 		echo "debugmsg: No debug level specified with message." >&2
 	fi
@@ -935,6 +935,57 @@ extract_tarball()
 	return 0
 }
 
+source_conffiles()
+{
+	colon_separated_config_dirs=`echo ${CONFIG_DIRS} | sed 's/ /:/g'`
+	for config in ${CONFIG_FILES}; do
+		config_to_source="${config}"
+
+		# check to see if the config exists. If it doesn't search the config paths
+		if ! [ -e "${config}" ]; then
+			for d in ${CONFIG_DIRS}; do
+				if [ -e "${d}/${config}" ]; then
+					config_to_source="${d}/${config}"
+				fi
+			done
+
+			if [ -z "${config_to_source}" ]; then
+				echo "ERROR: Could not find configuration file (${config_to_soure})."
+				echo "Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
+				exit 1
+			fi
+		fi
+		export PATH="$PATH:${colon_separated_config_dirs}:$(dirname ${config_to_source})"
+		source `basename ${config_to_source}`
+	done
+	# config sanity check
+	if [ "${#ROOTFS_LABEL}" -gt 16 ]; then
+		echo "The length of the ROOTFS_LABEL is greater than 16, will be stripped to: ${ROOTFS_LABEL:0:16}"
+		read -p "Do you wish to continue? [y/n] " -n 1
+		echo
+		if [[ $REPLY =~ ^[Yy]$ ]]; then
+			ROOTFS_LABEL=${ROOTFS_LABEL:0:16}
+		else
+			exit 1
+		fi
+	fi
+}
+
+clean_up()
+{
+	# Cleanup
+	debugmsg ${DEBUG_INFO} "Unmounting all partitions"
+	sync
+	[ -n "${mnt1}" ] && umount ${mnt1}
+	[ -n "${mnt2}" ] && umount ${mnt2}
+
+	# parameters passed by the SIGINT handle command
+	if [ -n "$1" ]; then
+		debugmsg ${DEBUG_INFO} $1
+		exit 0
+	fi
+}
+
 installer_main()
 {
 	local device="$1"
@@ -976,9 +1027,14 @@ installer_main()
 	create_partition "${dev}" 2 ${ROOTFS_FSTYPE} ${ROOTFS_START} ${ROOTFS_END}
 	assert $?
 
+	# make first partition bootable
+	/sbin/parted /dev/${device} set 1 boot on > /dev/null 2>&1
+
 	local p1
 	local p2
 	# XXX: TODO. the partition name should be returned by create_partition
+	while ([ -z ${p1} ] || [ -z ${p2} ])
+	do
 	if [ -e /dev/${dev}1 ]; then
 	    p1="${dev}1"
 	    p2="${dev}2"
@@ -987,7 +1043,8 @@ installer_main()
 	    p1="${dev}p1"
 	    p2="${dev}p2"
 	fi
-	
+	done
+
 	## Create new filesystems
 	debugmsg ${DEBUG_INFO} "Creating new filesystems "
 	create_filesystem "${p1}" "${BOOTPART_FSTYPE}" "${BOOTPART_LABEL}"
@@ -1022,13 +1079,9 @@ installer_main()
 		custom_install_rules "${mnt1}" "${mnt2}"
 		assert $?
 	fi
-	
-	# Cleanup
-	debugmsg ${DEBUG_INFO} "Unmounting all partitions"
-	sync
-	umount ${mnt1}
-	umount ${mnt2}
-	
+
+	clean_up
+
 	# Finish Installation
 	display_finalmsg
 	
