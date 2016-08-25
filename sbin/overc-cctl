@@ -344,7 +344,15 @@ if [ ! -e \$LXC_ROOTFS_MOUNT ] ; then
 	exit 1
 fi
 
-blacklist="console|core|fd|full|hugepages|initctl|log|lp0|lp1|lp2|lp3|mqueue|null|pts|random|shm|stderr|stdin|stdout|tty|urandom|zero"
+# We don't always populate block devices into containers except dom0,dom1 and cube-desktop
+case "\$LXC_NAME" in
+dom0|dom1|cube-desktop)
+	blacklist="console|core|fd|full|hugepages|initctl|log|lp0|lp1|lp2|lp3|mqueue|null|pts|random|shm|stderr|stdin|stdout|tty|urandom|zero"
+	;;
+*)
+	blacklist="console|core|fd|full|hugepages|initctl|log|lp0|lp1|lp2|lp3|mqueue|null|pts|random|shm|stderr|stdin|stdout|tty|urandom|zero|hd.*|sd.*|vd.*|nvme.*|xvd.*|loop.*|mmcblk.*|nbd.*"
+	;;
+esac
 
 # Populate the dev directory, avoiding anything in the blacklist
 cd /dev ; cp -ua \`ls | egrep -v -e "^(\$blacklist)\\\$"\` \$LXC_ROOTFS_MOUNT/dev
@@ -423,7 +431,7 @@ function deploy_new_container {
 	    fi
 	fi
 
-	if [ $privileged -ne 1 ] && [ -e ${pathtocontainer}/rootfs/etc/systemd/system ] ; then
+	if [ $privileged -ne 1 ] && [ -e ${pathtocontainer}/rootfs/etc/systemd/system ] && [ "${cn}" != "dom0" ]; then
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd.service
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd-kernel.socket
 		ln -sf /dev/null ${pathtocontainer}/rootfs/etc/systemd/system/systemd-udevd-control.socket
