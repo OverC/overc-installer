@@ -1,0 +1,6 @@
+                         The OverC Installer
+                         -------------------
+
+A collection of scripts which are used to assemble the output of a
+meta-overc build (kernel, rootfs, containers) into an installer image
+(capable of performing an install) or live image.

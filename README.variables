@@ -1,0 +1,32 @@
+The following is a description of some of the more commonly used
+variables employed during installer or live image creation.
+
+INSTALL_GRUBCFG:      The grub configuration file used when creating an
+                      installer image (unused when creating a live image).
+
+
+INSTALL_ROOTFS:       The 'bare metal' rootfs image. Passed to the installer
+                      when performing an install or creating a live image.
+
+
+HDINSTALL_ROOTFS:     The rootfs image which will be used as the rootfs of the
+                      installer (unused when creating a live image).
+
+
+HDINSTALL_CONTAINERS: In the case of installer generation this is the
+                      list of containers to cp to the install media,
+                      This list will be copied to the installer config
+                      and thus used when the installer performs an
+                      install. In the case of generatiing a live image
+                      this list will be the containers installed in
+                      the live image. Container names can include
+                      attribute suffixes.
+
+
+NETWORK_DEVICE:       The network device to passthrough to the network
+                      prime.  The network prime is defined by the
+                      'net=1' attribute being set for a container.
+
+
+GRUB_KERNEL_PARAMS:   Kernel parameters appended to the boot line used by the
+                      installed or live images. (cubeit-installer, x86 only).

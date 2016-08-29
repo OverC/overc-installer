@@ -497,7 +497,7 @@ menuentry "$DISTRIBUTION" {
 	insmod fat
 	search --no-floppy --label OVERCBOOT --set=root 
 	echo	'Loading Linux ...'
-	linux	/bzImage root=LABEL=OVERCROOTFS ro rootwait
+	linux	/bzImage root=LABEL=OVERCROOTFS ro rootwait $GRUB_KERNEL_PARAMS
 	echo	'Loading initial ramdisk ...'
 	initrd	/initrd
 }
@@ -508,7 +508,7 @@ menuentry "$DISTRIBUTION recovery" {
         insmod fat
         search --no-floppy --label OVERCBOOT --set=root 
         echo    'Loading Linux ...'
-        linux   /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait
+        linux   /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
         echo    'Loading initial ramdisk ...'
         initrd  /initrd
 }
