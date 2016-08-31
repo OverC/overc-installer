@@ -16,12 +16,14 @@ fi
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 #  See the GNU General Public License for more details.
 
+CURRENTDIR=$(pwd)
 BASEDIR=$(readlink -f $(dirname $BASH_SOURCE))
 IMAGESDIR="${BASEDIR}/../images"
 CONTAINERSDIR="${BASEDIR}/../images/containers"
 PACKAGESDIR="${BASEDIR}/../packages"
 PUPPETDIR="${BASEDIR}/../files/puppet"
 SBINDIR="${BASEDIR}/../sbin"
+LIBDIR="${BASEDIR}/../lib"
 export SBINDIR
 if [ -z "${CONFIG_DIRS}" ] ; then
     CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
@@ -72,6 +74,7 @@ cat << EOF
   cubeit-installer <base image> <device>
 
     -b: use btrfs
+    -i or --interactive: use the interactive configuration interface
     --finaldev: boot from this block dev. Default is vda
     --ttyconsoledev: set dev used for tty console
     --ttyconsolecn: set container name for providing agetty
@@ -106,6 +109,13 @@ while [ $# -gt 0 ]; do
             ;;
     -b) btrfs=1
             ;;
+	--interactive|-i)
+		# Interactive config mode
+		INTERACTIVE_MODE=1
+		for app in blockdev dialog; do
+			verify_utility $app || { echo >&2 "ERROR: $app is not available"; exit 1; }
+		done
+		;;
     --finaldev) final_dev="$2"
             shift
             ;;
@@ -169,6 +179,53 @@ if [ -e "${LOCAL_POST_FUNCTION_DEFS}" ] ; then
 fi
 
 IFS=$OLDIFS
+
+## typical qemu disk is vdb
+rootfs=$1
+raw_dev=$2
+
+if [ -e "$rootfs" ]; then
+    rootfs=`readlink -f $rootfs`
+else
+    if [ ! -f "${IMAGESDIR}/$rootfs" ]; then
+	debugmsg ${DEBUG_CRIT} "[ERROR]: install rootfs ($rootfs) not found"
+	exit 1
+    fi
+    rootfs="${IMAGESDIR}/$rootfs"
+fi
+
+# remove /dev/ if specified
+raw_dev="`echo ${raw_dev} | sed 's|/dev/||'`"
+
+# Check if interactive mode will be used
+if [ -n "$INTERACTIVE_MODE" ] && [ "$INTERACTIVE_MODE" -eq 1 ]; then
+	if [ -z "$ARTIFACTS_DIR" ] || [ ! -d "$ARTIFACTS_DIR" ]; then
+		ARTIFACTS_DIR=$IMAGESDIR
+	fi
+	debugmsg ${DEBUG_INFO} "Entering interactive mode..."
+	SAVE_CONFIG_FOLDER="saved_config"
+	tmpconf="${SAVE_CONFIG_FOLDER}/config.sh"
+	echo "" > ${tmpconf}
+	tmppuppet=${SAVE_CONFIG_FOLDER}/puppet/init.pp
+	recursive_mkdir ${SAVE_CONFIG_FOLDER}/puppet
+	echo "" > $tmppuppet
+	promptsdir=${LIBDIR}/prompts
+	INSTALL_TYPE=full
+	for f in `ls $promptsdir`; do
+		source $promptsdir/$f
+		basename=${f%.*}
+		${basename:5}
+		if [ $? -ne 0 ]; then
+			debugmsg ${DEBUG_CRIT} -e "\n\n\nFailed to generate config using interactive mode, run again or specify a config via --config option."
+			exit 1
+		fi
+	done
+
+	debugmsg ${DEBUG_INFO} -e "\n\n\nUser config saved. Installation will continue."
+	debugmsg ${DEBUG_INFO} "You can specify --config ${SAVE_CONFIG_FOLDER}/config.sh option in your later installations to use the exact same configurations."
+	CONFIG_FILES="`pwd`/${SAVE_CONFIG_FOLDER}/config.sh"
+	source $CONFIG_FILES
+fi
 
 if [ ! -d "${IMAGESDIR}" ]; then
     if [ -n "${ARTIFACTS_DIR}" ]; then
@@ -273,23 +330,6 @@ if [ -z "${privilegedcn}" ]; then
         privilegedcn="cube-desktop"
     fi
 fi
-
-## typical qemu disk is vdb
-rootfs=$1
-raw_dev=$2
-
-if [ -e "$rootfs" ]; then
-    rootfs=`readlink -f $rootfs`
-else
-    if [ ! -f "${IMAGESDIR}/$rootfs" ]; then
-	debugmsg ${DEBUG_CRIT} "[ERROR]: install rootfs ($rootfs) not found"
-	exit 1
-    fi
-    rootfs="${IMAGESDIR}/$rootfs"
-fi
-
-# remove /dev/ if specified
-raw_dev="`echo ${raw_dev} | sed 's|/dev/||'`"
 
 # create partitions
 # 
@@ -878,6 +918,9 @@ smart update"
 
 fi
 
+if [ -d "$CURRENTDIR/$PUPPETDIR" ]; then
+	PUPPETDIR=$CURRENTDIR/$PUPPETDIR
+fi
 if [ -d ${PUPPETDIR} ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: Running puppet"
 	cd ${TMPMNT}
