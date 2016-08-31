@@ -258,6 +258,9 @@ lxc.group = ${group}
 lxc.start.auto = ${autostart}
 wr.start.auto = ${peerstart}
 EOF
+	if [ ${cn} == "dom0" ]; then
+		echo "lxc.uncontain = 1" >> ${pathtocontainer}/config
+	fi
 	if [ ${bridged_net} == 1 ]; then
 		sed -i '/^lxc.network.script.*$/d' ${pathtocontainer}/config
 		sed -i '/^lxc.network.type.*$/a lxc.network.link = br0' \
