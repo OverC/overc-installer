@@ -9,13 +9,28 @@
 #  See the GNU General Public License for more details.
 export PATH="$PATH:/bin"
 
-BASEDIR=$(dirname $BASH_SOURCE)
-
 if [ "$CUBE_DEBUG_SET_X_IF_SET" = 1 ] ; then
     set -x
 fi
 
+BASEDIR=$(dirname $BASH_SOURCE)
+# support files
+INSTALLER_FILES_DIR="${BASEDIR}/../files"
+# sbin files (typically this creator)
+SBINDIR="${BASEDIR}/../sbin"
+# installers that will go on the usb stick, and install to the HD
+INSTALLERS_DIR="${BASEDIR}/../installers"
+LIBDIR="${BASEDIR}/../lib"
+
 : ${FUNCTIONS_FILE="$BASEDIR/functions.sh"}
+
+## Load functions file
+if ! [ -e $FUNCTIONS_FILE ]
+then
+	echo "ERROR: Could not find function definitions (${FUNCTIONS_FILE})"
+	exit 1
+fi
+source $FUNCTIONS_FILE
 
 usage()
 {
@@ -33,6 +48,7 @@ cat << EOF
   options:
 
      --config <script>: use the specified configuration script found in ~/.overc/
+     -i or --interactive: use the interactive configuration interface
      --target-config <script>: use the specified configuration script found in ~/.overc/
                                when running the target installer
      --force: force overwrite any output files or images
@@ -101,6 +117,13 @@ while [ $# -gt 0 ]; do
 	    TARGET_DISK_SIZE="$2"
 	    shift
 	    ;;
+	--interactive|-i)
+		# Interactive config mode
+		INTERACTIVE_MODE=1
+		for app in blockdev dialog; do
+			verify_utility $app || { echo >&2 "ERROR: $app is not available"; exit 1; }
+		done
+		;;
     --installer)
 	    # create an installer, not a final image (this is the default)
             INSTALLER_IMAGE=t
@@ -127,12 +150,6 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-# support files
-INSTALLER_FILES_DIR="${BASEDIR}/../files"
-# sbin files (typically this creator)
-SBINDIR="${BASEDIR}/../sbin"
-# installers that will go on the usb stick, and install to the HD
-INSTALLERS_DIR="${BASEDIR}/../installers"
 # configuration for this script
 if [ -z "${CONFIG_DIRS}" ] ; then
     CONFIG_DIRS="${BASEDIR}/../config $HOME/.overc/"
@@ -145,14 +162,6 @@ if [ -n "$ARTIFACTS_DIR" ]; then
     fi
 fi
 export ARTIFACTS_DIR
-
-## Load functions file
-if ! [ -e $FUNCTIONS_FILE ]
-then
-	echo "ERROR: Could not find function definitions (${FUNCTIONS_FILE})"
-	exit 1
-fi
-source $FUNCTIONS_FILE
 
 ######################################################################
 # Define some debug output variables
@@ -196,11 +205,6 @@ if [ "$TARGET_TYPE" = "block" ]; then
 fi
 
 ## Load configuration file(s)
-if [ -z ${CONFIG_FILES} ]; then
-    echo "ERROR: no configuration was provided via --config"
-    exit 1
-fi
-
 colon_separated_config_dirs=`echo ${CONFIG_DIRS} | sed 's/ /:/g'`
 for config in ${CONFIG_FILES}; do
     config_to_source="${config}"
@@ -235,6 +239,41 @@ if [ "${#ROOTFS_LABEL}" -gt 16 ]; then
 	fi
 fi
 
+# Check if interactive mode will be used
+if [ -z ${CONFIG_FILES} ] || ([ -n "$INTERACTIVE_MODE" ] && [ "$INTERACTIVE_MODE" -eq 1 ]); then
+	if [ -z "$ARTIFACTS_DIR" ]; then
+		debugmsg ${DEBUG_CRIT} -e "Artifacts dir not found, please use --artifacts to specify."
+		exit 1
+	fi
+	debugmsg ${DEBUG_INFO} "Entering interactive mode..."
+	SAVE_CONFIG_FOLDER="saved_config"
+	tmpconf="${SAVE_CONFIG_FOLDER}/config.sh"
+	echo "" > ${tmpconf}
+	tmppuppet=${SAVE_CONFIG_FOLDER}/puppet/init.pp
+	recursive_mkdir ${SAVE_CONFIG_FOLDER}/puppet
+	echo "" > $tmppuppet
+	promptsdir=${LIBDIR}/prompts
+	for f in `ls $promptsdir`; do
+		source $promptsdir/$f
+		basename=${f%.*}
+		${basename:5}
+		if [ $? -ne 0 ]; then
+			debugmsg ${DEBUG_CRIT} -e "\n\n\nFailed to generate config using interactive mode, run again or specify a config via --config option."
+			exit 1
+		fi
+	done
+
+	# enable puppet
+	echo "PUPPETDIR=\"${SAVE_CONFIG_FOLDER}/puppet\"" >> ${tmpconf}
+	echo "INSTALL_PUPPET_DIR=\"${SAVE_CONFIG_FOLDER}/puppet\"" >> ${tmpconf}
+
+	debugmsg ${DEBUG_INFO} -e "\n\n\nUser config saved. Installation will continue."
+	debugmsg ${DEBUG_INFO} "You can specify --config ${SAVE_CONFIG_FOLDER}/config.sh option in your later installations to use the exact same configurations."
+	CONFIG_FILES="`pwd`/${SAVE_CONFIG_FOLDER}/config.sh"
+	TARGET_CONFIG_FILE=$CONFIG_FILES
+	source $CONFIG_FILES
+fi
+
 if ! [ -n "$DISTRIBUTION" ]; then
     DISTRIBUTION="OverC"
 fi
@@ -256,6 +295,7 @@ if [ -z "${INSTALLER_TARGET_DIR}" ]; then
     INSTALLER_TARGET_DIR="/opt/installer"
 fi
 INSTALLER_TARGET_SBIN_DIR="${INSTALLER_TARGET_DIR}/sbin"
+INSTALLER_TARGET_LIB_DIR="${INSTALLER_TARGET_DIR}/lib"
 INSTALLER_TARGET_CONFIG_DIR="${INSTALLER_TARGET_DIR}/config"
 INSTALLER_TARGET_FILES_DIR="${INSTALLER_TARGET_DIR}/files"
 INSTALLER_TARGET_IMAGES_DIR="${INSTALLER_TARGET_DIR}/images"
@@ -389,6 +429,15 @@ custom_install_rules()
 	    assert_return $?
 	else
 	    debugmsg ${DEBUG_INFO} "No kernel modules specified, not extracting"
+	fi
+
+	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_LIB_DIR}
+	assert_return $?
+
+	cp -r ${LIBDIR}/* ${mnt_rootfs}${INSTALLER_TARGET_LIB_DIR}
+	if [ $? -ne 0 ]; then
+		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy lib files"
+		return 1
 	fi
 
 	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
@@ -527,9 +576,12 @@ IFS=$OLDIFS
 	# puppet modules etc.
 	if [ -v INSTALL_PUPPET_DIR ]; then
 	    if [ -d ${INSTALLER_FILES_DIR}/${INSTALL_PUPPET_DIR} ]; then
-		debugmsg ${DEBUG_INFO} "Copying Puppet files to install media"
-		recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/puppet
-		cp -r ${INSTALLER_FILES_DIR}/${INSTALL_PUPPET_DIR}/* ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/puppet/
+			INSTALL_PUPPET_DIR=${INSTALLER_FILES_DIR}/${INSTALL_PUPPET_DIR}
+		fi
+		if [ -d ${INSTALL_PUPPET_DIR} ]; then
+			debugmsg ${DEBUG_INFO} "Copying Puppet files to install media"
+			recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/puppet
+			cp -r ${INSTALL_PUPPET_DIR}/* ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/puppet/
 	    else
 		debugmsg ${DEBUG_INFO} "INSTALL_PUPPET_DIR set but directory doesn't exist."
 	    fi
