@@ -256,7 +256,7 @@ lxc.network.script.up = /etc/lxc/ovs-up
 lxc.network.script.down = /etc/lxc/ovs-down
 lxc.group = ${group}
 lxc.start.auto = ${autostart}
-wr.start.auto = ${peerstart}
+overc.start.auto = ${peerstart}
 EOF
 	if [ ${cn} == "dom0" ]; then
 		echo "lxc.uncontain = 1" >> ${pathtocontainer}/config
