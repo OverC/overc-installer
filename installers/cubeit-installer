@@ -872,8 +872,6 @@ smart update"
 fi
 
 if [ -d ${PUPPETDIR} ]; then
-    verify_utility puppet
-    if [ $? -eq 0 ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: Running puppet"
 	cd ${TMPMNT}
 	cp -r ${PUPPETDIR} tmp/.
@@ -885,7 +883,6 @@ else \\
     echo \"Puppet not found on rootfs. Not applying puppet configuration.\" ; \\
 fi ; \\
 "
-    fi
 fi
 
 debugmsg ${DEBUG_INFO} "[INFO]: performing cleanup"
