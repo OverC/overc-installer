@@ -399,11 +399,17 @@ tar --numeric-owner -xpf $rootfs
 
 mount /dev/${fs_dev}1 mnt
 
-imgs=`ls boot/*Image-* 2>/dev/null`
-if [ -n "$imgs" ] ; then
-    cp boot/*Image-* mnt/
-fi
-if [ -e boot/uImage-* ]; then
+## Process kernel into /boot
+if [ -e "${INSTALL_KERNEL}" ] ; then
+	inst_img=${INSTALL_KERNEL##*}
+	if [ "${inst_img/uImage/}" != "$inst_img" ] ; then
+		inst_kernel=uImage
+	else
+		inst_kernel=bzImage
+	fi
+	cp ${INSTALL_KERNEL} mnt/${inst_kernel}
+	cp ${INSTALL_KERNEL} mnt/${inst_kernel}_bakup
+elif [ -e boot/uImage-* ]; then
 	cp boot/uImage-* mnt/uImage
 	#create a backup kernel for recovery boot
 	cp boot/uImage-* mnt/uImage_bakup
@@ -417,31 +423,32 @@ sync
 umount ./mnt
 mount /dev/${fs_dev}1 ./boot
 
+## Process initrd into /boot
 img=`ls boot/*Image-* 2> /dev/null`
-if [ -n "$img" ] ; then
+# First use the config file specified one, if not set,
+# then find it in ${IMAGESDIR}
+# create both a initrd-<version> and initrd
+if [ -e "$INSTALL_INITRAMFS" ]; then
+	cp $INSTALL_INITRAMFS boot/initrd
+elif [ -n "$img" ] ; then
 	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs ($INSTALL_INITRAMFS)"
 	kernel=`basename boot/*Image-*`
 	kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
 	initrd="initrd-${kernel_version}.gz"
 
-	# First use the config file specified one, if not set,
-	# then find it in ${IMAGESDIR}
-	# create both a initrd-<version> and initrd
-	if [ -e "$INSTALL_INITRAMFS" ]; then
-		mkdir -p boot
-		cp $INSTALL_INITRAMFS boot/${initrd}
-		cp $INSTALL_INITRAMFS boot/initrd
-	else
-		#Generally in deploy/image dir, there will be several initramfs files
-		#with different name, but they are the same file, so here just copy one
-		#of them is ok.
-		for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
-			mkdir -p boot
-			cp /$i boot/${initrd}
-			cp /$i boot/initrd
-			break
-		done
-	fi
+	#Generally in deploy/image dir, there will be several initramfs files
+	#with different name, but they are the same file, so here just copy one
+	#of them is ok.
+	for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
+		cp /$i boot/initrd
+		break
+	done
+fi
+
+## Deploy kernel modules to overwrite what was there if INSTALL_MODULES is set
+if [ -n "${INSTALL_MODULES}" ]; then
+	debugmsg ${DEBUG_INFO} "[INFO]: installing kernel modules (${INSTALL_MODULES##*/})"
+	tar --numeric-owner -xpf ${INSTALL_MODULES}
 fi
 
 if [ $btrfs -eq 1 ]; then
