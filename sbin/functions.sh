@@ -964,6 +964,469 @@ clean_up()
 	sync
 	[ -n "${mnt1}" ] && umount ${mnt1}
 	[ -n "${mnt2}" ] && umount ${mnt2}
+	rm $tmpfile
+}
+
+#TODO: value sanity check
+interactive_partition()
+{
+	# define if this is an installer image
+	# If this is an installer image, we provide only two partitions for user to choose.
+	# If this is an live/harddrive image, we provide four partitions for user to configure.
+	local install_type="$1"
+
+	local size="$2"
+	local localconf_dir="$3"
+	local lastsize=0
+	local localconf="${localconf_dir}/config.sh"
+	local localpartitionlayout="${localconf_dir}/fdisk-4-partition-user-layout.txt"
+	if [ -z "$tmpfile" ]; then
+		tmpfile=$(mktemp)
+	fi
+
+	local prompt="Destinition device will be partitioned using the following schema: \n"
+	if [ "$install_type" == "installer" ]; then
+		lastsize=`numfmt --to=iec --round=down $(expr $size - 268435456)`
+		prompt="$prompt 1) boot (256M) \n 2) root ($lastsize)"
+	else
+		lastsize=`numfmt --to=iec --round=down $(expr $size - 3221225472)`
+		prompt="$prompt 1) boot (256M) \n 2) swap (768M) \n 3) root (2G) \n 4) containers ($lastsize)"
+	fi
+	dialog --yesno "$prompt" 10 80
+	local dialog_res=$?
+	if [ $dialog_res -eq 0 ]; then
+		# User answered yes. Just use default
+		if [ "$install_type" == "installer" ]; then
+			bootpartsize="256M"
+			rootfspartsize="-1"
+		else
+			bootpartsize="256M"
+			swappartsize="768M"
+			rootfspartsize="2048M"
+			containerpartsize=`numfmt --to=iec --round=down $(expr $size - 3221225472)`
+		fi
+	else
+		# User answered no. Prompt for sizes.
+		# TODO: let user do manual partition layout
+		if [ "$install_type" == "installer" ]; then
+			dialog --no-cancel --inputbox "Boot partition size:" 8 40 "256M" 2>$tmpfile
+			bootpartsize=`numfmt --from=auto $(cat $tmpfile)`
+			lastsize=`numfmt --to=iec $(expr $size - ${bootpartsize})`
+			dialog --no-cancel --inputbox "Rootfs partition size:" 8 40 "${lastsize}" 2>$tmpfile
+			rootfspartsize=$(cat $tmpfile)
+		else
+			dialog --no-cancel --inputbox "Boot partition size:" 8 40 "256M" 2>$tmpfile
+			bootpartsize=`numfmt --from=auto $(cat $tmpfile)`
+			dialog --no-cancel --inputbox "Swap partition size:" 8 40 "768M" 2>$tmpfile
+			swappartsize=`numfmt --from=auto $(cat $tmpfile)`
+			dialog --no-cancel --inputbox "Rootfs partition size:" 8 40 "2G" 2>$tmpfile
+			rootfspartsize=`numfmt --from=auto $(cat $tmpfile)`
+			dialog --no-cancel --inputbox "Containers partition size:" 8 40 \
+				"`numfmt --to=iec --round=down $(expr $size - ${bootpartsize} - ${swappartsize} - ${rootfspartsize})`" 2>$tmpfile
+			containerpartsize=`numfmt --from=auto $(cat $tmpfile)`
+		fi
+	fi
+	if [ "$install_type" == "installer" ]; then
+		echo "BOOTPART_START=\"0\"" >> ${localconf}
+		echo "BOOTPART_END=\"${bootpartsize}\"" >> ${localconf}
+		echo "BOOTPART_FSTYPE=\"fat32\"" >> ${localconf}
+		echo "BOOTPART_LABEL=\"OVERCBOOT\"" >> ${localconf}
+		echo "ROOTFS_START=\"${bootpartsize}\"" >> ${localconf}
+		if [ ${rootfspartsize} == "-1" ]; then
+			echo "ROOTFS_END=\"${rootfspartsize}\"" >> ${localconf}
+		else
+			echo "ROOTFS_END=\"$(expr `numfmt --from=auto $bootpartsize` + `numfmt --from=auto $rootfspartsize`)\"" >> ${localconf}
+		fi
+		echo "ROOTFS_FSTYPE=\"ext2\"" >> ${localconf}
+		echo "ROOTFS_LABEL=\"OVERCINSTROOTFS\"" >> ${localconf}
+	else
+		cat <<EOF > ${localpartitionlayout}
+d
+1
+d
+2
+d
+3
+d
+4
+
+
+n
+p
+1
+
++`numfmt --to=iec --from=iec ${bootpartsize}`
+n
+p
+2
+
++`numfmt --to=iec --from=iec ${swappartsize}`
+n
+p
+3
+
++`numfmt --to=iec --from=iec ${rootfspartsize}`
+n
+p
+
++`numfmt --to=iec --from=iec ${containerpartsize}`
+a
+1
+t
+1
+b
+t
+2
+82
+t
+3
+83
+w
+p
+q
+
+
+EOF
+		echo "FDISK_PARTITION_LAYOUT=\"${localpartitionlayout}\"" >> ${localconf}
+	fi
+}
+
+interactive_config()
+{
+	local device="$1"
+	local localconf_dir="$2"
+
+	if [ -z ${device} ]
+	then
+		debugmsg ${DEBUG_CRIT} "ERROR in interactive_config: device parameter not provided"
+		return 1
+	fi
+
+	if [ -z ${localconf_dir} ]
+	then
+		debugmsg ${DEBUG_CRIT} "ERROR in interactive_config: tmp config directory parameter not provided"
+		return 1
+	fi
+
+	local localconf="${localconf_dir}/config.sh"
+	tmpfile=$(mktemp)
+
+	echo "" > ${localconf}
+
+	# Distribution
+	dialog --no-cancel --inputbox "Distribution name:" 8 40 "OverC" 2>$tmpfile
+	local dialog_res=$(cat $tmpfile)
+	if [ -n "${dialog_res}" ]; then
+		echo "DISTRIBUTION=\"${dialog_res}\"" >> ${localconf}
+	else
+		echo "DISTRIBUTION=\"OverC\"" >> ${localconf}
+	fi
+
+	# Container selection
+	local filecount=0
+	local filelist="" menuitems=""
+	if [ -z "$ARTIFACTS_DIR" ]; then
+		if [ -e "tmp/deploy/images" ]; then
+			filecount=`ls tmp/deploy/images/ -1 | wc -l`
+			case "$filecount" in
+				0)
+					debugmsg ${DEBUG_CRIT}  "Project build incomplete. Please try finish the build first."
+					return 1
+					;;
+				1)
+					ARTIFACTS_DIR="`pwd`/tmp/deploy/images/`ls tmp/deploy/images/`"
+					;;
+				*)
+					filelist=`ls tmp/deploy/images` menuitems=""
+					for i in $filelist; do
+						menuitems="$menuitems $i $i "
+					done
+					dialog --no-cancel --menu "Found multiple machine target in your project, Please choose one:" \
+						$(expr $filecount + 7) 30 $filecount $menuitems 2>$tmpfile
+					ARTIFACTS_DIR="`pwd`/tmp/deploy/images/$(cat $tmpfile)"
+					;;
+			esac
+		elif [ -e "images" ]; then
+			ARTIFACTS_DIR="`pwd`/images"
+		else
+			# default to current dir
+			ARTIFACTS_DIR="`pwd`"
+		fi
+	fi
+	echo "ARTIFACTS_DIR=\"${ARTIFACTS_DIR}\"" >> ${localconf}
+	filecount=`ls $ARTIFACTS_DIR -1 | grep -v menifest | wc -l`
+	if [ $filecount -lt 3 ]; then
+		debugmsg ${DEBUG_CRIT} "Artifacts are not sufficient. Please verify."
+		return 1
+	fi
+
+	# exclude manifest files
+	filelist=`ls $ARTIFACTS_DIR | grep -v manifest` menuitems=""
+	local checklistmenu=""
+	for i in $filelist; do
+		menuitems="$menuitems $i $i "
+		checklistmenu="$checklistmenu $i $i off "
+	done
+
+	# Kernel selection
+	dialog --no-tags --menu "Please choose kernel:" \
+		$(expr $filecount + 7) 100 $filecount $menuitems 2>$tmpfile
+	dialog_res=$(cat $tmpfile)
+	if [ -z "${dialog_res}" ]; then
+		debugmsg ${DEBUG_CRIT} "Kernel not specified. Please try again."
+		return 1
+	fi
+	echo "INSTALL_KERNEL=\"\${ARTIFACTS_DIR}/${dialog_res}\"" >> ${localconf}
+
+	# Rootfs selection
+	dialog --no-tags --menu "Please choose rootfs:" \
+		$(expr $filecount + 7) 100 $filecount $menuitems 2>$tmpfile
+	dialog_res=$(cat $tmpfile)
+	if [ -z "${dialog_res}" ]; then
+		debugmsg ${DEBUG_CRIT} "Rootfs not specified. Please try again."
+		return 1
+	fi
+	echo "INSTALL_ROOTFS=\"\${ARTIFACTS_DIR}/${dialog_res}\"" >> ${localconf}
+	echo "HDINSTALL_ROOTFS=\"\${ARTIFACTS_DIR}/${dialog_res}\"" >> ${localconf}
+
+	# Initramfs selection
+	dialog --no-tags --menu "Please choose initramfs:" \
+		$(expr $filecount + 7) 100 $filecount $menuitems 2>$tmpfile
+	dialog_res=$(cat $tmpfile)
+	if [ -z "${dialog_res}" ]; then
+		debugmsg ${DEBUG_CRIT} "Initramfs not specified. Please try again."
+		return 1
+	fi
+	echo "INSTALL_INITRAMFS=\"\${ARTIFACTS_DIR}/${dialog_res}\"" >> ${localconf}
+
+	# containers selection
+	if [ -d "$ARTIFACTS_DIR/containers" ]; then
+		filelist=`ls $ARTIFACTS_DIR/containers` checklistmenu="" filecount=0
+		for i in $filelist; do
+			let filecount++
+			checklistmenu="$checklistmenu $i $i off "
+		done
+	fi
+	dialog --no-tags --checklist "Please choose install containers:" \
+		$(expr $filecount + 7) 100 $filecount $checklistmenu 2>$tmpfile
+	dialog_res=$(cat $tmpfile)
+	if [ -z "${dialog_res}" ]; then
+		debugmsg ${DEBUG_CRIT} "Containers not specified. Please try again."
+		return 1
+	fi
+
+	local hdcontainers=${dialog_res} fmtcontainers=""
+
+	# VT and network prime selection
+	menuitems=""
+	filecount=0
+	for i in ${hdcontainers}; do
+		if [ -d "$ARTIFACTS_DIR/containers" ]; then
+			fmtcontainers="$fmtcontainers containers/$i"
+		else
+			fmtcontainers="$fmtcontainers $i"
+		fi
+		menuitems="$menuitems $i $i "
+		dialog --yesno "Do you want to allocate a virtual console for $i?" 10 100
+		if [ $? -eq 0 ]; then
+			fmtcontainers="$fmtcontainers:console"
+			dialog --inputbox "Which virtual terminal to be allocated to $i:" 8 100 2>$tmpfile
+			dialog_res=$(cat $tmpfile)
+
+			# TODO: sanity check
+			if [ -n "${dialog_res}" ]; then
+				fmtcontainers="$fmtcontainers:vty=${dialog_res}"
+			fi
+		fi
+		let filecount++
+	done
+	dialog --no-tags --menu "Please choose the network prime container:" \
+		$(expr $filecount + 7) 100 $filecount $menuitems 2>$tmpfile
+	local network_prime_container=$(cat $tmpfile)
+	if [ -z "${network_prime_container}" ]; then
+		debugmsg ${DEBUG_INFO} "Network prime containers not specified."
+	else
+		# Define network device
+		dialog --inputbox "Please provide the network device to be used in the network prime container:" 8 100 "all" 2>$tmpfile
+		dialog_res=$(cat $tmpfile)
+		if [ -n "$dialog_res" ]; then
+			echo "NETWORK_DEVICE=\"${dialog_res}\"" >> ${localconf}
+		fi
+	fi
+
+	# Format HDINSTALL_CONTAINERS configuration
+	echo "HDINSTALL_CONTAINERS=\" \\" >> ${localconf}
+	for i in ${fmtcontainers}; do
+		echo -n " \${ARTIFACTS_DIR}/${i}" >> ${localconf}
+		if [[ $i == *${network_prime_container}* ]]; then
+			echo -n ":net=1" >> ${localconf}
+		fi
+		echo " \\" >> ${localconf}
+	done
+	echo " \"" >> ${localconf}
+
+	# Partitioning
+	local devsize=""
+	if [ -e "/sys/block/$(basename "$target")" ]; then
+		TARGET_TYPE=block
+	elif [ -d $target ]; then
+		TARGET_TYPE=dir
+	else
+		TARGET_TYPE=image
+	fi
+	if [ -z "$INSTALL_TYPE" ]; then
+		if [ "$TARGET_TYPE" == block ]; then
+			INSTALL_TYPE=installer
+		else
+			INSTALL_TYPE=full
+		fi
+	fi
+	case $TARGET_TYPE in
+		block)
+			devsize=`blockdev --getsize64 /dev/$(basename "$device")`
+			interactive_partition $INSTALL_TYPE $devsize $localconf_dir
+			;;
+		image)
+			# prompt for target size if not defined
+			if [ -z "$TARGET_DISK_SIZE" ]; then
+				dialog --inputbox "Please input the size of the image file:" 8 100 "7G" 2>$tmpfile
+				devsize=$(cat $tmpfile)
+				if [ -z "$devsize" ]; then
+					debugmsg ${DEBUG_INFO} "Image size not provided. Will use 7G as default."
+					echo "TARGET_DISK_SIZE=\"7G\"" >> ${localconf}
+					devsize=7516192768
+				else
+					echo "TARGET_DISK_SIZE=\"$devsize\"" >> ${localconf}
+					devsize=`numfmt --from=auto $devsize`
+				fi
+			else
+					devsize=`numfmt --from=auto $TARGET_DISK_SIZE`
+			fi
+			interactive_partition $INSTALL_TYPE $devsize $localconf_dir
+			;;
+	esac
+
+	# puppet
+	recursive_mkdir ${localconf_dir}/puppet
+	echo "" > ${localconf_dir}/puppet/init.pp
+
+	# Add new user
+	dialog --no-cancel --inputbox "Create new user:" 8 40 2>$tmpfile
+	local username=$(cat $tmpfile)
+	if [ -n "$username" ]; then
+		local passwd1="" passwd2="" passwdprompt="Please input password:"
+		while [ -z "$passwd1" ] || [ -z "$passwd2" ] || [ "$passwd1" != "$passwd2" ]; do
+			dialog --no-cancel --inputbox "$passwdprompt" 8 40 2>$tmpfile
+			passwd1=$(cat $tmpfile)
+			dialog --no-cancel --inputbox "Please confirm password:" 8 40 2>$tmpfile
+			passwd2=$(cat $tmpfile)
+			passwdprompt="Password mismatch! Please re-input password:"
+		done
+		local cryptpasswd=$(python -c "import crypt; print crypt.crypt(\"$passwd1\", \"\$6\$\")")
+		cat <<EOF >> ${localconf_dir}/puppet/init.pp
+group { "$username":
+    name => "$username",
+    ensure => present,
+}
+
+user { "$username":
+    ensure => present,
+    gid => "$username",
+    groups => ["users"],
+    membership => minimum,
+    shell => "/bin/bash",
+    require => [Group["$username"]],
+    password => '$cryptpasswd',
+}
+
+EOF
+	fi
+
+	# Timezone settings
+	local tzinfo="/usr/share/zoneinfo"
+	while [ ! -f "$tzinfo" ]; do
+		if [ "$tzinfo" != "/usr/share/zoneinfo" ]; then
+			menuitems=".. .."
+		else
+			menuitems=""
+		fi
+		filecount=0
+		for i in `ls -1 ${tzinfo}`; do
+			menuitems="$menuitems $i $i"
+			let filecount++
+		done
+		dialog --no-tags --menu "Select your time zone:" \
+			$(expr $filecount + 7) 100 $filecount $menuitems 2>$tmpfile
+		dialog_res=$(cat $tmpfile)
+		if [ "$dialog_res" == ".." ]; then
+			tzinfo=`dirname $tzinfo`
+		elif [ -n "$dialog_res" ]; then
+			tzinfo="$tzinfo/$dialog_res"
+		fi
+	done
+	tzinfo=${tzinfo:20}
+	cat <<EOF >> ${localconf_dir}/puppet/init.pp
+exec { 'set_localtime':
+	command => "/bin/ln -sf /usr/share/zoneinfo/${tzinfo} /etc/localtime",
+}
+file { 'timezone':
+	path => "/etc/timezone",
+	content => "${tzinfo}",
+}
+
+EOF
+
+	# enable puppet
+	echo "PUPPETDIR=\"${localconf_dir}/puppet\"" >> ${localconf}
+	echo "INSTALL_PUPPET_DIR=\"${localconf_dir}/puppet\"" >> ${localconf}
+
+	# Basic configures
+	cat <<EOF >> ${localconf}
+EVAL_NAME="OverC Evaluation"
+
+HARDDRIVE_BANNER="Wind River Hard Drive Installer
+--------------------------------------------------------------------------------
+\$EVAL_NAME
+--------------------------------------------------------------------------------"
+
+HARDDRIVE_INTRODUCTION="
+This installer will erase all data on your hard drive and configure it to boot
+a working Nucleo-T
+"
+
+USBSTORAGE_BANNER="USB Creator for the Hard Drive Installer
+--------------------------------------------------------------------------------
+\$EVAL_NAME
+--------------------------------------------------------------------------------"
+
+USBSTORAGE_INTRODUCTION="
+This script will erase all data on your USB flash drive and configure it to boot
+the Wind River Hard Drive Installer.  This installer will then allow you to
+install a working system configuration on to your internal hard drive.
+"
+
+INSTALLER_COMPLETE="Installation is now complete"
+
+CMD_GRUB_INSTALL=\`which grub-install\`
+
+INSTALL_GRUBHDCFG="grub-hd.cfg"
+INSTALL_GRUBUSBCFG="grub-usb.cfg"
+INSTALL_GRUBCFG="\${INSTALLER_FILES_DIR}/\${INSTALL_GRUBUSBCFG}"
+INSTALL_FILES="\${INSTALL_KERNEL} \${INSTALL_ROOTFS} \${INSTALL_MODULES} \${INSTALL_GRUBCFG}"
+PREREQ_FILES="\${INSTALL_FILES} \${HDINSTALL_ROOTFS} \`strip_properties \${HDINSTALL_CONTAINERS}\`"
+
+BOOTPART_START="63s"
+BOOTPART_END="250M"
+BOOTPART_FSTYPE="fat32"
+BOOTPART_LABEL="OVERCBOOT"
+
+ROOTFS_START="250M"
+ROOTFS_END="-1"	# Specify -1 to use the rest of drive
+ROOTFS_FSTYPE="ext2"
+ROOTFS_LABEL="OVERCINSTROOTFS"
+
+EOF
+
 }
 
 installer_main()
