@@ -372,26 +372,19 @@ mount /dev/${fs_dev}3 ${TMPMNT}
 
 if [ $btrfs -eq 0 ]; then
 	mkdir ${TMPMNT}/boot
-	mount /dev/${fs_dev}1 ${TMPMNT}/boot
+
+	cd ${TMPMNT}
 else
 	# create a subvolume
 	btrfs subvolume create ${TMPMNT}/rootfs
 
 	mkdir ${TMPMNT}/rootfs/boot
-	mount /dev/${fs_dev}1 ${TMPMNT}/rootfs/boot
-fi
 
-## unpack the installation
-if [ $btrfs -eq 0 ]; then
-	cd ${TMPMNT}
-else
 	cd ${TMPMNT}/rootfs
 fi
 
 ## vfat filesystem doesn't support soft link, here umount boot partition and
 ## then copy kernel image to boot partition
-sync
-umount boot 
 
 # we are either in ${TMPMNT} or ${TMPMNT}/rootfs
 debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
@@ -419,17 +412,13 @@ elif [ -e boot/bzImage-* ]; then
 	cp boot/bzImage-* mnt/bzImage_bakup
 fi
  
-sync
-umount ./mnt
-mount /dev/${fs_dev}1 ./boot
-
 ## Process initrd into /boot
 img=`ls boot/*Image-* 2> /dev/null`
 # First use the config file specified one, if not set,
 # then find it in ${IMAGESDIR}
 # create both a initrd-<version> and initrd
 if [ -e "$INSTALL_INITRAMFS" ]; then
-	cp $INSTALL_INITRAMFS boot/initrd
+	cp $INSTALL_INITRAMFS mnt/initrd
 elif [ -n "$img" ] ; then
 	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs ($INSTALL_INITRAMFS)"
 	kernel=`basename boot/*Image-*`
@@ -440,7 +429,7 @@ elif [ -n "$img" ] ; then
 	#with different name, but they are the same file, so here just copy one
 	#of them is ok.
 	for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
-		cp /$i boot/initrd
+		cp /$i mnt/initrd
 		break
 	done
 fi
@@ -459,10 +448,10 @@ if [ $btrfs -eq 1 ]; then
 
 	cd /
 	sync
-	umount ${TMPMNT}/rootfs/boot
+	umount ${TMPMNT}/rootfs/mnt
 	umount ${TMPMNT}/
 	mount -o subvolid=${subvol} /dev/${fs_dev}3 ${TMPMNT}
-	mount /dev/${fs_dev}1 ${TMPMNT}/boot
+	mount /dev/${fs_dev}1 ${TMPMNT}/mnt
 	cd ${TMPMNT}/
 fi
 
@@ -523,6 +512,7 @@ menuentry "$DISTRIBUTION recovery" {
 EOF
 
     debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
+    
     # fixups for virtual installs
     if [ "${raw_dev}" = "vdb" ]; then
 	sed -i "s/${raw_dev}/${final_dev}/" ${TMPMNT}/boot/grub/grub.cfg
@@ -530,20 +520,20 @@ EOF
 
     if [ -e /${IMAGESDIR}/boot*.efi ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI"
-	mkdir -p boot/EFI/BOOT
-	cp /${IMAGESDIR}/boot*.efi boot/EFI/BOOT
+	mkdir -p mnt/EFI/BOOT
+	cp /${IMAGESDIR}/boot*.efi mnt/EFI/BOOT
 	# remove those sections that are supported by uefi grub,
 	# such as if/else statement and functions and only keep
 	# grub menuentry section.
-	cat ${TMPMNT}/boot/grub/grub.cfg | sed '/insmod\|terminal\|echo/d' >boot/EFI/BOOT/grub.cfg
-	    
-	echo `basename boot/EFI/BOOT/boot*.efi` >boot/startup.nsh
-	chmod +x boot/startup.nsh
+	cat ${TMPMNT}/boot/grub/grub.cfg | sed '/insmod\|terminal\|echo/d' >mnt/EFI/BOOT/grub.cfg
+
+	echo `basename mnt/EFI/BOOT/boot*.efi` >mnt/startup.nsh
+	chmod +x mnt/startup.nsh
     else
-	install -m 0755 ${SBINDIR}/startup.nsh boot/
-	sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" boot/startup.nsh
-	sed -i "s/%INITRD%/${initrd}/" boot/startup.nsh
-	sed -i "s/%BZIMAGE%/bzImage/" boot/startup.nsh
+	install -m 0755 ${SBINDIR}/startup.nsh mnt/
+	sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" mnt/startup.nsh
+	sed -i "s/%INITRD%/${initrd}/" mnt/startup.nsh
+	sed -i "s/%BZIMAGE%/bzImage/" mnt/startup.nsh
     fi
 else # arm architecture
     if [ -e "${INSTALL_DTB}" ]; then
@@ -896,7 +886,7 @@ debugmsg ${DEBUG_INFO} "[INFO]: performing cleanup"
 # cleanup
 cd /
 sync
-umount ${TMPMNT}/boot
+umount ${TMPMNT}/mnt
 
 cat /proc/mounts | grep -q "${TMPMNT}/dev"
 if [ $? -eq 0 ]; then
