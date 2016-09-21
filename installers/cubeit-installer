@@ -518,14 +518,33 @@ EOF
 	sed -i "s/${raw_dev}/${final_dev}/" ${TMPMNT}/boot/grub/grub.cfg
     fi
 
-    if [ -e /${IMAGESDIR}/boot*.efi ]; then
-	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI"
+    if [ -f boot/efi/EFI/BOOT/boot*.efi ]; then
+	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
 	mkdir -p mnt/EFI/BOOT
-	cp /${IMAGESDIR}/boot*.efi mnt/EFI/BOOT
-	# remove those sections that are supported by uefi grub,
-	# such as if/else statement and functions and only keep
-	# grub menuentry section.
-	cat ${TMPMNT}/boot/grub/grub.cfg | sed '/insmod\|terminal\|echo/d' >mnt/EFI/BOOT/grub.cfg
+	cp -a boot/efi/EFI mnt
+
+	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
+	    cp "${INSTALL_GRUBEFI_CFG}" mnt/EFI/BOOT/grub.cfg
+	else
+	    cat <<EOF >mnt/EFI/BOOT/grub.cfg
+set default="0"
+set timeout=5
+set color_normal='light-gray/black'
+set color_highlight='light-green/blue'
+
+menuentry "$DISTRIBUTION" {
+       chainloader /bzImage root=LABEL=OVERCROOTFS ro rootwait initrd=/initrd
+}
+
+menuentry "$DISTRIBUTION recovery" {
+       chainloader /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/initrd
+}
+
+menuentry 'Automatic Key Provision' {
+       chainloader /EFI/BOOT/LockDown.efi
+}
+EOF
+	fi
 
 	echo `basename mnt/EFI/BOOT/boot*.efi` >mnt/startup.nsh
 	chmod +x mnt/startup.nsh
