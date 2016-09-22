@@ -557,19 +557,19 @@ EOF
     fi
 else # arm architecture
     if [ -e "${INSTALL_DTB}" ]; then
-        install_dtb "./boot" "${INSTALL_DTB}"
+        install_dtb "./mnt" "${INSTALL_DTB}"
     elif [ -e "${IMAGESDIR}/dtb" ]; then
-        install_dtb "./boot" "${IMAGESDIR}/dtb"
+        install_dtb "./mnt" "${IMAGESDIR}/dtb"
     fi
     if [ -e "${INSTALL_BOOTLOADER}" ]; then
         if [ -e "${INSTALL_BOOTLOADER_ENV}" ]; then
-	    install_bootloader "${raw_dev}" "./boot" ${INSTALL_BOOTLOADER} "${BOARD_NAME}" ${INSTALL_BOOTLOADER_ENV}
+	    install_bootloader "${raw_dev}" "./mnt" ${INSTALL_BOOTLOADER} "${BOARD_NAME}" ${INSTALL_BOOTLOADER_ENV}
         else
-	    install_bootloader "${raw_dev}" "./boot" ${INSTALL_BOOTLOADER} "${BOARD_NAME}"
+	    install_bootloader "${raw_dev}" "./mnt" ${INSTALL_BOOTLOADER} "${BOARD_NAME}"
 	fi
     elif [ -e ${IMAGESDIR}/*_boot.bin ]; then
 	BOARD_NAME=`basename ${IMAGESDIR}/*_boot.bin | sed 's/_boot\.bin//'`
-	install_bootloader "${raw_dev}" "./boot" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
+	install_bootloader "${raw_dev}" "./mnt" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
     fi
 fi
 
