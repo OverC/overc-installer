@@ -802,25 +802,16 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: Using bridged networking."
     else
 	if [ ! -v NETWORK_DEVICE ]; then
-	    NETWORK_DEVICE="enp0s3"
+	    NETWORK_DEVICE=""
 	fi
 	if [ ! -v NETWORK_DEVICE_CLASSES ]; then
-	    NETWORK_DEVICE_CLASSES="eth* wl* en*"
+	    NETWORK_DEVICE_CLASSES=""
 	fi
 	pathtocontainer=${TMPMNT}/var/lib/lxc/${network_prime}
 	if [ -e "${pathtocontainer}/config" ]; then
 	    # Pass the network device through to the designated network prime container
-	    grep -q "lxc.network.name = $NETWORK_DEVICE" ${pathtocontainer}/config
-	    if [ $? -eq 0 ]; then
-		sed -i "s/\(lxc\.network\.name = $NETWORK_DEVICE\)/#\1/" \
-		    ${pathtocontainer}/config
-	    fi
-	    if [ "$NETWORK_DEVICE" = "all" ] ; then
-		echo "overc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
+	    if [ ! -z "${NETWORK_DEVICE_CLASSES}" ]; then
 		echo "overc.network.linkdevs = $NETWORK_DEVICE_CLASSES" >> ${pathtocontainer}/config
-	    else
-		echo "lxc.network.type = phys" >> ${pathtocontainer}/config
-		echo "lxc.network.link = $NETWORK_DEVICE" >> ${pathtocontainer}/config
 	    fi
 
 	    # Enable configuring the network prime container by puppet on first boot
