@@ -1081,3 +1081,21 @@ installer_main()
 		confirm_reboot
 	fi
 }
+
+# make menuitems function
+# param #1: the item list
+# param #2: optional. If present, it will be regarded as the checklist default status
+# return: the item count
+format_menuitems()
+{
+	menuitems=""
+	local itemlist=$1
+	local checklistswitch=$2
+	local itemcount=0
+	for i in $itemlist; do
+		menuitems="$menuitems $i $i $checklistswitch"
+		let itemcount++
+	done
+	return $itemcount
+}
+
