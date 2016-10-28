@@ -34,17 +34,7 @@ timezone_config()
 		fi
 	done
 	tzinfo=${tzinfo:20}
-	cat <<EOF >> ${tmppuppet}
-exec { 'set_localtime':
-	command => "/bin/ln -sf /usr/share/zoneinfo/${tzinfo} /etc/localtime",
-}
-file { 'timezone':
-path => "/etc/timezone",
-content => "${tzinfo}",
-}
 
-EOF
-
-
+	echo "TIMEZONE=\"${tzinfo}\"" >> ${tmpconf}
 	rm $tmpfile
 }

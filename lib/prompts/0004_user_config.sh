@@ -25,24 +25,9 @@ user_config()
 			passwdprompt="Password mismatch! Please re-input password:"
 		done
 		cryptpasswd=$(python -c "import crypt; print crypt.crypt(\"$passwd1\", \"\$6\$\")")
-		cat <<EOF >> ${tmppuppet}
-group { "$username":
-	name => "$username",
-	ensure => present,
-}
-
-user { "$username":
-	ensure => present,
-	gid => "$username",
-	groups => ["users"],
-	membership => minimum,
-	shell => "/bin/bash",
-	require => [Group["$username"]],
-	password => '$cryptpasswd',
-}
-
-EOF
 	fi
 
+	echo "INITIAL_USER=\"${username}\"" >> ${tmpconf}
+	echo "INITIAL_PASSWD=${cryptpasswd}" >> ${tmpconf}
 	rm $tmpfile
 }

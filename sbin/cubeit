@@ -247,11 +247,9 @@ if [ -z ${CONFIG_FILES} ] || ([ -n "$INTERACTIVE_MODE" ] && [ "$INTERACTIVE_MODE
 	fi
 	debugmsg ${DEBUG_INFO} "Entering interactive mode..."
 	SAVE_CONFIG_FOLDER="saved_config"
+	recursive_mkdir ${SAVE_CONFIG_FOLDER}
 	tmpconf="${SAVE_CONFIG_FOLDER}/config.sh"
 	echo "" > ${tmpconf}
-	tmppuppet=${SAVE_CONFIG_FOLDER}/puppet/init.pp
-	recursive_mkdir ${SAVE_CONFIG_FOLDER}/puppet
-	echo "" > $tmppuppet
 	promptsdir=${LIBDIR}/prompts
 	for f in `ls $promptsdir`; do
 		source $promptsdir/$f
@@ -262,10 +260,6 @@ if [ -z ${CONFIG_FILES} ] || ([ -n "$INTERACTIVE_MODE" ] && [ "$INTERACTIVE_MODE
 			exit 1
 		fi
 	done
-
-	# enable puppet
-	echo "PUPPETDIR=\"${SAVE_CONFIG_FOLDER}/puppet\"" >> ${tmpconf}
-	echo "INSTALL_PUPPET_DIR=\"${SAVE_CONFIG_FOLDER}/puppet\"" >> ${tmpconf}
 
 	debugmsg ${DEBUG_INFO} -e "\n\n\nUser config saved. Installation will continue."
 	debugmsg ${DEBUG_INFO} "You can specify --config ${SAVE_CONFIG_FOLDER}/config.sh option in your later installations to use the exact same configurations."
@@ -596,20 +590,6 @@ IFS=$OLDIFS
 	    then
 		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy kernel modules"
 		return 1
-	    fi
-	fi
-
-	# puppet modules etc.
-	if [ -v INSTALL_PUPPET_DIR ]; then
-	    if [ -d ${INSTALLER_FILES_DIR}/${INSTALL_PUPPET_DIR} ]; then
-			INSTALL_PUPPET_DIR=${INSTALLER_FILES_DIR}/${INSTALL_PUPPET_DIR}
-		fi
-		if [ -d ${INSTALL_PUPPET_DIR} ]; then
-			debugmsg ${DEBUG_INFO} "Copying Puppet files to install media"
-			recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/puppet
-			cp -r ${INSTALL_PUPPET_DIR}/* ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/puppet/
-	    else
-		debugmsg ${DEBUG_INFO} "INSTALL_PUPPET_DIR set but directory doesn't exist."
 	    fi
 	fi
 
