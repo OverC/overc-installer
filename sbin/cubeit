@@ -479,6 +479,15 @@ IFS=$OLDIFS
 	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
 	assert_return $?
 
+	## Copy the common files from ${INSTALLER_FILES_DIR} to ${INSTALLER_TARGET_FILES_DIR}
+	## Here only chvt.service, other files maybe added in the future
+	COMMON_FILES="chvt.service" 
+	for f in ${COMMON_FILES}; do
+		if [ -e ${INSTALLER_FILES_DIR}/${f} ]; then
+			cp ${INSTALLER_FILES_DIR}/${f} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/
+		fi
+	done
+
 	if ${X86_ARCH}; then
 		## Copy the hard drive GRUB configuration
 		for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
