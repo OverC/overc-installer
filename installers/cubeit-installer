@@ -343,10 +343,14 @@ SWAPLABEL="SWAP"
 ROOTLABEL="OVERCROOTFS"
 LXCLABEL="OVERCCN"
 
+PARTITIONTYPE=""
+
 if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ]; then
         FDISK_PARTITION_LAYOUT="${FDISK_PARTITION_LAYOUT_INPUT}"
 elif [ -z "${FDISK_PARTITION_LAYOUT}" ]; then
         FDISK_PARTITION_LAYOUT="${SBINDIR}/fdisk-4-partition-layout.txt"
+        #This fdisk-4-partition-layout.txt file only suitable to mbr partition type
+        PARTITIONTYPE="-t mbr"
 fi
 
 debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${FDISK_PARTITION_LAYOUT})"
@@ -357,7 +361,7 @@ debugmsg ${DEBUG_INFO} "          4) container (lxc)"
 # We partition the raw device as passed to the script. This is
 # nuke and pave .. so be careful!
 if [ -f ${FDISK_PARTITION_LAYOUT} ]; then
-        fdisk /dev/${raw_dev} < ${FDISK_PARTITION_LAYOUT} >/dev/null 2>&1
+        fdisk ${PARTITIONTYPE} /dev/${raw_dev} < ${FDISK_PARTITION_LAYOUT} >/dev/null 2>&1
 else
         debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find the fdisk partitions file ${FDISK_PARTITION_LAYOUT}"
         exit 1
