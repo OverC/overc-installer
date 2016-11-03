@@ -1026,7 +1026,7 @@ installer_main()
 			p1="${dev}p1"
 			p2="${dev}p2"
 		fi
-		if [ -n ${p1} ] && [ -n ${p2} ]; then break; fi
+		if [ -n "${p1}" ] && [ -n "${p2}" ]; then break; fi
 		let try_cnt++
 		sleep 1
 	done
