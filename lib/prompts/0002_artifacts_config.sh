@@ -128,6 +128,12 @@ artifacts_config()
 		if [ -n "$dialog_res" ]; then
 			echo "NETWORK_DEVICE_CLASSES=\"${dialog_res}\"" >> ${tmpconf}
 		fi
+		dialog --inputbox "Please provide the network device to be managed by systemd-networkd(leave blank if not wanted):" 8 100  2>$tmpfile
+		dialog_res=$(cat $tmpfile)
+		if [ -n "$dialog_res" ]; then
+			echo "NETWORK_DEVICE=\"${dialog_res}\"" >> ${tmpconf}
+		fi
+
 	fi
 
 	# Format HDINSTALL_CONTAINERS configuration
