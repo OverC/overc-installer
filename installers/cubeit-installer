@@ -346,8 +346,12 @@ if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ]; then
         FDISK_PARTITION_LAYOUT="${FDISK_PARTITION_LAYOUT_INPUT}"
 elif [ -z "${FDISK_PARTITION_LAYOUT}" ]; then
         FDISK_PARTITION_LAYOUT="${SBINDIR}/fdisk-4-partition-layout.txt"
-        #This fdisk-4-partition-layout.txt file only suitable to mbr partition type
-        PARTITIONTYPE="-t mbr"
+        # This fdisk-4-partition-layout.txt file only suitable to mbr partition type,
+        # but not all fdisk versions support -t. So we test and assign if it is available
+        fdisk -t mbr |& grep -q \\-t
+        if [ $? -eq 0 ]; then
+	    PARTITIONTYPE="-t mbr"
+        fi
 fi
 
 debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${FDISK_PARTITION_LAYOUT})"
