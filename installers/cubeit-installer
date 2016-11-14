@@ -78,6 +78,7 @@ cat << EOF
     --ttyconsoledev: set dev used for tty console
     --ttyconsolecn: set container name for providing agetty
     --privilegedcn: set container name for privileged
+    --encrypt: encrypt the rootfs
 
 EOF
 }
@@ -90,6 +91,7 @@ fi
 btrfs=0
 ttyconsolecn=""
 ttyconsoledev="ttyS0"
+do_encryption=0
 while [ $# -gt 0 ]; do
     case "$1" in
     --config) 
@@ -130,6 +132,9 @@ while [ $# -gt 0 ]; do
     --partition_layout)
             FDISK_PARTITION_LAYOUT_INPUT="$2"
             shift
+            ;;
+    --encrypt)
+            do_encryption=1
             ;;
          *) break
             ;;
@@ -239,6 +244,22 @@ fi
 
 if [ -v CONTAINER_PREFIX -a -n "$CONTAINER_PREFIX" ] ; then
     export CNAME_PREFIX="--prefix $CONTAINER_PREFIX"
+fi
+
+if [ $do_encryption -eq 1 ] ; then
+    which luks-setup.sh >/dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        echo "WARNING: --encrypt ignored due to missing luks-setup.sh. \
+Install cryptfs-tpm2"
+        do_encryption=0
+    fi
+
+    which cryptsetup >/dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        echo "WARNING: --encrypt ignored due to missing cryptsetup. \
+Install cryptsetup"
+        do_encryption=0
+    fi
 fi
 
 get_container_name_by_prop()
@@ -398,6 +419,12 @@ mkfs.vfat -I -n $BOOTLABEL /dev/${fs_dev}1
 ## define the device file names for rootfs and lxc filesystem
 rootfs_dev=${fs_dev}3
 lxc_fs_dev=${fs_dev}4
+
+if [ $do_encryption -eq 1 ]; then
+    ## Evict all objects for the first creation.
+    luks-setup.sh -f -e -d /dev/${rootfs_dev} -n "${ROOTLABEL}_encrypted"
+    rootfs_dev="mapper/${ROOTLABEL}_encrypted"
+fi
 
 if [ $btrfs -eq 0 ]; then
     debugmsg ${DEBUG_INFO} "[INFO]: creating / (ext4)"
@@ -1000,7 +1027,13 @@ else
 fi
 
 rmdir ${TMPMNT}
-	
+
+if [ $do_encryption -eq 1 ]; then
+    echo "INFO: Closing LUKS ..."
+
+    cryptsetup luksClose "${ROOTLABEL}_encrypted"
+fi
+
 # don't run this on a host!!
 # sync ; sync ; echo 3> /proc/sys/vm/drop_caches
 # echo o > /proc/sysrq-trigger
