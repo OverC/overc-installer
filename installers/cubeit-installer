@@ -394,17 +394,22 @@ mkswap -L $SWAPLABEL /dev/${fs_dev}2
 set -e
 debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
 mkfs.vfat -I -n $BOOTLABEL /dev/${fs_dev}1
+
+## define the device file names for rootfs and lxc filesystem
+rootfs_dev=${fs_dev}3
+lxc_fs_dev=${fs_dev}4
+
 if [ $btrfs -eq 0 ]; then
     debugmsg ${DEBUG_INFO} "[INFO]: creating / (ext4)"
-    mkfs.ext4 -v -L $ROOTLABEL /dev/${fs_dev}3
-    mkfs.ext4 -v -L $LXCLABEL /dev/${fs_dev}4
+    mkfs.ext4 -v -L $ROOTLABEL /dev/${rootfs_dev}
+    mkfs.ext4 -v -L $LXCLABEL /dev/${lxc_fs_dev}
 else
     debugmsg ${DEBUG_INFO} "[INFO]: creating / (btrfs)"
     set +e
     has_f=`mkfs.btrfs 2>&1 |grep -q '^.*\-f' && echo -f`
     set -e
-    mkfs.btrfs $has_f -L $ROOTLABEL /dev/${fs_dev}3
-    mkfs.btrfs $has_f -L $LXCLABEL /dev/${fs_dev}4
+    mkfs.btrfs $has_f -L $ROOTLABEL /dev/${rootfs_dev}
+    mkfs.btrfs $has_f -L $LXCLABEL /dev/${lxc_fs_dev}
 fi
 set +e
 
@@ -413,7 +418,7 @@ if [ -z "${TMPMNT}" ]; then
     export TMPMNT
 fi
 mkdir -p ${TMPMNT}
-mount /dev/${fs_dev}3 ${TMPMNT}
+mount /dev/${rootfs_dev} ${TMPMNT}
 
 if [ $btrfs -eq 0 ]; then
 	mkdir ${TMPMNT}/boot
@@ -495,7 +500,7 @@ if [ $btrfs -eq 1 ]; then
 	sync
 	umount ${TMPMNT}/rootfs/mnt
 	umount ${TMPMNT}/
-	mount -o subvolid=${subvol} /dev/${fs_dev}3 ${TMPMNT}
+	mount -o subvolid=${subvol} /dev/${rootfs_dev} ${TMPMNT}
 	mount /dev/${fs_dev}1 ${TMPMNT}/mnt
 	cd ${TMPMNT}/
 fi
@@ -658,7 +663,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     if [ ! -d ${TMPMNT}/var/lib/lxc ]; then
         mkdir -p ${TMPMNT}/var/lib/lxc
     fi
-    mount /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
+    mount /dev/${lxc_fs_dev} ${TMPMNT}/var/lib/lxc
 
     mkdir -p ${TMPMNT}/tmp
 
@@ -668,7 +673,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
         subvol=`btrfs subvolume list ${TMPMNT}/var/lib/lxc | awk '{print $2;}'`
         sync
         umount ${TMPMNT}/var/lib/lxc
-        mount -o subvol=workdir /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
+        mount -o subvol=workdir /dev/${lxc_fs_dev} ${TMPMNT}/var/lib/lxc
     fi
 
     # deal with static IPs and the "Networking Prime"
@@ -922,7 +927,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
         if [ -z "$subvol" ]; then
             debugmsg ${DEBUG_WARN} "[WARNING]: Could not get subvolume id, thus cannot create factory reset snapshot"
         else
-            mount /dev/${fs_dev}4 ${TMPMNT}/var/lib/lxc
+            mount /dev/${lxc_fs_dev} ${TMPMNT}/var/lib/lxc
             btrfs subvolume set-default $subvol ${TMPMNT}/var/lib/lxc
             btrfs subvolume snapshot ${TMPMNT}/var/lib/lxc/workdir ${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}
             #snapshot subvolume recursively
@@ -981,7 +986,7 @@ if [ $btrfs -eq 0 ]; then
 else
 	debugmsg ${DEBUG_INFO} "[INFO]: Creating a snapshot of rootfs for recovery."
 	#mount the root subvolume
-	mount -o subvolid=5 /dev/${fs_dev}3 ${TMPMNT}
+	mount -o subvolid=5 /dev/${rootfs_dev} ${TMPMNT}
 	if [ -e "${TMPMNT}/rootfs" ]; then
 		btrfs subvolume snapshot ${TMPMNT}/rootfs ${TMPMNT}/rootfs_bakup
 		btrfs subvolume snapshot ${TMPMNT}/rootfs ${TMPMNT}/${FACTORY_SNAPSHOT}
