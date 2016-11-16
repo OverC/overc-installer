@@ -606,6 +606,13 @@ install_grub()
 	    ${CMD_GRUB_INSTALL} --root-directory=${mountpoint} --no-floppy hd0 # > /dev/null 2>&1
 	else
 	    ${CMD_GRUB_INSTALL} --root-directory=${mountpoint} --no-floppy --recheck /dev/${device} # > /dev/null 2>&1
+	    # Fedora 24 employs grub2-install which installs the files to DIR/grub2
+	    if [ -d "${mountpoint}/boot/grub2" ]; then
+		if ! mv "${mountpoint}/boot/grub2" "${mountpoint}/boot/grub"; then
+		    debugmsg ${DEBUG_CRIT} "ERROR: Unable to rename ${mountpoint}/boot/grub2"
+		    return 1
+		fi
+	    fi
 	fi
 	if [ $? -ne 0 ]
 	then
