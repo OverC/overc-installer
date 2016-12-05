@@ -363,16 +363,31 @@ LXCLABEL="OVERCCN"
 
 PARTITIONTYPE=""
 
+if test ! $(which fdisk); then
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Unable to find 'fdisk'."
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Please ensure fdisk is installed and in your PATH."
+	exit 1
+fi
+# Get supported fdisk command line options
+avail_fdisk_options=$(fdisk -h | grep "^\ *-" | cut -d',' -f1 | xargs)
+
+
 if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ]; then
         FDISK_PARTITION_LAYOUT="${FDISK_PARTITION_LAYOUT_INPUT}"
 elif [ -z "${FDISK_PARTITION_LAYOUT}" ]; then
         FDISK_PARTITION_LAYOUT="${SBINDIR}/fdisk-4-partition-layout.txt"
         # This fdisk-4-partition-layout.txt file only suitable to mbr partition type,
         # but not all fdisk versions support -t. So we test and assign if it is available
-        fdisk -t mbr |& grep -q \\-t
-        if [ $? -eq 0 ]; then
-	    PARTITIONTYPE="-t mbr"
-        fi
+
+	# If fdisk supports the '-t' disklabel option use it. Determine which variant to
+	# use, prefer to use 'mbr' when available (though currently the same as 'dos')
+	if [[ $avail_fdisk_options == *"-t"* ]]; then
+		if $(fdisk -t mbr 2>&1 | grep -q unsupported); then
+			PARTITIONTYPE="-t dos"
+		else
+			PARTITIONTYPE="-t mbr"
+		fi
+	fi
 fi
 
 debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${FDISK_PARTITION_LAYOUT})"
