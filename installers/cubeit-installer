@@ -354,12 +354,12 @@ fi
 #  1: boot
 #  2: swap
 #  3: root
-#  4. lxc
+#  4. containers
 
 BOOTLABEL="OVERCBOOT"
 SWAPLABEL="SWAP"
 ROOTLABEL="OVERCROOTFS"
-LXCLABEL="OVERCCN"
+CONTAINERLABEL="OVERCCN"
 
 PARTITIONTYPE=""
 
@@ -394,7 +394,7 @@ debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${FDISK_PARTITION_LAY
 debugmsg ${DEBUG_INFO} "          1) boot"
 debugmsg ${DEBUG_INFO} "          2) swap"
 debugmsg ${DEBUG_INFO} "          3) root"
-debugmsg ${DEBUG_INFO} "          4) container (lxc)"
+debugmsg ${DEBUG_INFO} "          4) container"
 # We partition the raw device as passed to the script. This is
 # nuke and pave .. so be careful!
 if [ -f ${FDISK_PARTITION_LAYOUT} ]; then
@@ -431,9 +431,9 @@ set -e
 debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
 mkfs.vfat -I -n $BOOTLABEL /dev/${fs_dev}1
 
-## define the device file names for rootfs and lxc filesystem
+## define the device file names for rootfs and container filesystem
 rootfs_dev=${fs_dev}3
-lxc_fs_dev=${fs_dev}4
+container_fs_dev=${fs_dev}4
 
 if [ $do_encryption -eq 1 ]; then
     ## Evict all objects for the first creation.
@@ -444,14 +444,14 @@ fi
 if [ $btrfs -eq 0 ]; then
     debugmsg ${DEBUG_INFO} "[INFO]: creating / (ext4)"
     mkfs.ext4 -v -L $ROOTLABEL /dev/${rootfs_dev}
-    mkfs.ext4 -v -L $LXCLABEL /dev/${lxc_fs_dev}
+    mkfs.ext4 -v -L $CONTAINERLABEL /dev/${container_fs_dev}
 else
     debugmsg ${DEBUG_INFO} "[INFO]: creating / (btrfs)"
     set +e
     has_f=`mkfs.btrfs 2>&1 |grep -q '^.*\-f' && echo -f`
     set -e
     mkfs.btrfs $has_f -L $ROOTLABEL /dev/${rootfs_dev}
-    mkfs.btrfs $has_f -L $LXCLABEL /dev/${lxc_fs_dev}
+    mkfs.btrfs $has_f -L $CONTAINERLABEL /dev/${container_fs_dev}
 fi
 set +e
 
@@ -675,7 +675,7 @@ sed -i '/^usbdevfs/d' ${TMPMNT}/etc/fstab
 
 echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab
 echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> ${TMPMNT}/etc/fstab
-echo "LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0" >> ${TMPMNT}/etc/fstab
+echo "LABEL=$CONTAINERLABEL /opt/container auto defaults 0 0" >> ${TMPMNT}/etc/fstab
 
 if [ -e "$INSTALL_SMARTCONFIG" ]; then
 	cp $INSTALL_SMARTCONFIG ${TMPMNT}/var/lib/smart/config
@@ -702,20 +702,20 @@ fi
 if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     subvol=""
     debugmsg ${DEBUG_INFO} "[INFO]: installing containers"
-    if [ ! -d ${TMPMNT}/var/lib/lxc ]; then
-        mkdir -p ${TMPMNT}/var/lib/lxc
+    if [ ! -d ${TMPMNT}/opt/container ]; then
+        mkdir -p ${TMPMNT}/opt/container
     fi
-    mount /dev/${lxc_fs_dev} ${TMPMNT}/var/lib/lxc
+    mount /dev/${container_fs_dev} ${TMPMNT}/opt/container
 
     mkdir -p ${TMPMNT}/tmp
 
     if [ $btrfs -eq 1 ]; then
         #create a subvolume for container images
-        btrfs subvolume create ${TMPMNT}/var/lib/lxc/workdir
-        subvol=`btrfs subvolume list ${TMPMNT}/var/lib/lxc | awk '{print $2;}'`
+        btrfs subvolume create ${TMPMNT}/opt/container/workdir
+        subvol=`btrfs subvolume list ${TMPMNT}/opt/container | awk '{print $2;}'`
         sync
-        umount ${TMPMNT}/var/lib/lxc
-        mount -o subvol=workdir /dev/${lxc_fs_dev} ${TMPMNT}/var/lib/lxc
+        umount ${TMPMNT}/opt/container
+        mount -o subvol=workdir /dev/${container_fs_dev} ${TMPMNT}/opt/container
     fi
 
     # deal with static IPs and the "Networking Prime"
@@ -754,6 +754,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 	cp $c ${TMPMNT}/tmp/
 	cp ${SBINDIR}/overc-cctl ${TMPMNT}/tmp/
+	cp ${SBINDIR}/cube-ctl ${TMPMNT}/tmp/
 	
 	# Any container that has a console attribute gets a virtual console
 	consoleattr=`get_prop_isset_by_container $cname "console"`
@@ -818,8 +819,8 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	fi
 
 	# actually install the container
-	export LXCBASE="${TMPMNT}/var/lib/lxc"
-	export BINDMNTBASE="${TMPMNT}/opt/container"
+	export CONTAINERBASE="${TMPMNT}/opt/container"
+	export BINDMNTBASE="${TMPMNT}/var/lib/container"
 	export HOSTDIR="${TMPMNT}"
 	case $container_src in
 	    *-dom0-*)
@@ -832,20 +833,18 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		## TODO. make overc-cctl into smaller commands that manipulate the containers
 		##       on a more granular basis.
 		##       like: extract, configure, add service, etc.
-		${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt} ${monitor_container_opt} ${overc_cctl_bridged_net_opt}
-		;;
-	    *-dom1-*)
-		${SBINDIR}/overc-cctl add -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
+		# ${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt} ${monitor_container_opt} ${overc_cctl_bridged_net_opt}
+		${SBINDIR}/cube-ctl add --auto -n ${cname} -t cube -o ${CONTAINERBASE} ${c}
 		;;
 	    *)
-		${SBINDIR}/overc-cctl add ${subuid_opt} -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
+		# ${SBINDIR}/overc-cctl add ${subuid_opt} -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
 		;;
 	esac
 
 	if [ -e "$INSTALL_SMARTCONFIG" ]; then
-	    cp $INSTALL_SMARTCONFIG ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
+	    cp $INSTALL_SMARTCONFIG ${TMPMNT}/opt/container/$cname/rootfs/var/lib/smart/config
 	elif [ -e /${IMAGESDIR}/config.smart ]; then
-	    cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/lxc/$cname/rootfs/var/lib/smart/config
+	    cp /${IMAGESDIR}/config.smart ${TMPMNT}/opt/container/$cname/rootfs/var/lib/smart/config
 	fi
 
 	rm ${TMPMNT}/tmp/$(basename $c)
@@ -901,7 +900,11 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	if [ ! -v NETWORK_DEVICE_CLASSES ]; then
 	    NETWORK_DEVICE_CLASSES=""
 	fi
-	pathtocontainer=${TMPMNT}/var/lib/lxc/${network_prime}
+
+	if [ ! -e "${pathtocontainer}/config" ]; then
+	    touch ${pathtocontainer}/config
+	fi
+	pathtocontainer=${TMPMNT}/opt/container/${network_prime}
 	if [ -e "${pathtocontainer}/config" ]; then
 	    # Pass the network device through to the designated network prime container
 	    if [ ! -z "${NETWORK_DEVICE_CLASSES}" ]; then
@@ -963,26 +966,26 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	done
     fi
     sync
-    umount ${TMPMNT}/var/lib/lxc
+    umount ${TMPMNT}/opt/container
 
     if [ $btrfs -eq 1 ]; then
         if [ -z "$subvol" ]; then
             debugmsg ${DEBUG_WARN} "[WARNING]: Could not get subvolume id, thus cannot create factory reset snapshot"
         else
-            mount /dev/${lxc_fs_dev} ${TMPMNT}/var/lib/lxc
-            btrfs subvolume set-default $subvol ${TMPMNT}/var/lib/lxc
-            btrfs subvolume snapshot ${TMPMNT}/var/lib/lxc/workdir ${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}
+            mount /dev/${container_fs_dev} ${TMPMNT}/opt/container
+            btrfs subvolume set-default $subvol ${TMPMNT}/opt/container
+            btrfs subvolume snapshot ${TMPMNT}/opt/container/workdir ${TMPMNT}/opt/container/${FACTORY_SNAPSHOT}
             #snapshot subvolume recursively
-            subvolumes="$(btrfs subvolume list -c ${TMPMNT}/var/lib/lxc/workdir | awk '{print $NF}')"
+            subvolumes="$(btrfs subvolume list -c ${TMPMNT}/opt/container/workdir | awk '{print $NF}')"
             for subvolume in $subvolumes; do
-                snapshot_directory="${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/${subvolume}"
+                snapshot_directory="${TMPMNT}/opt/container/${FACTORY_SNAPSHOT}/${subvolume}"
                 if [ -d "${snapshot_directory}" ]; then
                     rm -rf "${snapshot_directory}"
-                    btrfs subvolume snapshot "${TMPMNT}/var/lib/lxc/workdir/${subvolume}" "${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/$(dirname ${subvolume})"
+                    btrfs subvolume snapshot "${TMPMNT}/opt/container/workdir/${subvolume}" "${TMPMNT}/opt/container/${FACTORY_SNAPSHOT}/$(dirname ${subvolume})"
                 fi
             done
             sync 
-            umount ${TMPMNT}/var/lib/lxc
+            umount ${TMPMNT}/opt/container
         fi
     fi
 fi
