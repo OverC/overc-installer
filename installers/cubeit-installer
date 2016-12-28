@@ -559,6 +559,10 @@ elif [ -e boot/bzImage-* ]; then
 	cp boot/bzImage-* mnt/bzImage
 	#create a backup kernel for recovery boot
 	cp boot/bzImage-* mnt/bzImage_bakup
+elif [ -e boot/fitImage-* ]; then
+	cp boot/fitImage-* mnt/fitImage
+	#create a backup kernel for recovery boot
+	cp boot/fitImage-* mnt/fitImage_bakup
 fi
  
 ## Process initrd into /boot
