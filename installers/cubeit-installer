@@ -820,8 +820,18 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	# actually install the container
 	export CONTAINERBASE="${TMPMNT}/opt/container"
-	export BINDMNTBASE="${TMPMNT}/var/lib/container"
+	export RUNBASE="/var/lib/cube"
+	export BINDMNTBASE="${TMPMNT}${RUNBASE}"
 	export HOSTDIR="${TMPMNT}"
+
+	# we bind mount /var/lib/container (essential) to
+	# /opt/container/var/lib/container (dom0) for the installer.  Since
+	# dom0 will always run with this bind mount, it allows cube-ctl add
+	# to work the same where here, and at runtime
+	mkdir -p ${CONTAINERBASE}/${RUNBASE}
+	mkdir -p ${BINDMNTBASE}
+	mount --bind ${BINDMNTBASE} ${CONTAINERBASE}/${RUNBASE}
+
 	case $container_src in
 	    *-dom0-*)
 		monitor_container_opt=""
@@ -841,6 +851,10 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		${SBINDIR}/cube-ctl add --auto dom0 -n ${cname} -t oci -o ${CONTAINERBASE} ${c}
 		;;
 	esac
+
+	# undo the bind mount
+	umount ${CONTAINERBASE}/${RUNBASE}
+	rm -rf ${CONTAINERBASE}/var
 
 	if [ -e "$INSTALL_SMARTCONFIG" ]; then
 	    cp $INSTALL_SMARTCONFIG ${TMPMNT}/opt/container/$cname/rootfs/var/lib/smart/config
