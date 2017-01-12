@@ -840,10 +840,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 			monitor_container_opt="-m ${monitored_container}"
 		fi
 
-		## TODO. make overc-cctl into smaller commands that manipulate the containers
-		##       on a more granular basis.
-		##       like: extract, configure, add service, etc.
-		# ${SBINDIR}/overc-cctl add -d -a -c -g onboot -t 0 -n $cname -f $c ${ttyconsole_opt} ${monitor_container_opt} ${overc_cctl_bridged_net_opt}
 		${SBINDIR}/cube-ctl add --auto essential -n ${cname} -t cube -o ${CONTAINERBASE} ${c}
 		;;
 	    *)
