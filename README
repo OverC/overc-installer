@@ -4,3 +4,34 @@
 A collection of scripts which are used to assemble the output of a
 meta-overc build (kernel, rootfs, containers) into an installer image
 (capable of performing an install) or live image.
+
+Dependencies:
+-------------
+
+The cube* installer has the following dependencies:
+
+ - oci-runtime-tool: git://github.com/opencontainers/runtime-tools.git
+ - cube-cfg: git://github.com/OverC/meta-overc.git
+ - cubt-ctl: git://github.com/OverC/meta-overc.git
+
+oci-runtime-tool has been built and checked into this repository as a
+static binary; therefore, there is nothing to do for this depencency.
+
+cube-cfg/cube-ctl should be placed in the sbin/ directory of this repo
+and kept up to date with meta-overc development. To aid this, a github
+fetch script is provided. 
+
+To place these two scripts:
+
+ % ./lib/github-fetcher.py OverC meta-overc meta-cube/recipes-support/overc-utils/source/cube-cfg sbin/
+ % ./lib/github-fetcher.py OverC meta-overc meta-cube/recipes-support/overc-utils/source/cube-ctl sbin/
+ % chmod +x sbin/cube-ctl
+ % chmod +x sbin/cube-cfg
+
+Note: if a branch other than master is needed, use the -b <branch> parameter
+      to the fetcher.
+
+Usage:
+------
+
+see: git://github.com/OverC/meta-overc.git/README.install
