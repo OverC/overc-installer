@@ -13,6 +13,7 @@ The cube* installer has the following dependencies:
  - oci-runtime-tool: git://github.com/opencontainers/runtime-tools.git
  - cube-cfg: git://github.com/OverC/meta-overc.git
  - cubt-ctl: git://github.com/OverC/meta-overc.git
+ - jq
 
 oci-runtime-tool has been built and checked into this repository as a
 static binary; therefore, there is nothing to do for this depencency.
