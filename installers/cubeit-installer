@@ -753,7 +753,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	container_src=`basename $c`
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 	cp $c ${TMPMNT}/tmp/
-	cp ${SBINDIR}/overc-cctl ${TMPMNT}/tmp/
 	cp ${SBINDIR}/cube-ctl ${TMPMNT}/tmp/
 	
 	# Any container that has a console attribute gets a virtual console
@@ -912,17 +911,18 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    NETWORK_DEVICE_CLASSES=""
 	fi
 
-	if [ ! -e "${pathtocontainer}/config" ]; then
-	    touch ${pathtocontainer}/config
-	fi
 	pathtocontainer=${TMPMNT}/opt/container/${network_prime}
-	if [ -e "${pathtocontainer}/config" ]; then
+	if [ -e "${pathtocontainer}/config.json" ]; then
 	    # Pass the network device through to the designated network prime container
-	    if [ ! -z "${NETWORK_DEVICE_CLASSES}" ]; then
-	    	for i in ${NETWORK_DEVICE_CLASSES}; do
-	    	     echo "lxc.network.type = phys" >> ${pathtocontainer}/config
-	             echo "lxc.network.link = $i" >> ${pathtocontainer}/config
-	        done
+	    if [ -n "${NETWORK_DEVICE}" ]; then
+		echo "adding ${NETWORK_DEVICE} to network prime"
+		(
+		    cd ${TMPMNT}/opt/container/${network_prime}
+		    ${SBINDIR}/cube-cfg device network:${NETWORK_DEVICE}:${NETWORK_DEVICE}
+
+		    # hard coded to a cube for now, could be OCI in the future
+		    ${SBINDIR}/cube-cfg gen ${network_prime}:cube
+		)
 	    fi
 
 	    # Enable configuring the network prime container by ansible on first boot
