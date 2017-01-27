@@ -79,6 +79,7 @@ cat << EOF
     --ttyconsolecn: set container name for providing agetty
     --privilegedcn: set container name for privileged
     --encrypt: encrypt the rootfs
+    --ima-sign: sign the files with IMA signature
 
 EOF
 }
@@ -92,6 +93,7 @@ btrfs=0
 ttyconsolecn=""
 ttyconsoledev="ttyS0"
 do_encryption=0
+do_ima_sign=0
 while [ $# -gt 0 ]; do
     case "$1" in
     --config) 
@@ -135,6 +137,9 @@ while [ $# -gt 0 ]; do
             ;;
     --encrypt)
             do_encryption=1
+            ;;
+    --ima-sign)
+            do_ima_sign=1
             ;;
          *) break
             ;;
@@ -312,6 +317,40 @@ get_prop_isset_by_container()
     done
 
     echo "${ret}"
+}
+
+ima_sign()
+{
+    local root_dir="$1"
+    local mnt_dirs="`grep $root_dir /proc/mounts | awk '{ print $2 }'`"
+
+    for dir in `ls $root_dir`; do
+        local dst_dir="$root_dir/$dir"
+
+        for _dir in $mnt_dirs; do
+            # skip root directory
+            [ "$_dir" = "$root_dir" ] && continue
+
+            local fs_type="`grep $_dir /proc/mounts | awk '{ print $3 }'`"
+            local skip_signing=0
+
+            if [ "$dst_dir" = "$_dir" ]; then
+                if [ $fs_type != "btrfs" -a $fs_type != "ext4" ]; then
+                    skip_signing=1
+                    break
+                fi
+            fi
+        done
+
+        [ $skip_signing -eq 1 ] && continue
+
+        evmctl ima_sign --rsa -r -t f "$dst_dir" && {
+            debugmsg ${DEBUG_INFO} "[INFO]: IMA signing completed for $dst_dir."
+        } || {
+            debugmsg ${DEBUG_INFO} "[ERROR]: IMA signing occurs with error for $dst_dir."
+            exit 1
+        }
+    done
 }
 
 # containers are listed in HDINSTALL_CONTAINERS as:
@@ -524,6 +563,54 @@ elif [ -n "$img" ] ; then
 		cp /$i mnt/initrd
 		break
 	done
+
+        # repack initramfs as required
+        if [ $do_ima_sign -eq 1 -a -f mnt/initrd ]; then
+            if [ -n "${IMA_POLICY}" -a -f "${IMA_POLICY}" ]; then
+                copy_ima_policy=1
+            else
+                copy_ima_policy=0
+            fi
+
+            if [ -n "${IMA_PUBKEY}" -a -f "${IMA_PUBKEY}" ]; then
+                copy_ima_pubkey=1
+            else
+                copy_ima_pubkey=0
+            fi
+
+            if [ $copy_ima_policy -eq 1 -o $copy_ima_pubkey -eq 1 ]; then
+                topdir="`pwd`"
+                initrd_src="$topdir/mnt/initrd"
+
+                mkdir -p /tmp/initramfs-repack
+                cd /tmp/initramfs-repack
+
+                zcat $initrd_src | cpio -id
+
+                [ $copy_ima_policy -eq 1 ] && {
+                    cp -f "${IMA_POLICY}" etc/ima_policy && {
+                        debugmsg ${DEBUG_INFO} "IMA policy copied"
+                    } || {
+                        debugmsg ${DEBUG_INFO} "[ERROR] Unable to copy IMA policy"
+                        exit 1
+                    }
+                }
+
+                [ $copy_ima_pubkey -eq 1 ] && {
+                    cp -f "${IMA_PUBKEY}" etc/keys/pubkey_evm.pem && {
+                        debugmsg ${DEBUG_INFO} "IMA public key copied"
+                    } || {
+                        debugmsg ${DEBUG_INFO} "[ERROR] Unable to copy IMA public key"
+                        exit 1
+                    }
+                }
+
+                find . | cpio -o -H newc > "$initrd_src"
+                cd -
+                cp -f "$initrd_src" "mnt/${initrd}"
+                rm -rf /tmp/initramfs-repack
+            fi
+        fi
 fi
 
 ## Deploy kernel modules to overwrite what was there if INSTALL_MODULES is set
@@ -604,6 +691,10 @@ menuentry "$DISTRIBUTION recovery" {
 
 EOF
 
+    if [ $do_ima_sign -eq 1 ]; then
+        sed -i 's/^\s*linux .*/& ima_policy=tcb/' ${TMPMNT}/mnt/grub/grub.cfg
+    fi
+
     debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
     
     # fixups for virtual installs
@@ -641,6 +732,11 @@ EOF
 
 	echo `basename mnt/EFI/BOOT/boot*.efi` >mnt/startup.nsh
 	chmod +x mnt/startup.nsh
+
+        if [ $do_ima_sign -eq 1 ]; then
+            sed -i 's/^\s*chainloader .*/& integrity_audit=1 ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
+            sed -i 's/^\s*linux .*/& integrity_audit=1 ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
+        fi
     else
 	install -m 0755 ${SBINDIR}/startup.nsh mnt/
 	sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" mnt/startup.nsh
@@ -674,8 +770,9 @@ sed -i '/^tmpfs/d' ${TMPMNT}/etc/fstab
 sed -i '/^usbdevfs/d' ${TMPMNT}/etc/fstab
 
 echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab
-echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> ${TMPMNT}/etc/fstab
-echo "LABEL=$LXCLABEL /var/lib/lxc auto defaults 0 0" >> ${TMPMNT}/etc/fstab
+[ $do_ima_sign -eq 1 ] && mount_ops="defaults,iversion" || mount_ops="defaults"
+echo "LABEL=$BOOTLABEL /boot auto $mount_ops 0 0" >> ${TMPMNT}/etc/fstab
+echo "LABEL=$LXCLABEL /var/lib/lxc auto $mount_opts 0 0" >> ${TMPMNT}/etc/fstab
 
 if [ -e "$INSTALL_SMARTCONFIG" ]; then
 	cp $INSTALL_SMARTCONFIG ${TMPMNT}/var/lib/smart/config
@@ -985,6 +1082,9 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
             umount ${TMPMNT}/var/lib/lxc
         fi
     fi
+
+    [ $do_ima_sign -eq 1 ] &&
+        ima_sign "${TMPMNT}/var/lib/lxc"
 fi
 
 if [ -d "${PACKAGESDIR}" ]; then
@@ -999,6 +1099,16 @@ smart channel -y --add genericx86_64 type=rpm-md baseurl=file://opt/packages/rpm
 smart channel -y --add lib32_x86 type=rpm-md baseurl=file://opt/packages/rpm/lib32_x86/; \\
 smart update"
 
+fi
+
+if [ $do_ima_sign -eq 1 ]; then
+    [ -n "${IMA_PRIVKEY}" -a -f "${IMA_PRIVKEY}" ] &&
+        cp -f ${IMA_PRIVKEY} ${TMPMNT}/etc/privkey_evm.pem
+
+    [ -n "${IMA_PUBKEY}" -a -f "${IMA_PUBKEY}" ] &&
+        cp -f ${IMA_PUBKEY} ${TMPMNT}/etc/pubkey_evm.pem
+
+    ima_sign "${TMPMNT}"
 fi
 
 debugmsg ${DEBUG_INFO} "[INFO]: performing cleanup"

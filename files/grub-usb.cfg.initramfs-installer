@@ -8,6 +8,6 @@ terminal serial
 
 menuentry "Initramfs Installer" {
 	set root=(hd0,1)
-	linux /images/%INSTALL_KERNEL% rootwait
+	linux /images/%INSTALL_KERNEL% rootwait ima_appraise=off
         initrd /images/%INSTALL_INITRAMFS%
 }
