@@ -673,6 +673,22 @@ sed -i '/^devpts/d' ${TMPMNT}/etc/fstab
 sed -i '/^tmpfs/d' ${TMPMNT}/etc/fstab
 sed -i '/^usbdevfs/d' ${TMPMNT}/etc/fstab
 
+# Setup any systemd serial/screen getty by removing all getty definitions first
+# and replacing by definition from the install template
+find ${TMPMNT}/etc/systemd/system/getty.target.wants |egrep -e "(serial-getty|screen-getty)" |xargs rm -f
+if [ "${SCREEN_GETTY_CONSOLE}" != "" ] ; then
+    con=${SCREEN_GETTY_CONSOLE%,*}
+    baud=${SCREEN_GETTY_CONSOLE#*,}
+    systemd_getty=/lib/systemd/system/screen-getty@.service
+    if [ "${baud}" != "" -a "${baud}" != "115200" ] ; then
+	cp ${TMPMNT}/lib/systemd/system/screen-getty@.service ${TMPMNT}/lib/systemd/system/screen-getty-$baud@.service
+	perl -p -i -e "s/(screen-getty \%I) .*? /\$1 $baud /" ${TMPMNT}/lib/systemd/system/screen-getty@.service
+	ln -sf /lib/systemd/system/screen-getty-$baud@.service ${TMPMNT}/etc/systemd/system/getty.target.wants/screen-getty-$baud@$con.service
+    else
+	ln -sf /lib/systemd/system/screen-getty@.service ${TMPMNT}/etc/systemd/system/getty.target.wants/screen-getty@$con.service
+    fi
+fi
+
 echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab
 echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> ${TMPMNT}/etc/fstab
 echo "LABEL=$CONTAINERLABEL /opt/container auto defaults 0 0" >> ${TMPMNT}/etc/fstab
@@ -763,6 +779,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	ttyconsole_opt="-S ${ttyconsoledev}"
 	if [ "${ttyconsolecn}" == "${cname}" -o -n "$consoleattr" ]; then
             ttyconsole_opt="-s ${ttyconsole_opt}"
+	    container_console="-s"
 	fi
 	
 	if [ "${privilegedcn}" == "${cname}" ]; then
@@ -841,7 +858,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 			monitor_container_opt="-m ${monitored_container}"
 		fi
 
-		${SBINDIR}/cube-ctl add --auto essential -n ${cname} -t cube -o ${CONTAINERBASE} ${c}
+		${SBINDIR}/cube-ctl add --auto essential -n ${cname} -t cube ${container_console} -o ${CONTAINERBASE} ${c}
 		;;
 	    *)
 		${SBINDIR}/cube-ctl add --auto dom0 -n ${cname} -t oci -o ${CONTAINERBASE} ${c}
