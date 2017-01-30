@@ -833,6 +833,8 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	case $container_src in
 	    *-dom0-*)
+		# TODO: we can likely drop the monitored container stuff, it needs to be
+		#       replaced.
 		monitor_container_opt=""
 		monitored_container=`get_container_name_by_prop monitored`
 		if [ -n "${monitored_container}" ]; then
@@ -842,7 +844,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		${SBINDIR}/cube-ctl add --auto essential -n ${cname} -t cube -o ${CONTAINERBASE} ${c}
 		;;
 	    *)
-		# ${SBINDIR}/overc-cctl add ${subuid_opt} -d -p -c -g peer -t 0 -n $cname -f $c ${ttyconsole_opt} ${overc_cctl_bridged_net_opt}
 		${SBINDIR}/cube-ctl add --auto dom0 -n ${cname} -t oci -o ${CONTAINERBASE} ${c}
 		;;
 	esac
