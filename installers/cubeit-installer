@@ -665,9 +665,9 @@ else # arm architecture
     fi
 fi
 
-#Remove the systemd's costly remount of the root partition from /etc/fstab,
-#and also remove API filesystems mounting from it, as systemd will mount them itself.
-#sed -i '\/dev\/root/d' ${TMPMNT}/etc/fstab
+# Remove the systemd's costly remount of the root partition from /etc/fstab,
+# and also remove API filesystems mounting from it, as systemd will mount them itself.
+# sed -i '\/dev\/root/d' ${TMPMNT}/etc/fstab
 sed -i '/^proc/d' ${TMPMNT}/etc/fstab
 sed -i '/^devpts/d' ${TMPMNT}/etc/fstab
 sed -i '/^tmpfs/d' ${TMPMNT}/etc/fstab
@@ -699,7 +699,7 @@ elif [ -e /${IMAGESDIR}/config.smart ]; then
 	cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/smart/config
 fi
 
-#make essential system use vty 1 to login and disable the autoVTs of systemd
+# make essential system use vty 1 to login and disable the autoVTs of systemd
 sed -i "s/#NAutoVTs=.*$/NAutoVTs=0/g" ${TMPMNT}/etc/systemd/logind.conf
 sed -i "s/#ReserveVT=.*$/ReserveVT=0/g" ${TMPMNT}/etc/systemd/logind.conf
 gettys=$( ls ${TMPMNT}/etc/systemd/system/getty.target.wants/getty* )
@@ -770,44 +770,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 	cp $c ${TMPMNT}/tmp/
 	cp ${SBINDIR}/cube-ctl ${TMPMNT}/tmp/
-	
-	# Any container that has a console attribute gets a virtual console
-	consoleattr=`get_prop_isset_by_container $cname "console"`
-	# hardconsole means a container gets the physical console device
-	hardconsoleattr=`get_prop_isset_by_container $cname "hardconsole"`
-
-	ttyconsole_opt="-S ${ttyconsoledev}"
-	if [ "${ttyconsolecn}" == "${cname}" -o -n "$consoleattr" ]; then
-            ttyconsole_opt="-s ${ttyconsole_opt}"
-	    container_console="-s"
-	fi
-	
-	if [ "${privilegedcn}" == "${cname}" ]; then
-	    ttyconsole_opt=" -P ${ttyconsole_opt}"
-	fi
-
-	if [ -n "${hardconsoleattr}" ]; then
-	    ttyconsole_opt="-T ${ttyconsole_opt}"
-	fi
-
-	# vty attributes are: <number>,<properites>
-	# properties: active or <empty>
-	vty_num=`get_prop_value_by_container $cname "vty"`
-	if [ -n "$vty_num" ]; then
-	    attribute1=`echo $vty_num | cut -f1 -d,`
-	    attribute2=`echo $vty_num | cut -f2 -d,`
-	    if [ "$attribute1" != "$attribute2" ]; then
-		# they are different, so ther's a number,<attribute>
-		vty_num="${attribute1}"
-		vty_prop="${attribute2}"
-		if [ "${vty_prop}" == "active" ]; then
-		    foreground_container="${cname}"
-		    foreground_vty="${vty_num}"
-		fi
-	    fi
-
-	    ttyconsole_opt=" -v $vty_num ${ttyconsole_opt}"
-	fi
 
 	# If a net offset is specified for this container add
 	# it to the network_offsets list in the overc_config_vars.yml
@@ -858,7 +820,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 			monitor_container_opt="-m ${monitored_container}"
 		fi
 
-		${SBINDIR}/cube-ctl add --auto essential -n ${cname} -t cube ${container_console} -o ${CONTAINERBASE} ${c}
+		${SBINDIR}/cube-ctl add --auto essential -n ${cname} -t cube -o ${CONTAINERBASE} ${c}
 		;;
 	    *)
 		${SBINDIR}/cube-ctl add --auto dom0 -n ${cname} -t oci -o ${CONTAINERBASE} ${c}
@@ -881,10 +843,45 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     #cleanup temp files
     rm ${CNRECORD}
 
-    # install and modify services
+    # install and modify per-container configurations
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
 	container_src=`basename $c`
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
+
+	# TTY/console processing
+	# Any container that has a console attribute gets a virtual console
+	consoleattr=`get_prop_isset_by_container $cname "console"`
+	# hardconsole means a container gets the physical console device
+	hardconsoleattr=`get_prop_isset_by_container $cname "hardconsole"`
+
+	# ttyconsoldev comes from the parameters to this installer
+	if [ "${ttyconsolecn}" == "${cname}" -o -n "$consoleattr" ]; then
+            ttyconsole_opt="-s ${ttyconsole_opt}"
+	    (
+		cd ${TMPMNT}/opt/container/${cname}
+		${SBINDIR}/cube-cfg set cube.console.mgr:screen-tty
+		${SBINDIR}/cube-cfg gen ${cname}:cube
+	    )
+	fi
+
+	# vty attributes are: <number>,<properites>
+	# properties: active or <empty>
+
+	# NOTE: not currently used.
+	vty_num=`get_prop_value_by_container ${cname} "vty"`
+	if [ -n "$vty_num" ]; then
+	    attribute1=`echo $vty_num | cut -f1 -d,`
+	    attribute2=`echo $vty_num | cut -f2 -d,`
+	    if [ "$attribute1" != "$attribute2" ]; then
+		# they are different, so ther's a number,<attribute>
+		vty_num="${attribute1}"
+		vty_prop="${attribute2}"
+		if [ "${vty_prop}" == "active" ]; then
+		    foreground_container="${cname}"
+		    foreground_vty="${vty_num}"
+		fi
+	    fi
+	fi
 
 	# if there was a foreground container defined (attribute 'active' on a vty), then we
 	# install a chvt service to make sure it is in the foreground after boot. Note, this
