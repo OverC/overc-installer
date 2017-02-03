@@ -724,7 +724,7 @@ menuentry "$DISTRIBUTION recovery" {
        chainloader /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/initrd
 }
 
-menuentry 'Automatic Key Provision' {
+menuentry 'Automatic Certificate Provision' {
        chainloader /EFI/BOOT/LockDown.efi
 }
 EOF
