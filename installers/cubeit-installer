@@ -1102,11 +1102,13 @@ smart update"
 fi
 
 if [ $do_ima_sign -eq 1 ]; then
+    [ ! -d ${TMPMNT}/etc/keys ] && mkdir -p ${TMPMNT}/etc/keys
+
     [ -n "${IMA_PRIVKEY}" -a -f "${IMA_PRIVKEY}" ] &&
-        cp -f ${IMA_PRIVKEY} ${TMPMNT}/etc/privkey_evm.pem
+        cp -f ${IMA_PRIVKEY} ${TMPMNT}/etc/keys/privkey_evm.pem
 
     [ -n "${IMA_PUBKEY}" -a -f "${IMA_PUBKEY}" ] &&
-        cp -f ${IMA_PUBKEY} ${TMPMNT}/etc/pubkey_evm.pem
+        cp -f ${IMA_PUBKEY} ${TMPMNT}/etc/keys/pubkey_evm.pem
 
     ima_sign "${TMPMNT}"
 fi
