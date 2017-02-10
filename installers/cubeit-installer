@@ -770,8 +770,8 @@ sed -i '/^tmpfs/d' ${TMPMNT}/etc/fstab
 sed -i '/^usbdevfs/d' ${TMPMNT}/etc/fstab
 
 echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab
-[ $do_ima_sign -eq 1 ] && mount_ops="defaults,iversion" || mount_ops="defaults"
-echo "LABEL=$BOOTLABEL /boot auto $mount_ops 0 0" >> ${TMPMNT}/etc/fstab
+[ $do_ima_sign -eq 1 ] && mount_opts="defaults,iversion" || mount_opts="defaults"
+echo "LABEL=$BOOTLABEL /boot auto $mount_opts 0 0" >> ${TMPMNT}/etc/fstab
 echo "LABEL=$LXCLABEL /var/lib/lxc auto $mount_opts 0 0" >> ${TMPMNT}/etc/fstab
 
 if [ -e "$INSTALL_SMARTCONFIG" ]; then
