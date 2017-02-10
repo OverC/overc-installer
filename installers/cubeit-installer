@@ -521,6 +521,16 @@ fi
 debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
 tar --numeric-owner -xpf $rootfs
 
+# sanity check the private key is available for IMA signing
+if [ $do_ima_sign -eq 1 ]; then
+    if [ ! -f etc/keys/privkey_evm.pem ]; then
+        if [ -z "${IMA_PRIVKEY}" -o ! -f "${IMA_PRIVKEY}" ]; then
+            debugmsg ${DEBUG_WARN} "[WARNING]: IMA signined disabled."
+            do_ima_sign=0
+        fi
+    fi
+fi
+
 mount /dev/${fs_dev}1 mnt
 
 ## Process kernel into /boot
