@@ -701,7 +701,7 @@ menuentry "$DISTRIBUTION recovery" {
 
 EOF
 
-    if [ $do_ima_sign -eq 1 ]; then
+    if [ $do_ima_sign -eq 1 -a $do_encryption -eq 0 ]; then
         sed -i 's/^\s*linux .*/& ima_policy=tcb/' ${TMPMNT}/mnt/grub/grub.cfg
     fi
 
@@ -751,9 +751,9 @@ EOF
 	echo `basename mnt/EFI/BOOT/boot*.efi` >mnt/startup.nsh
 	chmod +x mnt/startup.nsh
 
-        if [ $do_ima_sign -eq 1 ]; then
-            sed -i 's/^\s*chainloader .*/& integrity_audit=1 ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
-            sed -i 's/^\s*linux .*/& integrity_audit=1 ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
+        if [ $do_ima_sign -eq 1 -a $do_encryption -eq 0 ]; then
+            sed -i 's/^\s*chainloader .*/& ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
+            sed -i 's/^\s*linux .*/& ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
         fi
     else
 	install -m 0755 ${SBINDIR}/startup.nsh mnt/
