@@ -934,6 +934,9 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		(
 		    cd ${TMPMNT}/opt/container/${network_prime}
 		    ${SBINDIR}/cube-cfg device network:${NETWORK_DEVICE}:${NETWORK_DEVICE}
+		    # we also need a veth so we can connect to the ovs bridge
+		    # TODO: "veth0" needs to vary. Perhaps a container count ?
+		    ${SBINDIR}/cube-cfg device network-virt:veth0:veth0
 
 		    # hard coded to a cube for now, could be OCI in the future
 		    ${SBINDIR}/cube-cfg gen ${network_prime}:cube
