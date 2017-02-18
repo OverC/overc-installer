@@ -344,7 +344,7 @@ ima_sign()
 
         [ $skip_signing -eq 1 ] && continue
 
-        evmctl ima_sign --rsa -r -t f "$dst_dir" && {
+        evmctl ima_sign --hashalgo sha256 --rsa -r -t f "$dst_dir" && {
             debugmsg ${DEBUG_INFO} "[INFO]: IMA signing completed for $dst_dir."
         } || {
             debugmsg ${DEBUG_INFO} "[ERROR]: IMA signing occurs with error for $dst_dir."
