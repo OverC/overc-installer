@@ -521,11 +521,11 @@ fi
 debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
 tar --numeric-owner -xpf $rootfs
 
-# sanity check the private key is available for IMA signing
+# sanity check whether the private key is available for IMA signing
 if [ $do_ima_sign -eq 1 ]; then
     if [ ! -f etc/keys/privkey_evm.pem ]; then
         if [ -z "${IMA_PRIVKEY}" -o ! -f "${IMA_PRIVKEY}" ]; then
-            debugmsg ${DEBUG_WARN} "[WARNING]: IMA signined disabled."
+            debugmsg ${DEBUG_WARN} "[WARNING]: IMA signing disabled"
             do_ima_sign=0
         fi
     fi
@@ -1126,7 +1126,7 @@ if [ $do_ima_sign -eq 1 ]; then
         cp -f ${IMA_PRIVKEY} ${TMPMNT}/etc/keys/privkey_evm.pem
 
     [ -n "${IMA_PUBKEY}" -a -f "${IMA_PUBKEY}" ] &&
-        cp -f ${IMA_PUBKEY} ${TMPMNT}/etc/keys/pubkey_evm.pem
+        cp -f "${IMA_PUBKEY}" "${TMPMNT}/etc/keys/pubkey_evm.pem"
 
     ima_sign "${TMPMNT}"
 fi
