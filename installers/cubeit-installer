@@ -938,6 +938,12 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    # TODO: "veth0" needs to vary. Perhaps a container count ?
 		    ${SBINDIR}/cube-cfg device network-virt:veth0:veth0
 
+		    # add two hooks that will put the veth on the OVS bridge, and that
+		    # will bring the link up (both are run in essential).
+		    echo "setting network hooks for ${network_prim}"
+		    ${SBINDIR}/cube-cfg hook prestart:ovs-vsctl add-port br-int veth0
+		    ${SBINDIR}/cube-cfg hook prestart:ip link set dev veth0 up
+
 		    # hard coded to a cube for now, could be OCI in the future
 		    ${SBINDIR}/cube-cfg gen ${network_prime}:cube
 		)
