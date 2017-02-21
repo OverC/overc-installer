@@ -547,10 +547,16 @@ elif [ -e boot/uImage-* ]; then
 	cp boot/uImage-* mnt/uImage
 	#create a backup kernel for recovery boot
 	cp boot/uImage-* mnt/uImage_bakup
-elif [ -e boot/bzImage-* ]; then
-	cp boot/bzImage-* mnt/bzImage
-	#create a backup kernel for recovery boot
-	cp boot/bzImage-* mnt/bzImage_bakup
+else
+	if [ -e boot/bzImage-initramfs* ]; then
+	    cp boot/bzImage-initramfs-* mnt/bzImage-initramfs
+	    cp boot/bzImage-initramfs-* mnt/bzImage-initramfs_bakup
+	fi
+
+	if [ -e boot/bzImage ]; then
+	    cp boot/bzImage mnt/bzImage
+	    cp boot/bzImage mnt/bzImage_bakup
+	fi
 fi
  
 ## Process initrd into /boot
