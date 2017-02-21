@@ -701,7 +701,11 @@ menuentry "$DISTRIBUTION recovery" {
 
 EOF
 
-    if [ $do_ima_sign -eq 1 -a $do_encryption -eq 0 ]; then
+    # If IMA appraisal is enabled but the filesystems are not labelled, a
+    # boot failure will occur.
+    if [ $do_ima_sign -eq 0 ]; then
+        sed -i 's/^\s*linux .*/& ima_appraise=off/' ${TMPMNT}/mnt/grub/grub.cfg
+    elif [ $do_encryption -eq 0 ]; then
         sed -i 's/^\s*linux .*/& ima_policy=tcb/' ${TMPMNT}/mnt/grub/grub.cfg
     fi
 
@@ -751,8 +755,13 @@ EOF
 	echo `basename mnt/EFI/BOOT/boot*.efi` >mnt/startup.nsh
 	chmod +x mnt/startup.nsh
 
-        if [ $do_ima_sign -eq 1 -a $do_encryption -eq 0 ]; then
-            sed -i 's/^\s*chainloader .*/& ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
+	# If IMA appraisal is enabled but the filesystems are not labelled, a
+	# boot failure will occur.
+	if [ $do_ima_sign -eq 0 ]; then
+	    sed -i 's/^\s*chainloader .*bzImage.*/& ima_appraise=off/' mnt/EFI/BOOT/grub.cfg
+	    sed -i 's/^\s*linux .*/& ima_appraise=off/' mnt/EFI/BOOT/grub.cfg
+	elif [ $do_encryption -eq 0 ]; then
+            sed -i 's/^\s*chainloader .*bzImage.*/& ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
             sed -i 's/^\s*linux .*/& ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
         fi
     else
