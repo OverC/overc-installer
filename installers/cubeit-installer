@@ -479,7 +479,7 @@ fi
 ## then copy kernel image to boot partition
 
 # we are either in ${TMPMNT} or ${TMPMNT}/rootfs
-debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
+debugmsg ${DEBUG_INFO} "[INFO] installing rootfs ($rootfs)"
 tar --numeric-owner -xpf $rootfs
 
 mount /dev/${fs_dev}1 mnt
@@ -717,7 +717,7 @@ fi
 
 if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     subvol=""
-    debugmsg ${DEBUG_INFO} "[INFO]: installing containers"
+    debugmsg ${DEBUG_INFO} "[INFO] installing containers"
     if [ ! -d ${TMPMNT}/opt/container ]; then
         mkdir -p ${TMPMNT}/opt/container
     fi
@@ -763,7 +763,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     done;
 
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-	debugmsg ${DEBUG_INFO} "[INFO]: installing $c"
+	debugmsg ${DEBUG_INFO} "[INFO] installing $c"
 
 	# containers names are "prefix-<container name>-<... suffixes >
 	container_src=`basename $c`
