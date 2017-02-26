@@ -6,6 +6,17 @@ serial --unit=0 --speed=9600
 
 terminal serial
 
+insmod efivar
+get_efivar -f uint8 -s unprovisioned SetupMode
+
+if [ "${unprovisioned}" = "1" ]; then
+    set timeout=0
+
+    menuentry "Automatic Certificate Provision" {
+        chainloader ${prefix}/LockDown.efi
+    }
+fi
+
 menuentry "Initramfs Installer" {
 	set root=(hd0,1)
 	linux /images/%INSTALL_KERNEL% rootwait ima_appraise=off
