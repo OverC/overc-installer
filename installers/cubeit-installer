@@ -534,6 +534,7 @@ fi
 mount /dev/${fs_dev}1 mnt
 
 ## Process kernel into /boot
+bundled_kernel=0
 if [ -e "${INSTALL_KERNEL}" ] ; then
 	inst_img=${INSTALL_KERNEL##*}
 	if [ "${inst_img/uImage/}" != "$inst_img" ] ; then
@@ -548,6 +549,9 @@ elif [ -e boot/uImage-* ]; then
 	#create a backup kernel for recovery boot
 	cp boot/uImage-* mnt/uImage_bakup
 elif [ -e boot/bzImage-* ]; then
+	if [ -e boot/bzImage-initramfs-* ]; then
+	    bundled_kernel=1
+	fi
 	cp boot/bzImage-* mnt/bzImage
 	#create a backup kernel for recovery boot
 	cp boot/bzImage-* mnt/bzImage_bakup
@@ -573,9 +577,33 @@ elif [ -n "$img" ] ; then
 		cp /$i mnt/initrd
 		break
 	done
+fi
 
-        # repack initramfs as required
-        if [ $do_ima_sign -eq 1 -a -f mnt/initrd ]; then
+if [ $bundled_kernel -eq 1 -a $do_ima_sign -eq 1 ]; then
+	[ -n "${IMA_POLICY}" -a -f "${IMA_POLICY}" ] &&
+	    debugmsg ${DEBUG_WARN} "[WARNING]: Skip to deploy ${IMA_POLICY}"
+
+	[ -n "${IMA_PUBKEY}" -a -f "${IMA_PUBKEY}" ] && {
+	    debugmsg ${DEBUG_WARN} "[WARNING]: Skip to deploy ${IMA_PUBKEY}"
+	    # Don't copy the public key to rootfs.
+	    IMA_PUBKEY=""
+
+	    # If the external public key cannot be deployed due to using
+	    # the bundled kernel, labelling filesystems becomes meaningless.
+	    [ -n "${IMA_PRIVKEY}" -a -f "${IMA_PRIVKEY}" ] && {
+	        # No private key available for IMA signing.
+		if [ ! -f etc/keys/privkey_evm.pem ]; then
+		    debugmsg ${DEBUG_WARN} "[WARNING]: IMA signing disabled due to using the bundled kernel"
+		    do_ima_sign=0
+		else
+		    IMA_PRIVKEY=""
+		fi
+	    }
+	}
+fi
+
+# repack initramfs as required
+if [ $do_ima_sign -eq 1 -a -f mnt/initrd ]; then
             if [ -n "${IMA_POLICY}" -a -f "${IMA_POLICY}" ]; then
                 copy_ima_policy=1
             else
@@ -701,6 +729,10 @@ menuentry "$DISTRIBUTION recovery" {
 
 EOF
 
+    # Don't allow to load the detached initramfs if the bundled kernel used.
+    [ $bundled_kernel -eq 1 ] &&
+        sed -i '/^\s*initrd\s\+/d' ${TMPMNT}/mnt/grub/grub.cfg
+
     # If IMA appraisal is enabled but the filesystems are not labelled, a
     # boot failure will occur.
     if [ $do_ima_sign -eq 0 ]; then
@@ -757,17 +789,22 @@ EOF
 
 	# The linux command doesn't support secure boot. So replace
 	# it with the chainloader command.
-	sed -i 's/^\s*linux /&chainloader /g' mnt/EFI/BOOT/grub.cfg
+	sed -i 's/^\s*linux\s\+/&chainloader /g' mnt/EFI/BOOT/grub.cfg
+
 	# The initrd command becomes not working if the linux command
 	# is not launched.
-	sed -i '/^\s*initrd /d' mnt/EFI/BOOT/grub.cfg
+	sed -i '/^\s*initrd\s\+/d' mnt/EFI/BOOT/grub.cfg
+
+	# Don't allow to load the detached initramfs if the bundled kernel used.
+	[ $bundled_kernel -eq 1 ] &&
+	    sed -i 's/\(^\s*chainloader\s\+.*bzImage.*\)\s\+initrd=[^[:space:]]*\(.*\)/\1\2/g' mnt/EFI/BOOT/grub.cfg
 
 	# If IMA appraisal is enabled but the filesystems are not labelled, a
 	# boot failure will occur.
 	if [ $do_ima_sign -eq 0 ]; then
-	    sed -i 's/^\s*chainloader .*bzImage.*/& ima_appraise=off/' mnt/EFI/BOOT/grub.cfg
+	    sed -i 's/^\s*chainloader\s\+.*bzImage.*/& ima_appraise=off/' mnt/EFI/BOOT/grub.cfg
 	elif [ $do_encryption -eq 0 ]; then
-            sed -i 's/^\s*chainloader .*bzImage.*/& ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
+            sed -i 's/^\s*chainloader\s\+.*bzImage.*/& ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
         fi
     else
 	install -m 0755 ${SBINDIR}/startup.nsh mnt/
