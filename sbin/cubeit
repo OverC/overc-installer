@@ -407,12 +407,16 @@ custom_install_rules()
 	##       and align things like grub to that name.
 	debugmsg ${DEBUG_INFO} "Copying kernel image"
 	install_kernel "${INSTALL_KERNEL}" "${mnt_boot}" "${initramfs_source}" "`basename ${INSTALL_INITRAMFS}`"
-	assert_return $?
+	if [ $? -ne 0 ]; then
+	    return 1
+	fi
 
 	if [ -n "${INSTALL_ROOTFS}" ]; then
 	    debugmsg ${DEBUG_INFO} "Extracting root filesystem (${INSTALL_ROOTFS})"
 	    extract_tarball "${INSTALL_ROOTFS}" "${mnt_rootfs}"
-	    assert_return $?
+	    if [ $? -ne 0 ]; then
+		return 1
+	    fi
 	else
 	    debugmsg ${DEBUG_INFO} "No rootfs specified, not extracting"
 	fi
@@ -420,13 +424,17 @@ custom_install_rules()
 	if [ -n "${INSTALL_MODULES}" ]; then
 	    debugmsg ${DEBUG_INFO} "Extracting kernel modules "
 	    extract_tarball "${INSTALL_MODULES}" "${mnt_rootfs}"
-	    assert_return $?
+	    if [ $? -ne 0 ]; then
+		return 1
+	    fi
 	else
 	    debugmsg ${DEBUG_INFO} "No kernel modules specified, not extracting"
 	fi
 
 	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_LIB_DIR}
-	assert_return $?
+	if [ $? -ne 0 ]; then
+	    return 1
+	fi
 
 	cp -r ${LIBDIR}/* ${mnt_rootfs}${INSTALLER_TARGET_LIB_DIR}
 	if [ $? -ne 0 ]; then
@@ -435,7 +443,9 @@ custom_install_rules()
 	fi
 
 	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
-	assert_return $?
+	if [ $? -ne 0 ]; then
+	    return 1
+	fi
 
 	cp ${SBINDIR}/* ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
 	if [ $? -ne 0 ]; then
@@ -468,10 +478,14 @@ IFS=$OLDIFS
 
 	## Copy files from local workspace to USB drive
 	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}
-	assert_return $?
+	if [ $? -ne 0 ]; then
+	    return 1
+	fi
 
 	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
-	assert_return $?
+	if [ $? -ne 0 ]; then
+	    return 1
+	fi
 
 	## Copy the common files from ${INSTALLER_FILES_DIR} to ${INSTALLER_TARGET_FILES_DIR}
 	## Here only chvt.service, other files maybe added in the future

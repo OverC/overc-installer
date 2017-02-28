@@ -65,14 +65,6 @@ assert()
 	fi
 }
 
-assert_return()
-{
-	if [ $1 -ne 0 ]
-	then
-		return $1
-	fi
-}
-
 trap_handler()
 {
 	case $1 in
