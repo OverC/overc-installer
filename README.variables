@@ -30,3 +30,10 @@ NETWORK_DEVICE:       The network device to passthrough to the network
 
 GRUB_KERNEL_PARAMS:   Kernel parameters appended to the boot line used by the
                       installed or live images. (cubeit-installer, x86 only).
+
+LOCAL_POST_FUNCTION_DEFS: Local function definitions which will be
+			  sourced by the installer scripts. When
+			  creating an on target installer this script
+			  and any other files found in the same
+			  directory will be copied to the installer
+			  media.
