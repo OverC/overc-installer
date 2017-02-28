@@ -500,6 +500,12 @@ copy_installer_data()
 		cat $TARGET_CONFIG_FILE |
 			sed "s|\${ARTIFACTS_DIR}|${INSTALLER_TARGET_IMAGES_DIR}/containers|g" > \
 			${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+
+		# copy all files, which might be used by target configuration
+		if [ -e "${LOCAL_POST_FUNCTION_DEFS}" ] ; then
+		    debugmsg ${DEBUG_INFO} "Copying files from $(dirname $LOCAL_POST_FUNCTION_DEFS)."
+		    cp $(dirname $LOCAL_POST_FUNCTION_DEFS)/* ${destdir}${INSTALLER_TARGET_CONFIG_DIR}
+		fi
 	    else
 		echo "HDINSTALL_CONTAINERS=\"\\" > ${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 		for c in ${HDINSTALL_CONTAINERS}; do
