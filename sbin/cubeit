@@ -55,8 +55,8 @@ cat << EOF
      --artifacts: directory where the binary inputs for image generation are found.
 		  The configuration script indicates what specific images will be used
 
-  cubeit is capable of creating images, or installers + payloads, with the value of
-  <target> indicating which type of image to create.
+  cubeit is capable of creating images, or installers + payloads, or simply payloads
+  with the value of <target> indicating which type of image to create.
 
      <target>: The output of the script.
 
@@ -74,6 +74,13 @@ cat << EOF
 			      written or flashed to a device and directly booted .. or
                               directly booted via qemu.
 
+	  - <path_to_dir>: Generate an install media directory. This mode produces a
+			   directory with the installer and installer data required to
+			   complete an install. This is similar to the bootable USB
+			   installer without the bootable part, allowing the result to
+			   be copied to an existing bootable USB device or accessed via
+			   NFS to complete an install on a running system.
+
   examples:
 
       # network block device
@@ -87,6 +94,9 @@ cat << EOF
 
       # image
       $ cubeit --force --config config-live.sh --artifacts `pwd` /tmp/overc.img
+
+      # installer + installer data
+      $ cubeit --artifacts `pwd` /tmp/installer_dir
 
 EOF
 }
@@ -279,9 +289,9 @@ for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
 	INSTALL_GRUBCFG=${d}/${INSTALL_GRUBUSBCFG}
     fi
 done
-if [ -z "${INSTALL_GRUBUSBCFG}" ]; then
-    echo "ERROR: usb grub configuration ${INSTALL_GRUBUSBCFG} not found"
-    exit 1
+if [ "$TARGET_TYPE" != "dir" ] && [ -z "${INSTALL_GRUBUSBCFG}" ]; then
+        echo "ERROR: usb grub configuration ${INSTALL_GRUBUSBCFG} not found"
+        exit 1
 fi
 
 # Locations on the USB bootable drive fr installer configuration
@@ -333,7 +343,19 @@ case $TARGET_TYPE in
 	fi
 	;;
     dir)
-	# TODO: not currently implemented
+	if [ -d "$target" ]; then
+		if [ -n "$(ls -A $target)" -a -z "$FORCE" ]; then
+			debugmsg ${DEBUG_CRIT} "Directory  ($target) already exists and it is not empty. Remove it and restart"
+			false
+			assert $?
+		fi
+		rm -r $target
+	else
+		debugmsg ${DEBUG_CRIT} "The destination is not a directory."
+		false
+		assert $?
+	fi
+	mkdir -p $target
 	;;
     image)
 	if [ -e $target ]; then
@@ -631,6 +653,28 @@ custom_install_rules()
 	return 0
 }
 
+# Install installer files into a destination directory
+# The installation can be gzipped and transfered to the target for deployment.
+# It is usefull in the context when board is booted over nfs or from other media.
+custom_install_rules_dir()
+{
+	local destdir="$1"
+
+	# copy installer 'static' content
+	copy_installer "${destdir}" || return 1
+
+	## And initramfs
+	cp "${INSTALL_INITRAMFS}" ${destdir}${INSTALLER_TARGET_IMAGES_DIR} ||
+	    return 1
+
+	## ----------------------------------------------------------
+	## Things that will be installed to the hard drive below here
+	## ----------------------------------------------------------
+	copy_installer_data "${destdir}" || return 1
+
+	return 0
+}
+
 # In a desktop environment, disable the automounter to automatically
 # mount the inserted media and Nautilus automatically pops up a
 # window to open a folder during installing to avoid umount failures
@@ -689,7 +733,7 @@ case $TARGET_TYPE in
 	installer_main "$dev"
 	;;
     dir)
-	# TODO: not currently implemented
+	installer_dir "$target"
 	;;
     image)
 	export TARGET_TYPE=$TARGET_TYPE
