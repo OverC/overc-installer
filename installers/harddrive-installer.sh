@@ -62,16 +62,22 @@ custom_install_rules()
 
 	## Copy kernel and files to filesystem
 	debugmsg ${DEBUG_INFO} "Copying kernel image"
-	install_kernel "${INSTALL_KERNEL}" "${mnt_boot}"
-	assert_return $?
+	install_kernel "${INSTALL_KERNEL}" "${mnt_boot}" || {
+	    debugmsg ${DEBUG_CRIT} "Failed to copy kernel image"
+	    return 1
+	}
 
 	debugmsg ${DEBUG_INFO} "Extracting root filesystem "
-	extract_tarball "${INSTALL_ROOTFS}" "${mnt_rootfs}"
-	assert_return $?
+	extract_tarball "${INSTALL_ROOTFS}" "${mnt_rootfs}" || {
+	    debugmsg ${DEBUG_CRIT} "Failed to copy root filesystem"
+	    return 1
+	}
 	
 	debugmsg ${DEBUG_INFO} "Extracting kernel modules "
-	extract_tarball "${INSTALL_MODULES}" "${mnt_rootfs}"
-	assert_return $?
+	extract_tarball "${INSTALL_MODULES}" "${mnt_rootfs}" || {
+	    debugmsg ${DEBUG_CRIT} "Failed to copy kernel modules"
+	    return 1
+	}
 
 	return 0
 }

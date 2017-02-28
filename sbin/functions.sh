@@ -1105,3 +1105,46 @@ format_menuitems()
 	done
 	return $itemcount
 }
+
+installer_dir()
+{
+	local destdir="$1"
+
+	if [ -z $destdir ]
+	then
+		debugmsg ${DEBUG_CRIT} "ERROR: Could not determine destination directory"
+	fi
+
+	## Display installer banner
+	display_banner
+
+	## Verify that installation files exist
+	verify_prerequisite_files
+	assert $?
+
+	declare -f install_summary > /dev/null 2>&1
+	if [ $? -eq 0 ]
+	then
+		install_summary
+	fi
+
+	## Display Installer Introduction
+	display_introduction
+	assert $?
+
+	declare -f custom_install_rules_dir > /dev/null 2>&1
+	if [ $? -ne 0 ]
+	then
+		debugmsg ${DEBUG_CRIT} "ERROR: Could not determine how to install files"
+		false
+		assert $?
+	else
+		custom_install_rules_dir "${destdir}"
+		assert $?
+	fi
+
+	clean_up
+
+	# Finish Installation
+	display_finalmsg
+}

@@ -55,8 +55,8 @@ cat << EOF
      --artifacts: directory where the binary inputs for image generation are found.
 		  The configuration script indicates what specific images will be used
 
-  cubeit is capable of creating images, or installers + payloads, with the value of
-  <target> indicating which type of image to create.
+  cubeit is capable of creating images, or installers + payloads, or simply payloads
+  with the value of <target> indicating which type of image to create.
 
      <target>: The output of the script.
 
@@ -74,6 +74,13 @@ cat << EOF
 			      written or flashed to a device and directly booted .. or
                               directly booted via qemu.
 
+	  - <path_to_dir>: Generate an install media directory. This mode produces a
+			   directory with the installer and installer data required to
+			   complete an install. This is similar to the bootable USB
+			   installer without the bootable part, allowing the result to
+			   be copied to an existing bootable USB device or accessed via
+			   NFS to complete an install on a running system.
+
   examples:
 
       # network block device
@@ -87,6 +94,9 @@ cat << EOF
 
       # image
       $ cubeit --force --config config-live.sh --artifacts `pwd` /tmp/overc.img
+
+      # installer + installer data
+      $ cubeit --artifacts `pwd` /tmp/installer_dir
 
 EOF
 }
@@ -279,9 +289,9 @@ for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
 	INSTALL_GRUBCFG=${d}/${INSTALL_GRUBUSBCFG}
     fi
 done
-if [ -z "${INSTALL_GRUBUSBCFG}" ]; then
-    echo "ERROR: usb grub configuration ${INSTALL_GRUBUSBCFG} not found"
-    exit 1
+if [ "$TARGET_TYPE" != "dir" ] && [ -z "${INSTALL_GRUBUSBCFG}" ]; then
+        echo "ERROR: usb grub configuration ${INSTALL_GRUBUSBCFG} not found"
+        exit 1
 fi
 
 # Locations on the USB bootable drive fr installer configuration
@@ -333,7 +343,19 @@ case $TARGET_TYPE in
 	fi
 	;;
     dir)
-	# TODO: not currently implemented
+	if [ -d "$target" ]; then
+		if [ -n "$(ls -A $target)" -a -z "$FORCE" ]; then
+			debugmsg ${DEBUG_CRIT} "Directory  ($target) already exists and it is not empty. Remove it and restart"
+			false
+			assert $?
+		fi
+		rm -r $target
+	else
+		debugmsg ${DEBUG_CRIT} "The destination is not a directory."
+		false
+		assert $?
+	fi
+	mkdir -p $target
 	;;
     image)
 	if [ -e $target ]; then
@@ -376,6 +398,153 @@ install_summary()
 
 }
 
+#
+# Copy the installer 'static' parts, that is scripts, dirs,
+# files, libs...
+#
+# Configs are not static and so are dealt with as content
+# and copied later, see copy_installer_data().
+#
+copy_installer()
+{
+	local destdir="$1"
+
+	debugmsg ${DEBUG_INFO} "Copying installer to install media"
+	recursive_mkdir ${destdir}${INSTALLER_TARGET_LIB_DIR} || return 1
+
+	cp -r ${LIBDIR}/* ${destdir}${INSTALLER_TARGET_LIB_DIR}
+	if [ $? -ne 0 ]; then
+		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy lib files"
+		return 1
+	fi
+
+	recursive_mkdir ${destdir}${INSTALLER_TARGET_SBIN_DIR} || return 1
+
+	cp ${SBINDIR}/* ${destdir}${INSTALLER_TARGET_SBIN_DIR}
+	if [ $? -ne 0 ]; then
+		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy sbin files"
+		return 1
+	fi
+
+	# put the installers in with the sbin files
+	cp ${INSTALLERS_DIR}/* ${destdir}${INSTALLER_TARGET_SBIN_DIR}
+	if [ $? -ne 0 ]; then
+		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy installer files"
+		return 1
+	fi
+
+	# and any extended functions/callbacks
+	if [ -n "${FUNCTIONS_TO_COPY}" ]; then
+	    debugmsg ${DEBUG_INFO} "Copying target installer functions: ${FUNCTIONS_TO_COPY}"
+OLDIFS=$IFS
+IFS='
+'
+	    for f in ${FUNCTIONS_TO_COPY}; do
+		# remove any leading spaces
+		a=`echo $f | sed 's/^ *//g'`
+		if [ -e "${a}" ]; then
+		    cp -f "${a}" ${destdir}${INSTALLER_TARGET_SBIN_DIR}
+		fi
+	    done
+IFS=$OLDIFS
+	fi
+
+	## Copy files from local workspace to USB drive
+	recursive_mkdir ${destdir}${INSTALLER_TARGET_FILES_DIR} || return 1
+
+	## Copy the common files from ${INSTALLER_FILES_DIR} to ${INSTALLER_TARGET_FILES_DIR}
+	## Here only chvt.service, other files maybe added in the future
+	COMMON_FILES="chvt.service"
+	for f in ${COMMON_FILES}; do
+		if [ -e ${INSTALLER_FILES_DIR}/${f} ]; then
+			cp ${INSTALLER_FILES_DIR}/${f} ${destdir}${INSTALLER_TARGET_FILES_DIR}/
+		fi
+	done
+
+	recursive_mkdir ${destdir}${INSTALLER_TARGET_IMAGES_DIR} || return 1
+
+	return 0
+}
+
+#
+# Copies installer data (container images, dynamic configs...)
+#
+copy_installer_data()
+{
+	local destdir="$1"
+
+	debugmsg ${DEBUG_INFO} "Copying installer data to install media"
+	if [ -n "${HDINSTALL_ROOTFS}" ]; then
+	    ## Copy the Linux rootfs tarball(s) to USB drive
+            for i in ${HDINSTALL_ROOTFS}; do
+	        cp ${i} ${destdir}${INSTALLER_TARGET_IMAGES_DIR}
+	        if [ $? -ne 0 ]; then
+		    debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy hard drive install root filesystem"
+		    return 1
+	        fi
+            done
+	fi
+
+	# deal with any packages
+	if [ -n "${PACKAGES_DIR}" ]; then
+	    debugmsg ${DEBUG_INFO} "Copying RPMs to install media"
+	    recursive_mkdir ${destdir}/${INSTALLER_TARGET_IMAGES_DIR}/packages
+	    cp -r ${PACKAGES_DIR} ${destdir}/${INSTALLER_TARGET_IMAGES_DIR}/packages
+	fi
+
+	# containers
+	# make a container map, based on the HDINSTALL_CONTAINERS
+	if [ -n "${HDINSTALL_CONTAINERS}" ]; then
+	    debugmsg ${DEBUG_INFO} "Copying Containers to install media"
+
+	    recursive_mkdir ${destdir}${INSTALLER_TARGET_IMAGES_DIR}/containers
+	    recursive_mkdir ${destdir}${INSTALLER_TARGET_CONFIG_DIR}
+
+	    # drop any properties and copy the containers to the installer
+	    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
+		cp ${c} ${destdir}/${INSTALLER_TARGET_IMAGES_DIR}/containers/
+	    done
+
+	    # create a configuration that can be read by the cubeit-installer
+	    if [ -v TARGET_CONFIG_FILE -a -n "$TARGET_CONFIG_FILE" ]; then
+		cat $TARGET_CONFIG_FILE |
+			sed "s|\${ARTIFACTS_DIR}|${INSTALLER_TARGET_IMAGES_DIR}/containers|g" > \
+			${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+
+		# copy all files, which might be used by target configuration
+		if [ -e "${LOCAL_POST_FUNCTION_DEFS}" ] ; then
+			cp $(dirname $LOCAL_POST_FUNCTION_DEFS)/* ${destdir}${INSTALLER_TARGET_CONFIG_DIR}
+		fi
+	    else
+		echo "HDINSTALL_CONTAINERS=\"\\" > ${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+		for c in ${HDINSTALL_CONTAINERS}; do
+		    echo -n "${INSTALLER_TARGET_IMAGES_DIR}/containers/" >> ${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+		    echo -n `basename ${c}` >> ${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+		    echo " \\" >> ${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+		done
+		echo "\"" >> ${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+	    fi
+	    echo "DISTRIBUTION=\"$DISTRIBUTION\"" >>${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+	fi
+
+	if [ -n "${HD_MODULES}" ]; then
+	    ## Copy the kernel modules tarball to USB drive
+	    cp ${HD_MODULES} ${destdir}${INSTALLER_TARGET_FILES_DIR}
+	    if [ $? -ne 0 ]
+	    then
+		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy kernel modules"
+		return 1
+	    fi
+	fi
+
+	if [ -e "$INSTALL_SMARTCONFIG" ]; then
+		debugmsg ${DEBUG_INFO} "Install smart config $INSTALL_SMARTCONFIG"
+		cp $INSTALL_SMARTCONFIG ${destdir}/${INSTALLER_TARGET_IMAGES_DIR}/config.smart
+	fi
+
+	return 0
+}
+
 custom_install_rules()
 {
 	local mnt_boot="$1"
@@ -406,81 +575,25 @@ custom_install_rules()
 	##       INSTALL_INITRAMFS, since other routines read that global variable,
 	##       and align things like grub to that name.
 	debugmsg ${DEBUG_INFO} "Copying kernel image"
-	install_kernel "${INSTALL_KERNEL}" "${mnt_boot}" "${initramfs_source}" "`basename ${INSTALL_INITRAMFS}`"
-	assert_return $?
+	install_kernel "${INSTALL_KERNEL}" "${mnt_boot}" "${initramfs_source}" "`basename ${INSTALL_INITRAMFS}`" ||
+	    return 1
 
 	if [ -n "${INSTALL_ROOTFS}" ]; then
 	    debugmsg ${DEBUG_INFO} "Extracting root filesystem (${INSTALL_ROOTFS})"
-	    extract_tarball "${INSTALL_ROOTFS}" "${mnt_rootfs}"
-	    assert_return $?
+	    extract_tarball "${INSTALL_ROOTFS}" "${mnt_rootfs}" || return 1
 	else
 	    debugmsg ${DEBUG_INFO} "No rootfs specified, not extracting"
 	fi
 	
 	if [ -n "${INSTALL_MODULES}" ]; then
 	    debugmsg ${DEBUG_INFO} "Extracting kernel modules "
-	    extract_tarball "${INSTALL_MODULES}" "${mnt_rootfs}"
-	    assert_return $?
+	    extract_tarball "${INSTALL_MODULES}" "${mnt_rootfs}" || return 1
 	else
 	    debugmsg ${DEBUG_INFO} "No kernel modules specified, not extracting"
 	fi
 
-	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_LIB_DIR}
-	assert_return $?
-
-	cp -r ${LIBDIR}/* ${mnt_rootfs}${INSTALLER_TARGET_LIB_DIR}
-	if [ $? -ne 0 ]; then
-		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy lib files"
-		return 1
-	fi
-
-	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
-	assert_return $?
-
-	cp ${SBINDIR}/* ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
-	if [ $? -ne 0 ]; then
-		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy sbin files"
-		return 1
-	fi
-
-	# put the installers in with the sbin files
-	cp ${INSTALLERS_DIR}/* ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
-	if [ $? -ne 0 ]; then
-		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy installer files"
-		return 1
-	fi
-
-	# and any extended functions/callbacks
-	if [ -n "${FUNCTIONS_TO_COPY}" ]; then
-	    debugmsg ${DEBUG_INFO} "Copying target installer functions: ${FUNCTIONS_TO_COPY}"
-OLDIFS=$IFS
-IFS='
-'
-	    for f in ${FUNCTIONS_TO_COPY}; do
-		# remove any leading spaces
-		a=`echo $f | sed 's/^ *//g'`
-		if [ -e "${a}" ]; then
-		    cp -f "${a}" ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
-		fi
-	    done
-IFS=$OLDIFS
-	fi
-
-	## Copy files from local workspace to USB drive
-	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}
-	assert_return $?
-
-	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
-	assert_return $?
-
-	## Copy the common files from ${INSTALLER_FILES_DIR} to ${INSTALLER_TARGET_FILES_DIR}
-	## Here only chvt.service, other files maybe added in the future
-	COMMON_FILES="chvt.service" 
-	for f in ${COMMON_FILES}; do
-		if [ -e ${INSTALLER_FILES_DIR}/${f} ]; then
-			cp ${INSTALLER_FILES_DIR}/${f} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/
-		fi
-	done
+	# copy installer 'static' content
+	copy_installer "${mnt_rootfs}" || return 1
 
 	if ${X86_ARCH}; then
 		## Copy the hard drive GRUB configuration
@@ -535,69 +648,30 @@ IFS=$OLDIFS
 	## ----------------------------------------------------------
 	## Things that will be installed to the hard drive below here
 	## ----------------------------------------------------------
-	if [ -n "${HDINSTALL_ROOTFS}" ]; then
-	    ## Copy the Linux rootfs tarball(s) to USB drive
-            for i in ${HDINSTALL_ROOTFS}; do               
-	        cp ${i} ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
-	        if [ $? -ne 0 ]; then
-		    debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy hard drive install root filesystem"
-		    return 1
-	        fi
-            done
-	fi
+	copy_installer_data "${mnt_rootfs}" || return 1
 
-	# deal with any packages
-	if [ -n "${PACKAGES_DIR}" ]; then
-	    debugmsg ${DEBUG_INFO} "Copying RPMs to install media"
-	    recursive_mkdir ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/packages
-	    cp -r ${PACKAGES_DIR} ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/packages
-	fi
+	return 0
+}
 
-	# containers
-	# make a container map, based on the HDINSTALL_CONTAINERS
-	if [ -n "${HDINSTALL_CONTAINERS}" ]; then
-	    debugmsg ${DEBUG_INFO} "Copying Containers to install media"
+# Install installer files into a destination directory
+# The installation can be gzipped and transfered to the target for deployment.
+# It is usefull in the context when board is booted over nfs or from other media.
+custom_install_rules_dir()
+{
+	local destdir="$1"
 
-	    recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}/containers
-	    recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}
+	# copy installer 'static' content
+	copy_installer "${destdir}" || return 1
 
-	    # drop any properties and copy the containers to the installer
-	    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-		cp ${c} ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/containers/
-	    done
+	## And initramfs
+	cp "${INSTALL_INITRAMFS}" ${destdir}${INSTALLER_TARGET_IMAGES_DIR} ||
+	    return 1
 
-	    # create a configuration that can be read by the cubeit-installer
-	    if [ -v TARGET_CONFIG_FILE -a -n "$TARGET_CONFIG_FILE" ]; then
-		cat $TARGET_CONFIG_FILE |
-			sed "s|\${ARTIFACTS_DIR}|${INSTALLER_TARGET_IMAGES_DIR}/containers|g" > \
-			${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-	    else
-		echo "HDINSTALL_CONTAINERS=\"\\" > ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-		for c in ${HDINSTALL_CONTAINERS}; do
-		    echo -n "${INSTALLER_TARGET_IMAGES_DIR}/containers/" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-		    echo -n `basename ${c}` >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-		    echo " \\" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-		done
-		echo "\"" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-	    fi
-	    echo "DISTRIBUTION=\"$DISTRIBUTION\"" >>${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
-	fi
+	## ----------------------------------------------------------
+	## Things that will be installed to the hard drive below here
+	## ----------------------------------------------------------
+	copy_installer_data "${destdir}" || return 1
 
-	if [ -n "${HD_MODULES}" ]; then
-	    ## Copy the kernel modules tarball to USB drive
-	    cp ${HD_MODULES} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}
-	    if [ $? -ne 0 ]
-	    then
-		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy kernel modules"
-		return 1
-	    fi
-	fi
-
-	if [ -e "$INSTALL_SMARTCONFIG" ]; then
-		debugmsg ${DEBUG_INFO} "Install smart config $INSTALL_SMARTCONFIG"
-		cp $INSTALL_SMARTCONFIG ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/config.smart
-	fi
-	
 	return 0
 }
 
@@ -659,7 +733,7 @@ case $TARGET_TYPE in
 	installer_main "$dev"
 	;;
     dir)
-	# TODO: not currently implemented
+	installer_dir "$target"
 	;;
     image)
 	export TARGET_TYPE=$TARGET_TYPE
