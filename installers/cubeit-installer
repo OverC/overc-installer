@@ -395,10 +395,10 @@ fi
 #  3: root
 #  4. lxc
 
-BOOTLABEL="OVERCBOOT"
-SWAPLABEL="SWAP"
-ROOTLABEL="OVERCROOTFS"
-LXCLABEL="OVERCCN"
+BOOTLABEL="${BOOTLABEL=OVERCBOOT}"
+SWAPLABEL="${SWAPLABEL=SWAP}"
+ROOTLABEL="${ROOTLABEL=OVERCROOTFS}"
+LXCLABEL="${LXCLABEL=OVERCCN}"
 
 PARTITIONTYPE=""
 
@@ -431,7 +431,9 @@ fi
 
 debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${FDISK_PARTITION_LAYOUT})"
 debugmsg ${DEBUG_INFO} "          1) boot"
-debugmsg ${DEBUG_INFO} "          2) swap"
+if [ "$SWAPLABEL" != "NOSWAP" ] ; then
+	debugmsg ${DEBUG_INFO} "          2) swap"
+fi
 debugmsg ${DEBUG_INFO} "          3) root"
 debugmsg ${DEBUG_INFO} "          4) container (lxc)"
 # We partition the raw device as passed to the script. This is
@@ -461,10 +463,12 @@ if [ $(echo $raw_dev | grep -c 'loop') ==  "1" ]; then
        partprobe /dev/${raw_dev}
 fi
 
-## create filesystems
-debugmsg ${DEBUG_INFO} "[INFO]: creating filesystems"
-debugmsg ${DEBUG_INFO} "[INFO]: creating swap"
-mkswap -L $SWAPLABEL /dev/${fs_dev}2
+if [ "$SWAPLABEL" != "NOSWAP" ] ; then
+	## create filesystems
+	debugmsg ${DEBUG_INFO} "[INFO]: creating filesystems"
+	debugmsg ${DEBUG_INFO} "[INFO]: creating swap"
+	mkswap -L $SWAPLABEL /dev/${fs_dev}2
+fi
 
 set -e
 debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
@@ -709,9 +713,9 @@ menuentry "$DISTRIBUTION" {
 	insmod gzio
 	insmod ext2
 	insmod fat
-	search --no-floppy --label OVERCBOOT --set=root 
+	search --no-floppy --label $BOOTLABEL --set=root
 	echo	'Loading Linux ...'
-	linux	/bzImage root=LABEL=OVERCROOTFS ro rootwait $GRUB_KERNEL_PARAMS
+	linux	/bzImage root=LABEL=$ROOTLABEL ro rootwait $GRUB_KERNEL_PARAMS
 	echo	'Loading initial ramdisk ...'
 	initrd	/initrd
 }
@@ -720,9 +724,9 @@ menuentry "$DISTRIBUTION recovery" {
         insmod gzio
         insmod ext2
         insmod fat
-        search --no-floppy --label OVERCBOOT --set=root 
+        search --no-floppy --label $BOOTLABEL --set=root
         echo    'Loading Linux ...'
-        linux   /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
+        linux   /bzImage_bakup root=LABEL=$ROOTLABEL rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
         echo    'Loading initial ramdisk ...'
         initrd  /initrd
 }
@@ -775,11 +779,11 @@ fi
 
 menuentry "$DISTRIBUTION" {
     set fallback="$DISTRIBUTION recovery"
-    chainloader /bzImage root=LABEL=OVERCROOTFS ro rootwait initrd=/initrd
+    chainloader /bzImage root=LABEL=$ROOTLABEL ro rootwait initrd=/initrd
 }
 
 menuentry "$DISTRIBUTION recovery" {
-    chainloader /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/initrd
+    chainloader /bzImage_bakup root=LABEL=$ROOTLABEL rootflags=subvol=rootfs_bakup ro rootwait initrd=/initrd
 }
 EOF
 	fi
@@ -838,7 +842,10 @@ sed -i '/^devpts/d' ${TMPMNT}/etc/fstab
 sed -i '/^tmpfs/d' ${TMPMNT}/etc/fstab
 sed -i '/^usbdevfs/d' ${TMPMNT}/etc/fstab
 
-echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab
+if [ "$SWAPLABEL" != "NOSWAP" ] ; then
+	echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab
+fi
+
 [ $do_ima_sign -eq 1 ] && mount_opts="defaults,iversion" || mount_opts="defaults"
 echo "LABEL=$BOOTLABEL /boot auto $mount_opts 0 0" >> ${TMPMNT}/etc/fstab
 echo "LABEL=$LXCLABEL /var/lib/lxc auto $mount_opts 0 0" >> ${TMPMNT}/etc/fstab
