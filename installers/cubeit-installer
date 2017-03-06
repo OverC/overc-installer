@@ -1135,14 +1135,14 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    ${f}
 	done
     fi
-    sync
-    umount ${TMPMNT}/var/lib/lxc
+
+    [ $do_ima_sign -eq 1 ] &&
+        ima_sign "${TMPMNT}/var/lib/lxc"
 
     if [ $btrfs -eq 1 ]; then
         if [ -z "$subvol" ]; then
             debugmsg ${DEBUG_WARN} "[WARNING]: Could not get subvolume id, thus cannot create factory reset snapshot"
         else
-            mount /dev/${lxc_fs_dev} ${TMPMNT}/var/lib/lxc
             btrfs subvolume set-default $subvol ${TMPMNT}/var/lib/lxc
             btrfs subvolume snapshot ${TMPMNT}/var/lib/lxc/workdir ${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}
             #snapshot subvolume recursively
@@ -1154,13 +1154,10 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
                     btrfs subvolume snapshot "${TMPMNT}/var/lib/lxc/workdir/${subvolume}" "${TMPMNT}/var/lib/lxc/${FACTORY_SNAPSHOT}/$(dirname ${subvolume})"
                 fi
             done
-            sync 
-            umount ${TMPMNT}/var/lib/lxc
         fi
     fi
 
-    [ $do_ima_sign -eq 1 ] &&
-        ima_sign "${TMPMNT}/var/lib/lxc"
+    umount "${TMPMNT}/var/lib/lxc"
 fi
 
 if [ -d "${PACKAGESDIR}" ]; then
