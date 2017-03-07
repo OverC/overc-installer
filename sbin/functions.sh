@@ -277,6 +277,7 @@ validate_usbstorage()
 	echo $parent | grep -q virtual
 	if [ $? -eq 0 ]; then
 	    # this is a virtual block device, return ok
+	    echo $(basename ${usbstorage_device})
 	    return 0
 	fi
 
