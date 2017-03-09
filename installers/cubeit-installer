@@ -612,51 +612,50 @@ fi
 
 # repack initramfs as required
 if [ $do_ima_sign -eq 1 -a -f mnt/initrd ]; then
-            if [ -n "${IMA_POLICY}" -a -f "${IMA_POLICY}" ]; then
-                copy_ima_policy=1
-            else
-                copy_ima_policy=0
-            fi
+	if [ -n "${IMA_POLICY}" -a -f "${IMA_POLICY}" ]; then
+	    copy_ima_policy=1
+	else
+	    copy_ima_policy=0
+	fi
 
-            if [ -n "${IMA_PUBKEY}" -a -f "${IMA_PUBKEY}" ]; then
-                copy_ima_pubkey=1
-            else
-                copy_ima_pubkey=0
-            fi
+	if [ -n "${IMA_PUBKEY}" -a -f "${IMA_PUBKEY}" ]; then
+	    copy_ima_pubkey=1
+	else
+	    copy_ima_pubkey=0
+	fi
 
-            if [ $copy_ima_policy -eq 1 -o $copy_ima_pubkey -eq 1 ]; then
-                topdir="`pwd`"
-                initrd_src="$topdir/mnt/initrd"
+	if [ $copy_ima_policy -eq 1 -o $copy_ima_pubkey -eq 1 ]; then
+	    topdir="`pwd`"
+	    initrd_src="$topdir/mnt/initrd"
 
-                mkdir -p /tmp/initramfs-repack
-                cd /tmp/initramfs-repack
+	    mkdir -p /tmp/initramfs-repack
+	    cd /tmp/initramfs-repack
 
-                zcat $initrd_src | cpio -id
+	    zcat $initrd_src | cpio -id
 
-                [ $copy_ima_policy -eq 1 ] && {
-                    cp -f "${IMA_POLICY}" etc/ima_policy && {
-                        debugmsg ${DEBUG_INFO} "IMA policy copied"
-                    } || {
-                        debugmsg ${DEBUG_INFO} "[ERROR] Unable to copy IMA policy"
-                        exit 1
-                    }
-                }
+	    [ $copy_ima_policy -eq 1 ] && {
+		cp -f "${IMA_POLICY}" etc/ima_policy && {
+		    debugmsg ${DEBUG_INFO} "IMA policy copied"
+		} || {
+		    debugmsg ${DEBUG_INFO} "[ERROR] Unable to copy IMA policy"
+		    exit 1
+		}
+	    }
 
-                [ $copy_ima_pubkey -eq 1 ] && {
-                    cp -f "${IMA_PUBKEY}" etc/keys/pubkey_evm.pem && {
-                        debugmsg ${DEBUG_INFO} "IMA public key copied"
-                    } || {
-                        debugmsg ${DEBUG_INFO} "[ERROR] Unable to copy IMA public key"
-                        exit 1
-                    }
-                }
+	    [ $copy_ima_pubkey -eq 1 ] && {
+		cp -f "${IMA_PUBKEY}" etc/keys/pubkey_evm.pem && {
+		    debugmsg ${DEBUG_INFO} "IMA public key copied"
+		} || {
+		    debugmsg ${DEBUG_INFO} "[ERROR] Unable to copy IMA public key"
+		    exit 1
+		}
+	    }
 
-                find . | cpio -o -H newc > "$initrd_src"
-                cd -
-                cp -f "$initrd_src" "mnt/${initrd}"
-                rm -rf /tmp/initramfs-repack
-            fi
-        fi
+	    find . | cpio -o -H newc > "$initrd_src"
+	    cd -
+	    cp -f "$initrd_src" "mnt/${initrd}"
+	    rm -rf /tmp/initramfs-repack
+	fi
 fi
 
 ## Deploy kernel modules to overwrite what was there if INSTALL_MODULES is set
