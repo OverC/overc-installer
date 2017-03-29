@@ -940,7 +940,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 		    # add two hooks that will put the veth on the OVS bridge, and that
 		    # will bring the link up (both are run in essential).
-		    echo "setting network hooks for ${network_prim}"
+		    echo "[INFO]: setting network hooks for ${network_prime}"
 		    ${SBINDIR}/cube-cfg hook prestart:ovs-vsctl add-port br-int veth0
 		    ${SBINDIR}/cube-cfg hook prestart:ip link set dev veth0 up
 
