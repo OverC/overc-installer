@@ -794,14 +794,6 @@ EOF
 	echo `basename mnt/EFI/BOOT/boot*.efi` >mnt/startup.nsh
 	chmod +x mnt/startup.nsh
 
-	# The linux command doesn't support secure boot. So replace
-	# it with the chainloader command.
-	sed -i 's/^\s*linux\s\+/&chainloader /g' mnt/EFI/BOOT/grub.cfg
-
-	# The initrd command becomes not working if the linux command
-	# is not launched.
-	sed -i '/^\s*initrd\s\+/d' mnt/EFI/BOOT/grub.cfg
-
 	# Don't allow to load the detached initramfs if the bundled kernel used.
 	[ $bundled_kernel -eq 1 ] &&
 	    sed -i 's/\(^\s*chainloader\s\+.*bzImage.*\)\s\+initrd=[^[:space:]]*\(.*\)/\1\2/g' mnt/EFI/BOOT/grub.cfg
