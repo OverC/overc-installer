@@ -856,11 +856,22 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	# ttyconsoldev comes from the parameters to this installer
 	if [ "${ttyconsolecn}" == "${cname}" -o -n "$consoleattr" ]; then
-            ttyconsole_opt="-s ${ttyconsole_opt}"
 	    (
 		cd ${TMPMNT}/opt/container/${cname}
 		${SBINDIR}/cube-cfg set cube.console.mgr:screen-tty
+		# TODO: this doesn't have to be a cube, but is currently hard coded
+		#       to be so.
 		${SBINDIR}/cube-cfg gen ${cname}:cube
+	    )
+	else
+	    (
+		cd ${TMPMNT}/opt/container/${cname}
+		${SBINDIR}/cube-cfg set cube.console.mgr:tty
+		if [ -e "pflask.cmd" ]; then
+		    ${SBINDIR}/cube-cfg gen ${cname}:cube
+		else
+		    ${SBINDIR}/cube-cfg gen ${cname}:oci
+		fi
 	    )
 	fi
 
@@ -944,8 +955,11 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    ${SBINDIR}/cube-cfg hook prestart:ovs-vsctl add-port br-int veth0
 		    ${SBINDIR}/cube-cfg hook prestart:ip link set dev veth0 up
 
-		    # hard coded to a cube for now, could be OCI in the future
-		    ${SBINDIR}/cube-cfg gen ${network_prime}:cube
+		    if [ -e "pflask.cmd" ]; then
+			${SBINDIR}/cube-cfg gen ${network_prime}:cube
+		    else
+			${SBINDIR}/cube-cfg gen ${network_prime}:oci
+		    fi
 		)
 	    fi
 
