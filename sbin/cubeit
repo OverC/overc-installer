@@ -646,10 +646,6 @@ custom_install_rules()
 			if [ -f ${mnt_boot}/EFI/BOOT/.grub.cfg ]; then
 				mv ${mnt_boot}/EFI/BOOT/.grub.cfg ${mnt_boot}/EFI/BOOT/grub.cfg
 			fi
-			#use the chainloader command to load the kernel and initramfs
-			if [ -f ${mnt_boot}/EFI/BOOT/grub.cfg ]; then
-				sed -e '/^[ |\t]*linux.*$/N;s/\n[ |\t]*initrd[ |\t]*/ initrd=/' -e 's/linux/chainloader/' -i ${mnt_boot}/EFI/BOOT/grub.cfg
-			fi
 		fi 
 	fi
 	if ! ${X86_ARCH}; then
