@@ -426,14 +426,14 @@ copy_installer()
 	    return 1
 	fi
 
-	cp ${SBINDIR}/* ${destdir}${INSTALLER_TARGET_SBIN_DIR}
+	cp -r ${SBINDIR}/* ${destdir}${INSTALLER_TARGET_SBIN_DIR}
 	if [ $? -ne 0 ]; then
 		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy sbin files"
 		return 1
 	fi
 
 	# put the installers in with the sbin files
-	cp ${INSTALLERS_DIR}/* ${destdir}${INSTALLER_TARGET_SBIN_DIR}
+	cp -r ${INSTALLERS_DIR}/* ${destdir}${INSTALLER_TARGET_SBIN_DIR}
 	if [ $? -ne 0 ]; then
 		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy installer files"
 		return 1
