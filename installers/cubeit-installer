@@ -548,18 +548,18 @@ if [ -e "${INSTALL_KERNEL}" ] ; then
 	fi
 	cp ${INSTALL_KERNEL} mnt/${inst_kernel}
 	cp ${INSTALL_KERNEL} mnt/${inst_kernel}_bakup
-elif [ -e boot/uImage-* ]; then
+elif ls boot/uImage-* >/dev/null 2>&1; then
 	cp boot/uImage-* mnt/uImage
 	#create a backup kernel for recovery boot
 	cp boot/uImage-* mnt/uImage_bakup
-elif [ -e boot/bzImage-* ]; then
-	if [ -e boot/bzImage-initramfs-* ]; then
+elif ls boot/bzImage-* >/dev/null 2>&1; then
+	if ls boot/bzImage-initramfs-* >/dev/null 2>&1; then
 	    bundled_kernel=1
 	fi
 	cp boot/bzImage-* mnt/bzImage
 	#create a backup kernel for recovery boot
 	cp boot/bzImage-* mnt/bzImage_bakup
-elif [ -e boot/fitImage-* ]; then
+elif ls boot/fitImage-* >/dev/null 2>&1; then
 	cp boot/fitImage-* mnt/fitImage
 	#create a backup kernel for recovery boot
 	cp boot/fitImage-* mnt/fitImage_bakup
