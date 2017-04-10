@@ -538,6 +538,7 @@ copy_installer_data()
 		echo "\"" >> ${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 	    fi
 	    echo "DISTRIBUTION=\"$DISTRIBUTION\"" >>${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+	    echo "CONFIRM_INSTALL=$CONFIRM_INSTALL" >>${destdir}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 	fi
 
 	if [ -n "${HD_MODULES}" ]; then
