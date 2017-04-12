@@ -78,7 +78,8 @@ cat << EOF
     --ttyconsoledev: set dev used for tty console
     --ttyconsolecn: set container name for providing agetty
     --encrypt: encrypt the rootfs
-
+    --yes: answer 'yes' to all questions for clearing TPM and wiping
+           the rootfs device for the disk encryption
 EOF
 }
 
@@ -91,6 +92,7 @@ btrfs=0
 ttyconsolecn=""
 ttyconsoledev="ttyS0"
 do_encryption=0
+no_interaction=0
 while [ $# -gt 0 ]; do
     case "$1" in
     --config) 
@@ -108,6 +110,8 @@ while [ $# -gt 0 ]; do
     -v) verbose=t
             ;;
     -b) btrfs=1
+            ;;
+    --yes) no_interaction=1
             ;;
 	--interactive|-i)
 		# Interactive config mode
@@ -140,6 +144,10 @@ done
 
 if [ -z "${CONFIG_FILES}" ]; then
     CONFIG_FILES="config-installer.sh"
+fi
+
+if [ $no_interaction -eq 0 ] && [ -v CONFIRM_INSTALL ] && [ ${CONFIRM_INSTALL} -eq 0 ]; then
+    no_interaction=1
 fi
 
 colon_separated_config_dirs=`echo ${CONFIG_DIRS} | sed 's/ /:/g'`
@@ -442,7 +450,9 @@ container_fs_dev=${fs_dev}4
 
 if [ $do_encryption -eq 1 ]; then
     ## Evict all objects for the first creation.
-    luks-setup.sh -f -e -d /dev/${rootfs_dev} -n "${ROOTLABEL}_encrypted" >/dev/null 2>&1
+    cmd="luks-setup.sh -f -e -d /dev/${rootfs_dev} -n ${ROOTLABEL}_encrypted >/dev/null 2>&1"
+    [ $no_interaction -eq 1 ] && cmd="echo Y | $cmd"
+    eval "$cmd"
     rootfs_dev="mapper/${ROOTLABEL}_encrypted"
 fi
 
