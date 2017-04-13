@@ -792,7 +792,7 @@ if [ "\${SECURE_OFF}" = "1" ]; then
 fi
 
 menuentry "$DISTRIBUTION" {
-    set fallback="$DISTRIBUTION recovery"
+    set fallback=1
     chainloader /bzImage root=LABEL=$ROOTLABEL ro rootwait initrd=/initrd
 }
 
