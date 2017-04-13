@@ -848,6 +848,14 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	container_src=`basename $c`
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 
+	devicemgr=`get_prop_value_by_container ${cname} "cube.device.mgr"`
+	if [ "${devicemgr}" = "self" ]; then
+	    (
+		cd ${TMPMNT}/opt/container/${cname}
+		${SBINDIR}/cube-cfg set cube.device.mgr:self
+	    )
+	fi
+
 	# TTY/console processing
 	# Any container that has a console attribute gets a virtual console
 	consoleattr=`get_prop_isset_by_container $cname "console"`
