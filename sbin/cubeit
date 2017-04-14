@@ -106,7 +106,7 @@ fi
 
 NBD=
 LOOP=t
-INSTALLER_IMAGE=t
+INSTALLER_IMAGE=""
 DO_IMA_SIGN=${DO_IMA_SIGN:-0}
 IMA_KEY_PASS=""
 while [ $# -gt 0 ]; do
@@ -135,7 +135,7 @@ while [ $# -gt 0 ]; do
 		done
 		;;
     --installer)
-	    # create an installer, not a final image (this is the default)
+	    # create an installer, not a final image.
             INSTALLER_IMAGE=t
             ;;
     -o)     outpath=$2
@@ -890,15 +890,21 @@ case $TARGET_TYPE in
 	    fi
 	fi
 
-	if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ];then
-	    debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} \
-		    --config ${TARGET_CONFIG_FILE} $device --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT}"
-	    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
-		    --config ${TARGET_CONFIG_FILE} --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
+	if [ -n "$INSTALLER_IMAGE" -a "$INSTALLER_IMAGE" == "t" ]; then
+		dev=`basename $device`
+		installer_main "$dev"
 	else
-	    debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} --config ${TARGET_CONFIG_FILE} $device"
-	    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
-		    --config ${TARGET_CONFIG_FILE} ${INSTALL_ROOTFS} $device
+
+		if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ];then
+		    debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} \
+			    --config ${TARGET_CONFIG_FILE} $device --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT}"
+		    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
+			    --config ${TARGET_CONFIG_FILE} --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
+		else
+		    debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} --config ${TARGET_CONFIG_FILE} $device"
+		    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
+			    --config ${TARGET_CONFIG_FILE} ${INSTALL_ROOTFS} $device
+		fi
 	fi
 
 	if [ -n "$NBD" ]; then
