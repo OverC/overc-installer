@@ -517,6 +517,15 @@ copy_installer_data()
 		cp ${c} ${destdir}/${INSTALLER_TARGET_IMAGES_DIR}/containers/
 	    done
 
+	    # Copy additional artifacts
+	    if [ "${EXTRA_ARTIFACTS}" != "" ] ; then
+		(
+		    debugmsg ${DEBUG_INFO} "Copying Extra Artifacts to install media"
+		    cd ${ARTIFACTS_DIR}
+		    cp ${EXTRA_ARTIFACTS} ${destdir}/${INSTALLER_TARGET_IMAGES_DIR}
+		)
+	    fi
+
 	    # create a configuration that can be read by the cubeit-installer
 	    if [ -v TARGET_CONFIG_FILE -a -n "$TARGET_CONFIG_FILE" ]; then
 		cat $TARGET_CONFIG_FILE |
