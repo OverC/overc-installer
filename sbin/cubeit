@@ -485,6 +485,13 @@ copy_installer_data()
 {
 	local destdir="$1"
 
+	if [ -n "${LOCAL_ARTIFACT_PRE_FUNCS}" ]; then
+	    for f in ${LOCAL_ARTIFACT_PRE_FUNCS}; do
+		debugmsg ${DEBUG_INFO} "Executing: ${f}"
+		${f}
+	    done
+	fi
+
 	debugmsg ${DEBUG_INFO} "Copying installer data to install media"
 	if [ -n "${HDINSTALL_ROOTFS}" ]; then
 	    ## Copy the Linux rootfs tarball(s) to USB drive
