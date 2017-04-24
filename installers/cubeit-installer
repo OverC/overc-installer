@@ -79,6 +79,7 @@ cat << EOF
     --ttyconsolecn: set container name for providing agetty
     --privilegedcn: set container name for privileged
     --encrypt: encrypt the rootfs
+    --encrypt-data: encrypt the data
     --ima-sign: sign the files with IMA signature
     --yes: answer 'yes' to all questions for clearing TPM and wiping
            the rootfs device for the disk encryption
@@ -95,6 +96,7 @@ btrfs=0
 ttyconsolecn=""
 ttyconsoledev="ttyS0"
 do_encryption=0
+do_data_encryption=0
 do_ima_sign=0
 no_interaction=0
 while [ $# -gt 0 ]; do
@@ -142,6 +144,9 @@ while [ $# -gt 0 ]; do
             ;;
     --encrypt)
             do_encryption=1
+	    ;;
+    --encrypt-data)
+            do_data_encryption=1
             ;;
     --ima-sign)
             do_ima_sign=1
@@ -520,6 +525,14 @@ if [ $do_encryption -eq 1 ]; then
     [ $no_interaction -eq 1 ] && cmd="echo Y | $cmd"
     eval "$cmd"
     rootfs_dev="mapper/${ROOTLABEL}_encrypted"
+fi
+
+if [ $do_data_encryption -eq 1 ]; then
+    ## Encrypt data drive
+    cmd="luks-setup.sh -f -d /dev/${lxc_fs_dev} -n ${LXCLABEL}_encrypted" >/dev/null 2>&1
+    [ $no_interaction -eq 1 ] && cmd="echo Y | $cmd"
+    eval "$cmd"
+    lxc_fs_dev="mapper/${LXCLABEL}_encrypted"
 fi
 
 if [ $btrfs -eq 0 ]; then
@@ -1266,6 +1279,9 @@ if [ $do_encryption -eq 1 ]; then
     echo "INFO: Closing LUKS ..."
 
     cryptsetup luksClose "${ROOTLABEL}_encrypted"
+fi
+if [ $do_data_encryption -eq 1 ]; then
+    cryptsetup luksClose "${LXCLABEL}_encrypted"
 fi
 
 # don't run this on a host!!
