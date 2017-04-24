@@ -410,6 +410,7 @@ ROOTLABEL="${ROOTLABEL=OVERCROOTFS}"
 LXCLABEL="${LXCLABEL=OVERCCN}"
 
 PARTITIONTYPE=""
+USE_GPT=0
 
 if test ! $(which fdisk); then
 	debugmsg ${DEBUG_CRIT} "[ERROR]: Unable to find 'fdisk'."
@@ -438,6 +439,14 @@ elif [ -z "${FDISK_PARTITION_LAYOUT}" ]; then
 	fi
 fi
 
+if [ "${PARTITIONTYPE_OVERRIDE}" != "" ] ; then
+    PARTITIONTYPE="$PARTITIONTYPE_OVERRIDE"
+    echo ${PARTITIONTYPE} | grep -q gpt
+    if [ $? = 0 ] ; then
+	USE_GPT=1
+    fi
+fi
+
 debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${FDISK_PARTITION_LAYOUT})"
 debugmsg ${DEBUG_INFO} "          1) boot"
 if [ "$SWAPLABEL" != "NOSWAP" ] ; then
@@ -447,6 +456,12 @@ debugmsg ${DEBUG_INFO} "          3) root"
 debugmsg ${DEBUG_INFO} "          4) container (lxc)"
 # We partition the raw device as passed to the script. This is
 # nuke and pave .. so be careful!
+if [ $USE_GPT -eq 1 ] ; then
+    parted -s /dev/${raw_dev} print 2> /dev/null |grep ^Part |grep -q gpt
+    if [ $? -ne 0 ] ; then
+	parted -s /dev/${raw_dev} mklabel gpt
+    fi
+fi
 if [ -f ${FDISK_PARTITION_LAYOUT} ]; then
         fdisk ${PARTITIONTYPE} /dev/${raw_dev} < ${FDISK_PARTITION_LAYOUT} >/dev/null 2>&1
 else
@@ -477,15 +492,27 @@ if [ "$SWAPLABEL" != "NOSWAP" ] ; then
 	debugmsg ${DEBUG_INFO} "[INFO]: creating filesystems"
 	debugmsg ${DEBUG_INFO} "[INFO]: creating swap"
 	mkswap -L $SWAPLABEL /dev/${fs_dev}2
+	if [ $USE_GPT -eq 1 ] ; then
+	    parted -s /dev/${raw_dev} name 2 $SWAPLABEL
+	fi
 fi
 
 set -e
 debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
 mkfs.vfat -I -n $BOOTLABEL /dev/${fs_dev}1
 
+if [ $USE_GPT -eq 1 ] ; then
+    parted -s /dev/${raw_dev} name 1 $BOOTLABEL
+fi
+
 ## define the device file names for rootfs and lxc filesystem
 rootfs_dev=${fs_dev}3
 lxc_fs_dev=${fs_dev}4
+
+if [ $USE_GPT -eq 1 ] ; then
+    parted -s /dev/${raw_dev} name 3 $ROOTLABEL
+    parted -s /dev/${raw_dev} name 4 $LXCLABEL
+fi
 
 if [ $do_encryption -eq 1 ]; then
     ## Evict all objects for the first creation.
