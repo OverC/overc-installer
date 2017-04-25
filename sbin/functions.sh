@@ -943,14 +943,39 @@ extract_tarball()
 {
 	local tarball_src="$1"
 	local destination="$2"
+	local extra_opts=""
 
-	# tar -jxf ${tarball_src} -C ${destination} > /dev/null 2>&1 &
-	tar -jxf ${tarball_src} -C ${destination} &
+	[ ${DO_IMA_SIGN} -eq 1 ] && extra_opts="--xattrs --xattrs-include=security\\.ima"
+
+	tar ${extra_opts} -jxf "${tarball_src}" -C "${destination}" &
 	pidspinner "$!" "1"
 
 	if [ $? -ne 0 ]
 	then
 		debugmsg ${DEBUG_CRIT} "ERROR: Failed to extract tarball ${tarball_src} to ${destination}"
+		return 1
+	fi
+
+	return 0
+}
+
+pack_tarball()
+{
+	local dir="$1"
+	local tarball="$2"
+	local extra_opts=""
+
+	[ ${DO_IMA_SIGN} -eq 1 ] && extra_opts="--xattrs --xattrs-include=security\\.ima"
+
+	(
+		cd "${dir}"
+		tar ${extra_opts} -cjf "${tarball}" *
+	) &
+	pidspinner "$!" "1"
+
+	if [ $? -ne 0 ]
+	then
+		debugmsg ${DEBUG_CRIT} "ERROR: Failed to pack tarball ${tarball} from ${dir}"
 		return 1
 	fi
 
