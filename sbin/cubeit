@@ -36,7 +36,7 @@ usage()
 {
 cat << EOF
 
-  cubeit [--config <config script>] [--target-config <config script>] [--force] --artifacts [<artifacts dir>] <target>
+  cubeit [--config <config script>] [--target-config <config script>] [--force] --artifacts [<artifacts dir>] [--ima-sign] <target>
 
   cubeit is capable of creating a "cube capable" installer + payload, or image.
 
@@ -54,6 +54,7 @@ cat << EOF
      --force: force overwrite any output files or images
      --artifacts: directory where the binary inputs for image generation are found.
 		  The configuration script indicates what specific images will be used
+     --ima-sign: perform IMA signing for the rootfs and container images
 
   cubeit is capable of creating images, or installers + payloads, or simply payloads
   with the value of <target> indicating which type of image to create.
@@ -109,6 +110,7 @@ fi
 NBD=
 LOOP=t
 INSTALLER_IMAGE=t
+DO_IMA_SIGN=${DO_IMA_SIGN:-0}
 while [ $# -gt 0 ]; do
     case "$1" in
     --config)
@@ -145,6 +147,9 @@ while [ $# -gt 0 ]; do
 	    NBD=t
 	    LOOP=
 	    ;;
+    --ima-sign)
+	    DO_IMA_SIGN=1
+	    ;;
     --force)
 	    FORCE=t
             ;;
@@ -172,6 +177,94 @@ if [ -n "$ARTIFACTS_DIR" ]; then
     fi
 fi
 export ARTIFACTS_DIR
+
+# determine the location of key store
+if [ -z "$KEYS_DIR" -o ! -d "$KEYS_DIR" ]; then
+    SAMPLE_KEYS_DIR="$ARTIFACTS_DIR/sample-keys"
+    USER_KEYS_DIR="$ARTIFACTS_DIR/user-keys"
+
+    if [ -d "$USER_KEYS_DIR" ]; then
+        KEYS_DIR="$USER_KEYS_DIR"
+    else
+        KEYS_DIR="$SAMPLE_KEYS_DIR"
+    fi
+fi
+
+# check if the filesystem can support xattr.
+check_fs_for_ima()
+{
+    local tmpfile="`mktemp test_XXXX`"
+    local res=`setfattr -x security.ima "$tmpfile" 2>&1 | grep -q 'Operation not supported$'`
+
+    rm -f "$tmpfile"
+
+    return ! $res
+}
+
+if [ $DO_IMA_SIGN -eq 1 ]; then
+    if [ ! -s "$KEYS_DIR/ima_keys/ima_privkey.pem" ]; then
+        debugmsg ${DEBUG_CRIT} "[ERROR] Unable to run IMA signing due to the invalid signing key"
+        exit 1
+    elif ! check_fs_for_ima; then
+        debugmsg ${DEBUG_CRIT} "[ERROR]: Current file system does not support to set xattr"
+        exit 1
+    fi
+fi
+
+ima_sign()
+{
+    evmctl ima_sign --hashalgo sha256 --rsa \
+        --key "$KEYS_DIR/ima_keys/ima_privkey.pem" \
+        -r -t f "$1" && {
+        return 0
+    } || {
+        debugmsg ${DEBUG_INFO} "[ERROR]: IMA signing occurs with error for $1."
+        exit 1
+    } &
+    pidspinner "$!" "1"
+}
+
+repack_image_for_ima()
+{
+    local tarball="$1"
+    local tarball_dst=$2
+    local repack_dir=`mktemp -d repack_tarball.XXXXXX`
+    local repack_image="`basename ${tarball}`"
+
+    debugmsg ${DEBUG_INFO} "[INFO]: Preparing to repack image ${repack_image} for IMA signing ..."
+
+    repack_dir="`pwd`/${repack_dir}"
+
+    extract_tarball "${tarball}" "${repack_dir}"
+    [ $? -ne 0 ] && {
+        rm -rf "${repack_dir}"
+        return 1
+    }
+
+    debugmsg ${DEBUG_INFO} "[INFO]: The image ${repack_image} extracted"
+
+    ima_sign "$repack_dir"
+    [ $? -ne 0 ] && {
+        rm -rf "${repack_dir}"
+        return 1
+    }
+
+    debugmsg ${DEBUG_INFO} "[INFO]: IMA signing complete for ${repack_image}"
+
+    pack_tarball "${repack_dir}" "`pwd`/${repack_image}"
+    [ $? -ne 0 ] && {
+        rm -rf "${repack_dir}"
+        return 1
+    }
+
+    rm -rf "${repack_dir}"
+
+    eval "${tarball_dst}=${repack_image}"
+
+    debugmsg ${DEBUG_INFO} "[INFO]: ${tarball} is repacked as ${repack_image}"
+
+    return 0
+}
 
 ######################################################################
 # Define some debug output variables
@@ -484,12 +577,23 @@ IFS=$OLDIFS
 copy_installer_data()
 {
 	local destdir="$1"
+	local img=""
 
 	debugmsg ${DEBUG_INFO} "Copying installer data to install media"
 	if [ -n "${HDINSTALL_ROOTFS}" ]; then
 	    ## Copy the Linux rootfs tarball(s) to USB drive
             for i in ${HDINSTALL_ROOTFS}; do
-	        cp ${i} ${destdir}${INSTALLER_TARGET_IMAGES_DIR}
+		if [ $DO_IMA_SIGN -eq 0 ]; then
+		    img="${i}"
+		else
+		    repack_image_for_ima "${i}" img
+		    if [ $? -ne 0 ]; then
+			debugmsg ${DEBUG_CRIT} "ERROR: Failed to repack rootfs image $i for IMA signing"
+			return 1
+		    fi
+		fi
+
+	        cp "${img}" "${destdir}${INSTALLER_TARGET_IMAGES_DIR}"
 	        if [ $? -ne 0 ]; then
 		    debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy hard drive install root filesystem"
 		    return 1
@@ -514,7 +618,17 @@ copy_installer_data()
 
 	    # drop any properties and copy the containers to the installer
 	    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-		cp ${c} ${destdir}/${INSTALLER_TARGET_IMAGES_DIR}/containers/
+		if [ $DO_IMA_SIGN -eq 0 ]; then
+		    img="${c}"
+		else
+		    repack_image_for_ima "${c}" img
+		    if [ $? -ne 0 ]; then
+			debugmsg ${DEBUG_CRIT} "ERROR: Failed to repack container image $c for IMA signing"
+			return 1
+		    fi
+		fi
+
+		cp "${img}" "${destdir}/${INSTALLER_TARGET_IMAGES_DIR}/containers"
 	    done
 
 	    # Copy additional artifacts
