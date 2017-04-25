@@ -55,6 +55,10 @@ cat << EOF
      --artifacts: directory where the binary inputs for image generation are found.
 		  The configuration script indicates what specific images will be used
 
+     --loop <loop device>: if the default / automatic selection of the loopback device
+                           is causing partitioning/fdisk errors an explicit loop device
+                           can be specified, i.e. --loop /dev/loop2
+
   cubeit is capable of creating images, or installers + payloads, with the value of
   <target> indicating which type of image to create.
 
@@ -135,6 +139,12 @@ while [ $# -gt 0 ]; do
 	    NBD=t
 	    LOOP=
 	    ;;
+    --loop)
+            LOOPDEV=$2
+            shift
+            NBD=
+	    LOOP=t
+	    ;;
     --force)
 	    FORCE=t
             ;;
@@ -207,8 +217,6 @@ fi
 ## Load configuration file(s)
 colon_separated_config_dirs=`echo ${CONFIG_DIRS} | sed 's/ /:/g'`
 for config in ${CONFIG_FILES}; do
-    config_to_source="${config}"
-
     # check to see if the config exists. If it doesn't search the config paths
     if ! [ -e "${config}" ]; then
 	for d in ${CONFIG_DIRS}; do
@@ -218,13 +226,17 @@ for config in ${CONFIG_FILES}; do
 	done
 
 	if [ -z "${config_to_source}" ]; then
-	    echo "ERROR: Could not find configuration file (${config_to_soure})."
-	    echo "Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
+	    echo "ERROR: Could not find configuration file (${config})."
+	    echo "       Try using an absolute path or the file must be in one of ($(echo ${CONFIG_DIRS} | tr ' ' ','))."
+	    echo "       Also ensure that the permissions are correct and that it can be read as root/sudo"
 	    exit 1
 	fi
+    else
+	config_to_source="${config}"
     fi
     export PATH="$PATH:${colon_separated_config_dirs}:$(dirname ${config_to_source})"
-    source `basename ${config_to_source}`
+    i=$(basename ${config_to_source})
+    source $i
 done
 
 # config sanity check
@@ -680,7 +692,7 @@ case $TARGET_TYPE in
 	if [ -n "$NBD" ]; then
 	    device=
 	    for i in `ls /dev/nbd*`; do
-		qemu-nbd --nocache -c $i $target >/dev/null 2>&1
+		qemu-nbd --nocache -c $i $target # >/dev/null 2>&1
 		if [ $? -eq 0 ]; then
 		    echo "using nbd device $i"
 		    device=$i
@@ -694,12 +706,18 @@ case $TARGET_TYPE in
 		assert $?
 	    fi
 	else
-	    device=`losetup -f --show $target`
+	    if [ -n "${LOOPDEV}" ]; then
+	         device="${LOOPDEV}"
+                 losetup ${device} $target
+            else
+	         device=`losetup -f --show $target`
+            fi
 	    if [ -z "$device" ]; then
 		debugmsg ${DEBUG_CRIT} "[ERROR]: No free loop devices, try nbd ?"
 		false
 		assert $?
 	    fi
+            debugmsg ${DEBUG_INFO} using device: $device
 	fi
 
 	if [ -z "${TARGET_CONFIG_FILE}" ]; then

@@ -262,6 +262,17 @@ Install cryptsetup"
     fi
 fi
 
+check_required()
+{
+    if [ ! -e "${1}" ]; then
+	x=$(which "${1}")
+	if [ -z "${x}" ]; then
+	    echo "[ERROR]: required command ${1} not found, exiting"
+	    exit 1
+	fi
+    fi
+}
+
 get_container_name_by_prop()
 {
     local prop=$1
@@ -313,6 +324,8 @@ get_prop_isset_by_container()
 
     echo "${ret}"
 }
+
+check_required jq
 
 # containers are listed in HDINSTALL_CONTAINERS as:
 #    <full path>/<container tgz>:<properties>
