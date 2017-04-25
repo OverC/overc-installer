@@ -574,7 +574,7 @@ fi
 
 # we are either in ${TMPMNT} or ${TMPMNT}/rootfs
 debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
-tar --numeric-owner -xpf $rootfs
+tar --warning=no-timestamp --numeric-owner -xpf $rootfs
 
 # sanity check whether the private key is available for IMA signing
 if [ $do_ima_sign -eq 1 ]; then
