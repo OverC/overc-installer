@@ -77,7 +77,6 @@ cat << EOF
     --finaldev: boot from this block dev. Default is vda
     --ttyconsoledev: set dev used for tty console
     --ttyconsolecn: set container name for providing agetty
-    --privilegedcn: set container name for privileged
     --encrypt: encrypt the rootfs
 
 EOF
@@ -124,9 +123,6 @@ while [ $# -gt 0 ]; do
             shift
             ;;
     --ttyconsolecn) ttyconsolecn="$2"
-            shift
-            ;;
-    --privilegedcn) privilegedcn="$2"
             shift
             ;;
     --partition_layout)
@@ -347,18 +343,11 @@ fi
 
 # if ttyconsolecn wasn't passed on the command line, check to see
 # if a container in the configuration had the "console" property. If
-# so, set it. Otherwise, assign cube-desktop as the default
+# so, set it. Otherwise, assign dom0 as the default
 if [ -z "${ttyconsolecn}" ]; then
     ttyconsolecn=`get_container_name_by_prop console`
     if [ -z "${ttyconsolecn}" ]; then
-	ttyconsolecn="cube-desktop"
-    fi
-fi
-
-if [ -z "${privilegedcn}" ]; then
-    privilegedcn=`get_container_name_by_prop privileged`
-    if [ -z "${privilegedcn}" ]; then
-        privilegedcn="cube-desktop"
+	ttyconsolecn="dom0"
     fi
 fi
 
@@ -867,9 +856,15 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    (
 		cd ${TMPMNT}/opt/container/${cname}
 		${SBINDIR}/cube-cfg set cube.console.mgr:screen-tty
-		# TODO: this doesn't have to be a cube, but is currently hard coded
-		#       to be so.
-		${SBINDIR}/cube-cfg gen ${cname}:cube
+		if [ -e "pflask.cmd" ]; then
+		    ${SBINDIR}/cube-cfg gen ${cname}:cube
+		else
+		    # TODO: this won't work at the moment, since OCI based
+		    #       containers don't properly take over a tty device
+		    #       but we should still generate the right type of
+		    #       container.
+		    ${SBINDIR}/cube-cfg gen ${cname}:oci
+		fi
 	    )
 	else
 	    (
