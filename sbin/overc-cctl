@@ -628,7 +628,9 @@ function add_container {
 
 	# Extract compressed tar ball
 	echo -n "Extracting rootfs....."
-	tar --warning=no-timestamp --numeric-owner -xf ${rootfs_fn} -C ${pathtocontainer}/rootfs
+	tar --warning=no-timestamp --numeric-owner \
+		--xattrs --xattrs-include=security\\.ima \
+		-xf "${rootfs_fn}" -C "${pathtocontainer}/rootfs"
 	if [ $? != 0 ]; then
 		echo "Error: rootfs file extraction failed"
 		exit 1
