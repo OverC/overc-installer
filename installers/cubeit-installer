@@ -887,6 +887,8 @@ sed -i '/^proc/d' ${TMPMNT}/etc/fstab
 sed -i '/^devpts/d' ${TMPMNT}/etc/fstab
 sed -i '/^tmpfs/d' ${TMPMNT}/etc/fstab
 sed -i '/^usbdevfs/d' ${TMPMNT}/etc/fstab
+# If using IMA it should /sys/kernel/security is mounted by the container manager
+sed -i '/^securityfs/d' ${TMPMNT}/etc/fstab
 
 if [ "$SWAPLABEL" != "NOSWAP" ] ; then
 	echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab

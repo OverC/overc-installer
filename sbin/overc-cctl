@@ -480,6 +480,7 @@ function deploy_new_container {
 		sed -i '/^devpts/d' ${pathtocontainer}/rootfs/etc/fstab
 		sed -i '/^tmpfs/d' ${pathtocontainer}/rootfs/etc/fstab
 		sed -i '/^usbdevfs/d' ${pathtocontainer}/rootfs/etc/fstab
+		sed -i '/^securityfs/d' ${pathtocontainer}/rootfs/etc/fstab
 	fi
 	#Since lxc.network.name set the veth's name as veth0, thus we should 
 	#Set the match name in 20-wired.network according to veth*.
