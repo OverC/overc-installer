@@ -974,6 +974,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    ${SBINDIR}/cube-cfg set cube.network.type:static
 		    ${SBINDIR}/cube-cfg --prepend set cube.network.ip:192.168.42.1/24
 		    ${SBINDIR}/cube-cfg device network:${NETWORK_DEVICE}:${NETWORK_DEVICE}
+		    ${SBINDIR}/cube-cfg attribute +netprime
 
 		    if [ -e "pflask.cmd" ]; then
 			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netprime netprime /opt/container/${network_prime}
