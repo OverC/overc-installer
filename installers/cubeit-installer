@@ -717,6 +717,29 @@ if [ -n "${SERVICE_DISABLE_ESSENTIAL}" ]; then
     done
 fi
 
+# arg1: container storage path
+# arg2: container name
+# arg3: whether or not prep should be run
+regen_container_config() {
+    local outdir=$1
+    local cname=$2
+    local prep_flag=$3
+
+    (
+	cd ${outdir}${cname}
+	if [ -e "pflask.cmd" ]; then
+	    ${SBINDIR}/cube-cfg gen ${cname}:cube
+	else
+	    ${SBINDIR}/cube-cfg gen ${cname}:oci
+	fi
+
+	if [ -n "${prep_flag}" ]; then
+	    ${SBINDIR}/cube-ctl prep -n ${cname} -o ${outdir}
+	fi
+    )
+}
+
+
 if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     subvol=""
     debugmsg ${DEBUG_INFO} "[INFO] installing containers"
@@ -801,14 +824,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	case $container_src in
 	    *-dom0-*)
-		# TODO: we can likely drop the monitored container stuff, it needs to be
-		#       replaced.
-		monitor_container_opt=""
-		monitored_container=`get_container_name_by_prop monitored`
-		if [ -n "${monitored_container}" ]; then
-			monitor_container_opt="-m ${monitored_container}"
-		fi
-
 		${SBINDIR}/cube-ctl add --auto essential -n ${cname} -t cube -o ${CONTAINERBASE} ${c}
 		;;
 	    *)
@@ -856,32 +871,18 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    (
 		cd ${TMPMNT}/opt/container/${cname}
 		${SBINDIR}/cube-cfg set cube.console.mgr:screen-tty
-		if [ -e "pflask.cmd" ]; then
-		    ${SBINDIR}/cube-cfg gen ${cname}:cube
-		else
-		    # TODO: this won't work at the moment, since OCI based
-		    #       containers don't properly take over a tty device
-		    #       but we should still generate the right type of
-		    #       container.
-		    ${SBINDIR}/cube-cfg gen ${cname}:oci
-		fi
+		regen_container_config ${TMPMNT}/opt/container/ ${cname}
 	    )
 	else
 	    (
 		cd ${TMPMNT}/opt/container/${cname}
 		${SBINDIR}/cube-cfg set cube.console.mgr:tty
-		if [ -e "pflask.cmd" ]; then
-		    ${SBINDIR}/cube-cfg gen ${cname}:cube
-		else
-		    ${SBINDIR}/cube-cfg gen ${cname}:oci
-		fi
+		regen_container_config ${TMPMNT}/opt/container/ ${cname}
 	    )
 	fi
 
 	# vty attributes are: <number>,<properites>
 	# properties: active or <empty>
-
-	# NOTE: not currently used.
 	vty_num=`get_prop_value_by_container ${cname} "vty"`
 	if [ -n "$vty_num" ]; then
 	    attribute1=`echo $vty_num | cut -f1 -d,`
@@ -895,6 +896,12 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    foreground_vty="${vty_num}"
 		fi
 	    fi
+
+	    (
+		cd ${TMPMNT}/opt/container/${cname}
+		${SBINDIR}/cube-cfg device vt:/dev/tty${vty_num}:/dev/tty${vty_num}
+		regen_container_config ${TMPMNT}/opt/container/ ${cname} prep
+	    )
 	fi
 
 	# if there was a foreground container defined (attribute 'active' on a vty), then we
