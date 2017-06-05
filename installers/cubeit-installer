@@ -947,6 +947,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		if [ "${cname}" = "dom0" ]; then
 		    ${SBINDIR}/cube-cfg set cube.network.type:static
 		    ${SBINDIR}/cube-cfg set cube.network.ip:192.168.42.3/24
+		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig vrf /opt/container/${cname}
 		fi
 
 		${SBINDIR}/cube-cfg gen ${cname}:cube
@@ -956,6 +957,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
     # Setup networking prime and static IPs, unless using bridged networking
     if [ ! -v network_prime ]; then
+	# TODO: remove this case, it is no longer supported .. or fix it
 	# Fallback to using bridged networking (see overc_bridge_networking DISTRO_FEATURE)
 	sed -i "s/^configure_network_prime/#configure_network_prime/"  \
 	    ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
@@ -972,7 +974,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	if [ -e "${pathtocontainer}/config.json" ]; then
 	    # Pass the network device through to the designated network prime container
 	    if [ -n "${NETWORK_DEVICE}" ]; then
-		echo "adding ${NETWORK_DEVICE} to network prime"
+		echo "[INFO]: adding ${NETWORK_DEVICE} to network prime"
 		(
 		    cd ${TMPMNT}/opt/container/${network_prime}
 
@@ -983,11 +985,14 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    ${SBINDIR}/cube-cfg device network:${NETWORK_DEVICE}:${NETWORK_DEVICE}
 		    ${SBINDIR}/cube-cfg attribute +netprime
 
+		    # ensure that etcd (on dom0) is accessible
+		    ${SBINDIR}/cube-cfg -v link ${network_prime}:2379 dom0:2379
+
 		    if [ -e "pflask.cmd" ]; then
-			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netprime netprime /opt/container/${network_prime}
+			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig netprime /opt/container/${network_prime}
 			${SBINDIR}/cube-cfg gen ${network_prime}:cube
 		    else
-			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netprime netprime \$\(cat\)
+			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig netprime \$\(cat\)
 			${SBINDIR}/cube-cfg gen ${network_prime}:oci
 		    fi
 		)
