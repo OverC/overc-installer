@@ -747,7 +747,8 @@ if ${X86_ARCH}; then
     debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
 
     chroot ${TMPMNT} /bin/bash -c "mount -t devtmpfs none /dev"
-    chroot ${TMPMNT} /bin/bash -c "mount -t proc none /proc"
+    chroot ${TMPMNT} /bin/bash -c "mount -t proc proc /proc"
+    chroot ${TMPMNT} /bin/bash -c "mount -t sysfs sys /sys"
 
     if [ -n "$loop_device" ]; then
 	chroot ${TMPMNT} /bin/bash -c "grub-install --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search\" /dev/${raw_dev}"
@@ -1250,11 +1251,15 @@ cat /proc/mounts | grep -q "${TMPMNT}/proc"
 if [ $? -eq 0 ]; then
 	umount ${TMPMNT}/proc
 fi
+cat /proc/mounts | grep -q "${TMPMNT}/sys"
+if [ $? -eq 0 ]; then
+	umount ${TMPMNT}/sys
+fi
 
 umount ${TMPMNT}
 if [ $? -ne 0 ]; then
-    echo ERROR: umount ${TMPMNT} failed
-    exit 1
+   echo ERROR: umount ${TMPMNT} failed
+   exit 1
 fi
 
 #create a backup snapshot for rootfs
