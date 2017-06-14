@@ -885,6 +885,8 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	# vty attributes are: <number>,<properites>
 	# properties: active or <empty>
 	vty_num=`get_prop_value_by_container ${cname} "vty"`
+	foreground_container=
+	foreground_vty=
 	if [ -n "$vty_num" ]; then
 	    attribute1=`echo $vty_num | cut -f1 -d,`
 	    attribute2=`echo $vty_num | cut -f2 -d,`
@@ -948,6 +950,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		if [ "${cname}" = "dom0" ]; then
 		    ${SBINDIR}/cube-cfg set cube.network.type:static
 		    ${SBINDIR}/cube-cfg set cube.network.ip:192.168.42.3/24
+		    ${SBINDIR}/cube-cfg attribute +vrf
 		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig vrf /opt/container/${cname}
 		fi
 
