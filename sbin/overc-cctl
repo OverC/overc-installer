@@ -825,7 +825,7 @@ function switch_container {
 
 function stop_container {
 	echo -n "Stopping container ${cn} .... "
-	lxc-stop -n ${cn}
+	lxc-stop -n ${cn} -k
 	echo "done"
 }
 
