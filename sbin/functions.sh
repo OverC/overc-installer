@@ -846,11 +846,11 @@ service_install()
     fi
     sname=`basename ${service}`
 
-    if [ -d "${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/" ]; then
-	tgt="${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/"
+    if [ -d "${TMPMNT}/opt/container/${cname}/rootfs/lib/systemd/system/" ]; then
+	tgt="${TMPMNT}/opt/container/${cname}/rootfs/lib/systemd/system/"
     else
-	if [ -d "${LXCBASE}/${cname}/rootfs/usr_temp" ]; then
-	    tgt="${LXCBASE}/${cname}/rootfs/usr_temp/lib/systemd/system"
+	if [ -d "${TMPMNT}/opt/container/${cname}/rootfs/usr_temp" ]; then
+	    tgt="${TMPMNT}/opt/container/${cname}/rootfs/usr_temp/lib/systemd/system"
 	fi
     fi
 
@@ -859,7 +859,7 @@ service_install()
 	# copy service
 	cp -f "${service}" ${tgt}/${sname}
 	# activate service
-	ln -s /usr/lib/systemd/system/${sname} ${LXCBASE}/${cname}/rootfs/etc/systemd/system/multi-user.target.wants/${sname}
+	ln -sf /lib/systemd/system/${sname} ${TMPMNT}/opt/container/${cname}/rootfs/etc/systemd/system/multi-user.target.wants/${sname}
 	echo "[INFO] ${cname}: Service ${sname} installed and activated"
     else
 	echo "[WARNING] ${cname}: could not enable service ${sname}, target directory not found"
@@ -874,11 +874,12 @@ service_modify()
     local cname="$3"
     local sname="$4"
 
-    if [ -d "${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/" ]; then
-	tgt="${LXCBASE}/${cname}/rootfs/usr/lib/systemd/system/"
+    if [ -d "${TMPMNT}/opt/container/${cname}/rootfs/lib/systemd/system/" ]; then
+	tgt="${TMPMNT}/opt/container/${cname}/rootfs/lib/systemd/system/"
     else
-	if [ -d "${LXCBASE}/${cname}/rootfs/usr_temp" ]; then
-	    tgt="${LXCBASE}/${cname}/rootfs/usr_temp/lib/systemd/system"
+	if [ -d "${TMPMNT}/opt/container/${cname}/rootfs/usr_temp" ]; then
+            echo bar bar
+	    tgt="${TMPMNT}/opt/container/${cname}/rootfs/usr_temp/lib/systemd/system"
 	fi
     fi
 
@@ -907,7 +908,7 @@ service_disable()
         debug_msg="${debug_msg} for essential."
     else
         # For containers
-        slinks=`find ${LXCBASE}/${cname}/rootfs/etc/systemd/ -name ${services} 2>/dev/null`
+        slinks=`find ${TMPMNT}/opt/container/${cname}/rootfs/etc/systemd/ -name ${services} 2>/dev/null`
         debug_msg="${debug_msg} for ${cname}."
     fi
 
@@ -931,8 +932,8 @@ service_add_condition_for_container()
     local cname="$2"
  
     services="${services%.service}.service"
-    local spaths=`find ${LXCBASE}/${cname}/rootfs/lib/systemd/ \
-                       ${LXCBASE}/${cname}/rootfs/usr/lib/systemd/ \
+    local spaths=`find ${TMPMNT}/opt/container/${cname}/rootfs/lib/systemd/ \
+                       ${TMPMNT}/opt/container/${cname}/rootfs/usr/lib/systemd/ \
                        -name ${services} 2>/dev/null`
 
     if [ -z "${spaths}" ]; then
