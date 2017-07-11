@@ -55,6 +55,7 @@ cat << EOF
      --artifacts: directory where the binary inputs for image generation are found.
 		  The configuration script indicates what specific images will be used
      --ima-sign: perform IMA signing for the rootfs and container images
+     --ima-key-pass: the password of IMA signing key
 
   cubeit is capable of creating images, or installers + payloads, or simply payloads
   with the value of <target> indicating which type of image to create.
@@ -111,6 +112,7 @@ NBD=
 LOOP=t
 INSTALLER_IMAGE=t
 DO_IMA_SIGN=${DO_IMA_SIGN:-0}
+IMA_KEY_PASS=""
 while [ $# -gt 0 ]; do
     case "$1" in
     --config)
@@ -150,6 +152,10 @@ while [ $# -gt 0 ]; do
     --ima-sign)
 	    DO_IMA_SIGN=1
 	    ;;
+    --ima-key-pass)
+            IMA_KEY_PASS="$2"
+            shift
+            ;;
     --force)
 	    FORCE=t
             ;;
@@ -206,7 +212,7 @@ check_fs_for_ima()
 }
 
 if [ ${DO_IMA_SIGN} -eq 1 ]; then
-    if [ ! -s "${KEYS_DIR}/ima_keys/ima_privkey.pem" ]; then
+    if [ ! -s "${KEYS_DIR}/ima_keys/x509_ima.key" ]; then
         debugmsg ${DEBUG_CRIT} "[ERROR] Unable to run IMA signing due to specifying a nonexistent or empty signing key file"
         exit 1
     fi
@@ -215,12 +221,22 @@ if [ ${DO_IMA_SIGN} -eq 1 ]; then
         debugmsg ${DEBUG_CRIT} "[ERROR]: Current file system does not support to set xattr"
         exit 1
     fi
+
+    if [ -s "${IMA_KEY_PASS}" ]; then
+        IMA_KEY_PASS="`cat ${IMA_KEY_PASS}`"
+    fi
+
+    if [ -z "${IMA_KEY_PASS}" ]; then
+        debugmsg ${DEBUG_CRIT} "[ERROR]: The private key for IMA signing must be protected by a password"
+        exit 1
+    fi
 fi
 
 ima_sign()
 {
-    evmctl ima_sign --hashalgo sha256 --rsa \
-        --key "${KEYS_DIR}/ima_keys/ima_privkey.pem" \
+    evmctl ima_sign --hashalgo sha256 \
+        --key "${KEYS_DIR}/ima_keys/x509_ima.key" \
+        --pass="${IMA_KEY_PASS}" \
         -r -t f "$1" &
 
     pidspinner "$!" "1"
