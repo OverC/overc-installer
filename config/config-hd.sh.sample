@@ -48,6 +48,6 @@ INSTALLER_COMPLETE="Installation is now complete"
 
 CONFIRM_REBOOT=1
 
-CMD_GRUB_INSTALL="/bin/bash /sbin/grub-install"
+CMD_GRUB_INSTALL="/bin/sh /sbin/grub-install"
 
 DEBUG_LEVEL=${DEBUG_VERBOSE}

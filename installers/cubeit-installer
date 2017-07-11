@@ -747,14 +747,14 @@ fi
 if ${X86_ARCH}; then
     debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
 
-    chroot ${TMPMNT} /bin/bash -c "mount -t devtmpfs none /dev"
-    chroot ${TMPMNT} /bin/bash -c "mount -t proc proc /proc"
-    chroot ${TMPMNT} /bin/bash -c "mount -t sysfs sys /sys"
+    chroot ${TMPMNT} /bin/sh -c "mount -t devtmpfs none /dev"
+    chroot ${TMPMNT} /bin/sh -c "mount -t proc proc /proc"
+    chroot ${TMPMNT} /bin/sh -c "mount -t sysfs sys /sys"
 
     if [ -n "$loop_device" ]; then
-	chroot ${TMPMNT} /bin/bash -c "grub-install --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search\" /dev/${raw_dev}"
+	chroot ${TMPMNT} /bin/sh -c "grub-install --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search\" /dev/${raw_dev}"
     else
-	chroot ${TMPMNT} /bin/bash -c "grub-install --boot-directory=/mnt --force /dev/${raw_dev}"
+	chroot ${TMPMNT} /bin/sh -c "grub-install --boot-directory=/mnt --force /dev/${raw_dev}"
     fi
 
     mkdir -p ${TMPMNT}/mnt/grub
@@ -1220,7 +1220,7 @@ if [ -d "${PACKAGESDIR}" ]; then
     mkdir -p opt/
     cp -r ${PACKAGESDIR} opt/
 
-    chroot . /bin/bash -c "\\
+    chroot . /bin/sh -c "\\
 smart channel -y --add all type=rpm-md baseurl=file://opt/packages/rpm/all/; \\
 smart channel -y --add core2_64 type=rpm-md baseurl=file://opt/packages/rpm/core2_64/; \\
 smart channel -y --add genericx86_64 type=rpm-md baseurl=file://opt/packages/rpm/genericx86_64; \\

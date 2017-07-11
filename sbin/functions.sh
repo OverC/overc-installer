@@ -729,7 +729,7 @@ function extract_container_name
 install_container()
 {
     target_dir=$1
-    chroot . /bin/bash -c "/tmp/overc-cctl add -d -a -g onboot -t 0 -n $cname -f /tmp/$c ${ttyconsole_opt}"
+    chroot . /bin/sh -c "/tmp/overc-cctl add -d -a -g onboot -t 0 -n $cname -f /tmp/$c ${ttyconsole_opt}"
 }
 
 
