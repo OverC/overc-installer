@@ -21,6 +21,8 @@ SBINDIR="${BASEDIR}/../sbin"
 # installers that will go on the usb stick, and install to the HD
 INSTALLERS_DIR="${BASEDIR}/../installers"
 LIBDIR="${BASEDIR}/../lib"
+# libsign binaries
+LIBSIGN_DIR="${BASEDIR}/../libsign"
 
 : ${FUNCTIONS_FILE="$BASEDIR/functions.sh"}
 
@@ -183,6 +185,27 @@ if [ -n "$ARTIFACTS_DIR" ]; then
     fi
 fi
 export ARTIFACTS_DIR
+
+# key store
+SAMPLE_KEYS_DIR="$ARTIFACTS_DIR/sample-keys"
+USER_KEYS_DIR="$ARTIFACTS_DIR/user-keys"
+
+if [ -d "$USER_KEYS_DIR" ]; then
+    KEYS_DIR="$USER_KEYS_DIR"
+else
+    KEYS_DIR="$SAMPLE_KEYS_DIR"
+fi
+
+selsign()
+{
+    $LIBSIGN_DIR/bin/selsign.sh -k "$KEYS_DIR/mok_sb_keys/vendor_cert.key" \
+	-c "$KEYS_DIR/mok_sb_keys/vendor_cert.crt" "$1" && {
+	    debugmsg ${DEBUG_INFO} "[INFO] Succeeded to sign $1"
+	} || {
+	    debugmsg ${DEBUG_INFO} "[ERROR] Failed to sign $1"
+	    exit 1
+	}
+}
 
 # determine the location of key store
 if [ -z "${KEYS_DIR}" ] || [ ! -d "${KEYS_DIR}" ]; then
@@ -738,7 +761,7 @@ custom_install_rules()
 	##       INSTALL_INITRAMFS, since other routines read that global variable,
 	##       and align things like grub to that name.
 	debugmsg ${DEBUG_INFO} "Copying kernel image"
-	install_kernel "${INSTALL_KERNEL}" "${mnt_boot}" "${initramfs_source}" "`basename ${INSTALL_INITRAMFS}`"
+	install_kernel "${INSTALL_KERNEL}" "${mnt_boot}" "${initramfs_source}" "`basename ${INSTALL_INITRAMFS}`" "${INITRAMFS_EXTRAS}"
 	if [ $? -ne 0 ]; then
 	    return 1
 	fi
@@ -777,6 +800,11 @@ custom_install_rules()
 				debugmsg ${DEBUG_CRIT} "INFO: found grub hd configuration ${d}/${INSTALL_GRUBHDCFG}"
 				cp ${d}/${INSTALL_GRUBHDCFG} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG}
 	    		fi
+
+			if [ -e "${d}/${INSTALL_GRUBHDCFG}.p7b" ] &&
+			[ ! -e "${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG}.p7b" ]; then
+				cp -f "${d}/${INSTALL_GRUBHDCFG}.p7b" "${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}"
+			fi
 		done
 
 		## Copy the efi grub
@@ -791,10 +819,14 @@ custom_install_rules()
 			#backup the original grub.cfg file if it exists and then reback it
 			if [ -f ${mnt_boot}/EFI/BOOT/grub.cfg ]; then
 				mv ${mnt_boot}/EFI/BOOT/grub.cfg ${mnt_boot}/EFI/BOOT/.grub.cfg
+				[ -f "${mnt_boot}/EFI/BOOT/grub.cfg.p7b" ] &&
+				    mv "${mnt_boot}/EFI/BOOT/grub.cfg.p7b" "${mnt_boot}/EFI/BOOT/.grub.cfg.p7b"
 			fi
 			cp -a ${mnt_rootfs}/boot/efi/EFI  ${mnt_boot}/
 			if [ -f ${mnt_boot}/EFI/BOOT/.grub.cfg ]; then
 				mv ${mnt_boot}/EFI/BOOT/.grub.cfg ${mnt_boot}/EFI/BOOT/grub.cfg
+				[ -f "${mnt_boot}/EFI/BOOT/.grub.cfg.p7b" ] &&
+				    mv "${mnt_boot}/EFI/BOOT/.grub.cfg.p7b" "${mnt_boot}/EFI/BOOT/grub.cfg.p7b"
 			fi
 		fi 
 	fi
@@ -814,6 +846,10 @@ custom_install_rules()
 
 	## And the installer kernel + initramfs
 	cp "${INSTALL_KERNEL}" "${INSTALL_INITRAMFS}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
+	[ -f "${INSTALL_KERNEL}.p7b" ] &&
+	    cp -f "${INSTALL_KERNEL}.p7b" "${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}"
+	[ -f "${INSTALL_INITRAMFS}.p7b" ] &&
+	    cp -f "${INSTALL_INITRAMFS}.p7b" "${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}"
 
 	## ----------------------------------------------------------
 	## Things that will be installed to the hard drive below here

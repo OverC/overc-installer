@@ -609,9 +609,16 @@ elif ls boot/bzImage-* >/dev/null 2>&1; then
 	if ls boot/bzImage-initramfs-* >/dev/null 2>&1; then
 	    bundled_kernel=1
 	fi
-	cp boot/bzImage-* mnt/bzImage
+
+	name=`basename boot/bzImage-*`
+	cp "boot/$name" mnt/bzImage
 	#create a backup kernel for recovery boot
-	cp boot/bzImage-* mnt/bzImage_bakup
+	cp "boot/$name" mnt/bzImage_bakup
+
+	if [ -f "boot/$name.p7b" ]; then
+	    cp "boot/$name.p7b" mnt/bzImage.p7b
+	    cp "boot/$name.p7b" mnt/bzImage_bakup.p7b
+	fi
 elif ls boot/fitImage-* >/dev/null 2>&1; then
 	cp boot/fitImage-* mnt/fitImage
 	#create a backup kernel for recovery boot
@@ -625,6 +632,9 @@ img=`ls boot/*Image-* 2> /dev/null`
 # create both a initrd-<version> and initrd
 if [ -e "$INSTALL_INITRAMFS" ]; then
 	cp $INSTALL_INITRAMFS mnt/initrd
+	if [ -f "${INSTALL_INITRAMFS}.p7b" ]; then
+	    cp -f "${INSTALL_INITRAMFS}.p7b" mnt/initrd.p7b
+	fi
 elif [ -n "$img" ] ; then
 	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs ($INSTALL_INITRAMFS)"
 	kernel=`basename boot/*Image-*`
@@ -636,6 +646,9 @@ elif [ -n "$img" ] ; then
 	#of them is ok.
 	for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
 		cp /$i mnt/initrd
+		if [ -f "/$i.p7b" ]; then
+		    cp -f "/$i.p7b" mnt/initrd.p7b
+		fi
 		break
 	done
 fi
@@ -708,6 +721,8 @@ if [ $do_ima_sign -eq 1 -a -f mnt/initrd ]; then
 	    cd -
 	    cp -f "$initrd_src" "mnt/${initrd}"
 	    rm -rf /tmp/initramfs-repack
+
+	    debugmsg ${DEBUG_WARN} "[WARNING] the repacked initrd might fail to be verified by MOK Secure Boot"
 	fi
 fi
 
@@ -816,7 +831,9 @@ EOF
 
 	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
 	    cp "${INSTALL_GRUBEFI_CFG}" mnt/EFI/BOOT/grub.cfg
-	else
+	    [ -f "${INSTALL_GRUBEFI_CFG}.p7b" ] &&
+		cp -f "${INSTALL_GRUBEFI_CFG}.p7b" mnt/EFI/BOOT/grub.cfg.p7b
+	elif [ ! -f mnt/EFI/BOOT/grub.cfg ]; then
 	    cat <<EOF >mnt/EFI/BOOT/grub.cfg
 set default="0"
 set timeout=3
@@ -843,22 +860,26 @@ menuentry "$DISTRIBUTION recovery" {
     chainloader /bzImage_bakup root=LABEL=$ROOTLABEL rootflags=subvol=rootfs_bakup ro rootwait initrd=/initrd
 }
 EOF
+
+	    # Don't allow to load the detached initramfs if the bundled kernel used.
+	    [ $bundled_kernel -eq 1 ] &&
+	        sed -i 's/\(^\s*chainloader\s\+.*bzImage.*\)\s\+initrd=[^[:space:]]*\(.*\)/\1\2/g' mnt/EFI/BOOT/grub.cfg
+
+	    # If IMA appraisal is enabled but the filesystems are not labelled, a
+	    # boot failure will occur.
+	    if [ $do_ima_sign -eq 0 ]; then
+		! grep -q '\sima_appraise=off' &&
+		    sed -i 's/^\s*chainloader\s\+.*bzImage.*/& ima_appraise=off/' mnt/EFI/BOOT/grub.cfg
+	    elif [ $do_encryption -eq 0 ]; then
+		! grep -q '\sima_policy=tcb' &&
+		    sed -i 's/^\s*chainloader\s\+.*bzImage.*/& ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
+            fi
+
+	    debugmsg ${DEBUG_WARN} "[WARNING] the grub.cfg might be modified and thus will fail to be verified by MOK Secure Boot"
 	fi
 
 	echo `basename mnt/EFI/BOOT/boot*.efi` >mnt/startup.nsh
 	chmod +x mnt/startup.nsh
-
-	# Don't allow to load the detached initramfs if the bundled kernel used.
-	[ $bundled_kernel -eq 1 ] &&
-	    sed -i 's/\(^\s*chainloader\s\+.*bzImage.*\)\s\+initrd=[^[:space:]]*\(.*\)/\1\2/g' mnt/EFI/BOOT/grub.cfg
-
-	# If IMA appraisal is enabled but the filesystems are not labelled, a
-	# boot failure will occur.
-	if [ $do_ima_sign -eq 0 ]; then
-	    sed -i 's/^\s*chainloader\s\+.*bzImage.*/& ima_appraise=off/' mnt/EFI/BOOT/grub.cfg
-	elif [ $do_encryption -eq 0 ]; then
-            sed -i 's/^\s*chainloader\s\+.*bzImage.*/& ima_policy=tcb/' mnt/EFI/BOOT/grub.cfg
-        fi
     else
 	install -m 0755 ${SBINDIR}/startup.nsh mnt/
 	sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" mnt/startup.nsh
