@@ -422,6 +422,8 @@ if [ $(echo $raw_dev | grep -c 'loop') ==  "1" ]; then
        loop_device=t
        fs_dev="${raw_dev}p"
        partprobe /dev/${raw_dev}
+       # If partx is available resync all the partitions
+       which partx && partx -d /dev/${raw_dev}
        which partx && partx -a -v /dev/${raw_dev}
 fi
 
