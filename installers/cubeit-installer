@@ -450,7 +450,7 @@ container_fs_dev=${fs_dev}4
 
 if [ $do_encryption -eq 1 ]; then
     ## Evict all objects for the first creation.
-    cmd="luks-setup.sh -f -e -d /dev/${rootfs_dev} -n ${ROOTLABEL}_encrypted >/dev/null 2>&1"
+    cmd="luks-setup.sh -f -e -d /dev/${rootfs_dev} -n ${ROOTLABEL}_encrypted"
     [ $no_interaction -eq 1 ] && cmd="echo Y | $cmd"
     eval "$cmd"
     rootfs_dev="mapper/${ROOTLABEL}_encrypted"
