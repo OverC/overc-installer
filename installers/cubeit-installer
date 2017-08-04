@@ -522,7 +522,7 @@ fi
 
 if [ $do_encryption -eq 1 ]; then
     ## Evict all objects for the first creation.
-    cmd="luks-setup.sh -f -e -d /dev/${rootfs_dev} -n ${ROOTLABEL}_encrypted >/dev/null 2>&1"
+    cmd="luks-setup.sh -f -e -d /dev/${rootfs_dev} -n ${ROOTLABEL}_encrypted"
     [ $no_interaction -eq 1 ] && cmd="echo Y | $cmd"
     eval "$cmd"
     rootfs_dev="mapper/${ROOTLABEL}_encrypted"
@@ -530,7 +530,7 @@ fi
 
 if [ $do_data_encryption -eq 1 ]; then
     ## Encrypt data drive
-    cmd="luks-setup.sh -f -d /dev/${lxc_fs_dev} -n ${LXCLABEL}_encrypted" >/dev/null 2>&1
+    cmd="luks-setup.sh -f -d /dev/${lxc_fs_dev} -n ${LXCLABEL}_encrypted"
     [ $no_interaction -eq 1 ] && cmd="echo Y | $cmd"
     eval "$cmd"
     lxc_fs_dev="mapper/${LXCLABEL}_encrypted"
