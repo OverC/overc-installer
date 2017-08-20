@@ -21,6 +21,8 @@ SBINDIR="${BASEDIR}/../sbin"
 # installers that will go on the usb stick, and install to the HD
 INSTALLERS_DIR="${BASEDIR}/../installers"
 LIBDIR="${BASEDIR}/../lib"
+# libsign binaries
+LIBSIGN_DIR="${BASEDIR}/../libsign"
 
 : ${FUNCTIONS_FILE="$BASEDIR/functions.sh"}
 
@@ -36,7 +38,7 @@ usage()
 {
 cat << EOF
 
-  cubeit [--config <config script>] [--target-config <config script>] [--force] --artifacts [<artifacts dir>] <target>
+  cubeit [--config <config script>] [--target-config <config script>] [--force] --artifacts [<artifacts dir>] [--ima-sign] <target>
 
   cubeit is capable of creating a "cube capable" installer + payload, or image.
 
@@ -58,6 +60,8 @@ cat << EOF
      --loop <loop device>: if the default / automatic selection of the loopback device
                            is causing partitioning/fdisk errors an explicit loop device
                            can be specified, i.e. --loop /dev/loop2
+     --ima-sign: perform IMA signing for the rootfs and container images
+     --ima-key-pass: the password of IMA signing key
 
   cubeit is capable of creating images, or installers + payloads, with the value of
   <target> indicating which type of image to create.
@@ -103,6 +107,8 @@ fi
 NBD=
 LOOP=t
 INSTALLER_IMAGE=t
+DO_IMA_SIGN=${DO_IMA_SIGN:-0}
+IMA_KEY_PASS=""
 while [ $# -gt 0 ]; do
     case "$1" in
     --config)
@@ -145,6 +151,13 @@ while [ $# -gt 0 ]; do
             NBD=
 	    LOOP=t
 	    ;;
+    --ima-sign)
+	    DO_IMA_SIGN=1
+	    ;;
+    --ima-key-pass)
+            IMA_KEY_PASS="$2"
+	    shift
+	    ;;
     --force)
 	    FORCE=t
             ;;
@@ -172,6 +185,128 @@ if [ -n "$ARTIFACTS_DIR" ]; then
     fi
 fi
 export ARTIFACTS_DIR
+
+# key store
+SAMPLE_KEYS_DIR="$ARTIFACTS_DIR/sample-keys"
+USER_KEYS_DIR="$ARTIFACTS_DIR/user-keys"
+
+if [ -d "$USER_KEYS_DIR" ]; then
+    KEYS_DIR="$USER_KEYS_DIR"
+else
+    KEYS_DIR="$SAMPLE_KEYS_DIR"
+fi
+
+selsign()
+{
+    $LIBSIGN_DIR/bin/selsign.sh -k "$KEYS_DIR/mok_sb_keys/vendor_cert.key" \
+	-c "$KEYS_DIR/mok_sb_keys/vendor_cert.crt" "$1" && {
+	    debugmsg ${DEBUG_INFO} "[INFO] Succeeded to sign $1"
+	} || {
+	    debugmsg ${DEBUG_INFO} "[ERROR] Failed to sign $1"
+	    exit 1
+	}
+}
+
+# determine the location of key store
+if [ -z "${KEYS_DIR}" ] || [ ! -d "${KEYS_DIR}" ]; then
+    SAMPLE_KEYS_DIR="${ARTIFACTS_DIR}/sample-keys"
+    USER_KEYS_DIR="${ARTIFACTS_DIR}/user-keys"
+
+    if [ -d "${USER_KEYS_DIR}" ]; then
+        KEYS_DIR="${USER_KEYS_DIR}"
+    else
+        KEYS_DIR="${SAMPLE_KEYS_DIR}"
+    fi
+fi
+
+# check if the filesystem can support xattr.
+check_fs_for_ima()
+{
+    local tmpfile="$(mktemp test_XXXX)"
+    local res="$(setfattr -x security.ima "${tmpfile}" 2>&1 | grep -q 'Operation not supported$')"
+
+    rm -f "${tmpfile}"
+
+    if [ x"${res}" = x"" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+if [ ${DO_IMA_SIGN} -eq 1 ]; then
+    if [ ! -s "${KEYS_DIR}/ima_keys/x509_ima.key" ]; then
+        debugmsg ${DEBUG_CRIT} "[ERROR] Unable to run IMA signing due to specifying a nonexistent or empty signing key file"
+        exit 1
+    fi
+
+    if ! check_fs_for_ima; then
+        debugmsg ${DEBUG_CRIT} "[ERROR]: Current file system does not support to set xattr"
+        exit 1
+    fi
+
+    if [ -s "${IMA_KEY_PASS}" ]; then
+        IMA_KEY_PASS="`cat ${IMA_KEY_PASS}`"
+    fi
+
+    if [ -z "${IMA_KEY_PASS}" ]; then
+        debugmsg ${DEBUG_CRIT} "[ERROR]: The private key for IMA signing must be protected by a password"
+        exit 1
+    fi
+fi
+
+ima_sign()
+{
+    evmctl ima_sign --hashalgo sha256 \
+        --key "${KEYS_DIR}/ima_keys/x509_ima.key" \
+        --pass="${IMA_KEY_PASS}" \
+        -r -t f "$1" &
+
+    pidspinner "$!" "1"
+}
+
+repack_image_for_ima()
+{
+    local tarball="$1"
+    local tarball_dst="$2"
+    local repack_dir="$(mktemp -d repack_tarball.XXXXXX)"
+    local repack_image="$(basename ${tarball})"
+
+    debugmsg ${DEBUG_INFO} "[INFO]: Preparing to repack image ${repack_image} for IMA signing ..."
+
+    repack_dir="`pwd`/${repack_dir}"
+
+    extract_tarball "${tarball}" "${repack_dir}"
+    if [ $? -ne 0 ]; then
+        rm -rf "${repack_dir}"
+        return 1
+    fi
+
+    debugmsg ${DEBUG_INFO} "[INFO]: Finished extracting image ${repack_image}"
+
+    ima_sign "${repack_dir}"
+    if [ $? -ne 0 ]; then
+        rm -rf "${repack_dir}"
+        debugmsg ${DEBUG_INFO} "[ERROR]: IMA signing generated an error"
+        return 1
+    fi
+
+    debugmsg ${DEBUG_INFO} "[INFO]: IMA signing complete for ${repack_image}"
+
+    pack_tarball "${repack_dir}" "`pwd`/${repack_image}"
+    if [ $? -ne 0 ]; then
+        rm -rf "${repack_dir}"
+        return 1
+    fi
+
+    rm -rf "${repack_dir}"
+
+    eval "${tarball_dst}=${repack_image}"
+
+    debugmsg ${DEBUG_INFO} "[INFO]: ${tarball} is repacked as ${repack_image}"
+
+    return 0
+}
 
 ######################################################################
 # Define some debug output variables
@@ -549,8 +684,17 @@ IFS=$OLDIFS
 	## ----------------------------------------------------------
 	if [ -n "${HDINSTALL_ROOTFS}" ]; then
 	    ## Copy the Linux rootfs tarball(s) to USB drive
-            for i in ${HDINSTALL_ROOTFS}; do               
-	        cp ${i} ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
+            for i in ${HDINSTALL_ROOTFS}; do
+		if [ ${DO_IMA_SIGN} -eq 0 ]; then
+			img="${i}"
+		else
+			repack_image_for_ima "${i}" img
+			if [ $? -ne 0 ]; then
+				debugmsg ${DEBUG_CRIT} "ERROR: Failed to repack rootfs image ${i} for IMA signing"
+				return 1
+			fi
+		fi	
+	        cp ${img} ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
 	        if [ $? -ne 0 ]; then
 		    debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy hard drive install root filesystem"
 		    return 1
@@ -575,7 +719,16 @@ IFS=$OLDIFS
 
 	    # drop any properties and copy the containers to the installer
 	    for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
-		cp ${c} ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/containers/
+		if [ ${DO_IMA_SIGN} -eq 0 ]; then
+			img="${c}"
+		else
+			repack_image_for_ima "${c}" img
+			if [ $? -ne 0 ]; then
+				debugmsg ${DEBUG_CRIT} "ERROR: Failed to repack rootfs image ${i} for IMA signing"
+				return 1
+			fi
+		fi
+		cp ${img} ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/containers/
 	    done
 
 	    # create a configuration that can be read by the cubeit-installer

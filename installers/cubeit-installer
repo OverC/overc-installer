@@ -494,8 +494,9 @@ fi
 ## then copy kernel image to boot partition
 
 # we are either in ${TMPMNT} or ${TMPMNT}/rootfs
-debugmsg ${DEBUG_INFO} "[INFO] installing rootfs ($rootfs)"
-tar --numeric-owner -xpf $rootfs
+debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
+tar --warning=no-timestamp --numeric-owner \
+    --xattrs --xattrs-include=security\\.ima -xpf "${rootfs}"
 
 mount /dev/${fs_dev}1 mnt
 
