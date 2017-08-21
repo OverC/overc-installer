@@ -637,6 +637,11 @@ IFS=$OLDIFS
 				debugmsg ${DEBUG_CRIT} "INFO: found grub hd configuration ${d}/${INSTALL_GRUBHDCFG}"
 				cp ${d}/${INSTALL_GRUBHDCFG} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG}
 	    		fi
+
+			if [ -e "${d}/${INSTALL_GRUBHDCFG}.p7b" ] &&
+			[ ! -e "${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG}.p7b" ]; then
+				cp -f "${d}/${INSTALL_GRUBHDCFG}.p7b" "${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}"
+			fi
 		done
 
 		## Copy the efi grub
@@ -651,14 +656,14 @@ IFS=$OLDIFS
 			#backup the original grub.cfg file if it exists and then reback it
 			if [ -f ${mnt_boot}/EFI/BOOT/grub.cfg ]; then
 				mv ${mnt_boot}/EFI/BOOT/grub.cfg ${mnt_boot}/EFI/BOOT/.grub.cfg
+				[ -f "${mnt_boot}/EFI/BOOT/grub.cfg.p7b" ] &&
+				    mv "${mnt_boot}/EFI/BOOT/grub.cfg.p7b" "${mnt_boot}/EFI/BOOT/.grub.cfg.p7b"
 			fi
 			cp -a ${mnt_rootfs}/boot/efi/EFI  ${mnt_boot}/
 			if [ -f ${mnt_boot}/EFI/BOOT/.grub.cfg ]; then
 				mv ${mnt_boot}/EFI/BOOT/.grub.cfg ${mnt_boot}/EFI/BOOT/grub.cfg
-			fi
-			#use the chainloader command to load the kernel and initramfs
-			if [ -f ${mnt_boot}/EFI/BOOT/grub.cfg ]; then
-				sed -e '/^[ |\t]*linux.*$/N;s/\n[ |\t]*initrd[ |\t]*/ initrd=/' -e 's/linux/chainloader/' -i ${mnt_boot}/EFI/BOOT/grub.cfg
+				[ -f "${mnt_boot}/EFI/BOOT/.grub.cfg.p7b" ] &&
+				    mv "${mnt_boot}/EFI/BOOT/.grub.cfg.p7b" "${mnt_boot}/EFI/BOOT/grub.cfg.p7b"
 			fi
 		fi 
 	fi
@@ -678,6 +683,10 @@ IFS=$OLDIFS
 
 	## And the installer kernel + initramfs
 	cp "${INSTALL_KERNEL}" "${INSTALL_INITRAMFS}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
+	[ -f "${INSTALL_KERNEL}.p7b" ] &&
+	    cp -f "${INSTALL_KERNEL}.p7b" "${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}"
+	[ -f "${INSTALL_INITRAMFS}.p7b" ] &&
+	    cp -f "${INSTALL_INITRAMFS}.p7b" "${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}"
 
 	## ----------------------------------------------------------
 	## Things that will be installed to the hard drive below here

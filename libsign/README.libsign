@@ -1,0 +1,10 @@
+This directory contains the pre-built libsign components including the
+signing tool, signaturelet and library used by overc-installer.
+
+Optionally, you can build them from the scratch. Refer to libsign upstream.
+
+Pre-built binary information
+============================
+
+Upstream: git://github.com/jiazhang0/libsign
+Commit: 35c0059a864b332465721a6d9effa0db99fe7edc

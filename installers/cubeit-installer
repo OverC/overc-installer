@@ -510,15 +510,20 @@ if [ -e "${INSTALL_KERNEL}" ] ; then
 	fi
 	cp ${INSTALL_KERNEL} mnt/${inst_kernel}
 	cp ${INSTALL_KERNEL} mnt/${inst_kernel}_bakup
-elif [ -e boot/uImage-* ]; then
+elif ls boot/uImage-* >/dev/null 2>&1; then
 	cp boot/uImage-* mnt/uImage
 	#create a backup kernel for recovery boot
 	cp boot/uImage-* mnt/uImage_bakup
-elif [ -e boot/bzImage-* ]; then
-	cp boot/bzImage-* mnt/bzImage
+elif ls boot/bzImage-* >/dev/null 2>&1; then
+	name=`basename boot/bzImage-*`
+	cp "boot/$name" mnt/bzImage
 	#create a backup kernel for recovery boot
-	cp boot/bzImage-* mnt/bzImage_bakup
-elif [ -e boot/fitImage-* ]; then
+	cp "boot/$name" mnt/bzImage_bakup
+	if [ -f "boot/$name.p7b" ]; then
+		cp "boot/$name.p7b" mnt/bzImage.p7b
+		cp "boot/$name.p7b" mnt/bzImage_bakup.p7b
+	fi
+elif ls boot/fitImage-* >/dev/null 2>&1; then
 	cp boot/fitImage-* mnt/fitImage
 	#create a backup kernel for recovery boot
 	cp boot/fitImage-* mnt/fitImage_bakup
@@ -531,6 +536,9 @@ img=`ls boot/*Image-* 2> /dev/null`
 # create both a initrd-<version> and initrd
 if [ -e "$INSTALL_INITRAMFS" ]; then
 	cp $INSTALL_INITRAMFS mnt/initrd
+	if [ -f "${INSTALL_INITRAMFS}.p7b" ]; then
+	    cp -f "${INSTALL_INITRAMFS}.p7b" mnt/initrd.p7b
+	fi
 elif [ -n "$img" ] ; then
 	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs ($INSTALL_INITRAMFS)"
 	kernel=`basename boot/*Image-*`
@@ -542,6 +550,9 @@ elif [ -n "$img" ] ; then
 	#of them is ok.
 	for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
 		cp /$i mnt/initrd
+		if [ -f "/$i.p7b" ]; then
+		    cp -f "/$i.p7b" mnt/initrd.p7b
+		fi
 		break
 	done
 fi
