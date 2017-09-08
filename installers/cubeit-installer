@@ -999,9 +999,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	if [ ! -v NETWORK_DEVICE ]; then
 	    NETWORK_DEVICE=""
 	fi
-	if [ ! -v NETWORK_DEVICE_CLASSES ]; then
-	    NETWORK_DEVICE_CLASSES=""
-	fi
 
 	pathtocontainer=${TMPMNT}/opt/container/${network_prime}
 	if [ -e "${pathtocontainer}/config.json" ]; then
@@ -1015,7 +1012,9 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    # need to pass through the physical device
 		    ${SBINDIR}/cube-cfg set cube.network.type:static
 		    ${SBINDIR}/cube-cfg --prepend set cube.network.ip:192.168.42.1/24
-		    ${SBINDIR}/cube-cfg device network:${NETWORK_DEVICE}:${NETWORK_DEVICE}
+		    for n in ${NETWORK_DEVICE}; do
+			${SBINDIR}/cube-cfg device network:${n}:${n}
+		    done
 		    ${SBINDIR}/cube-cfg attribute +netprime
 
 		    # ensure that etcd (on dom0) is accessible
