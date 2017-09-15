@@ -257,8 +257,21 @@ fi
 
 ima_sign()
 {
+
+    # evmctl has problem with parsing a relative path of IMA key
+    # when recusively signing files under a directory
+    # so we convert KEYS_DIR into abs path
+    local realpath_bin=$(which realpath)
+    if [ -z "${realpath_bin}" ]; then
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Unable to find 'realpath'."
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Please ensure 'realpath' is installed and in your PATH."
+	exit 1
+    fi
+
+    KEYS_DIR_ABS="$(realpath ${KEYS_DIR})"
+
     evmctl ima_sign --hashalgo sha256 \
-        --key "${KEYS_DIR}/ima_keys/x509_ima.key" \
+        --key "${KEYS_DIR_ABS}/ima_keys/x509_ima.key" \
         --pass="${IMA_KEY_PASS}" \
         -r -t f "$1" &
 
