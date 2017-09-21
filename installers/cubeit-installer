@@ -876,6 +876,8 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
     #cleanup temp files
     rm ${CNRECORD}
+    foreground_container=""
+    foreground_vty=""
 
     # install and modify per-container configurations
     for c in `strip_properties ${HDINSTALL_CONTAINERS}`; do
@@ -914,8 +916,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	# vty attributes are: <number>,<properites>
 	# properties: active or <empty>
 	vty_num=`get_prop_value_by_container ${cname} "vty"`
-	foreground_container=
-	foreground_vty=
+
 	if [ -n "$vty_num" ]; then
 	    attribute1=`echo $vty_num | cut -f1 -d,`
 	    attribute2=`echo $vty_num | cut -f2 -d,`
@@ -934,14 +935,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		${SBINDIR}/cube-cfg device vt:/dev/tty${vty_num}:/dev/tty${vty_num}
 		regen_container_config ${TMPMNT}/opt/container/ ${cname} prep
 	    )
-	fi
-
-	# if there was a foreground container defined (attribute 'active' on a vty), then we
-	# install a chvt service to make sure it is in the foreground after boot. Note, this
-	# currently does not touch essential, but could in the future.
-	if [ -n "${foreground_container}" ]; then
-	    service_install chvt.service ${cname}
-	    service_modify "%OVERC_ACTIVE_VT%" ${foreground_vty} ${cname} chvt.service
 	fi
 
         # Disable all not needed services in dom0
@@ -987,6 +980,14 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    )
 	fi
     done
+
+    # if there was a foreground container defined (attribute 'active' on a vty), then we
+    # install a chvt service to make sure it is in the foreground after boot. Note, this
+    # currently does not touch essential, but could in the future.
+    if [ -n "${foreground_container}" ]; then
+       service_install chvt.service "dom0"
+       service_modify "%OVERC_ACTIVE_VT%" ${foreground_vty} "dom0" chvt.service
+    fi
 
     # Setup networking prime and static IPs, unless using bridged networking
     if [ ! -v network_prime ]; then
