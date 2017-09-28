@@ -3,7 +3,7 @@ Description=Change the %OVERC_ACTIVE_VT% to be the active vt
 
 [Service]
 Type=oneshot
-ExecStart=/usr/sbin/cube-cmd chvt %OVERC_ACTIVE_VT%
+ExecStart=/usr/sbin/cube-cmd cube-cmd chvt %OVERC_ACTIVE_VT%
 #StandardInput=tty
 #TTYPath=/dev/tty%OVERC_ACTIVE_VT%
 #TTYReset=yes
