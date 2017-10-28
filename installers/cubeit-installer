@@ -977,10 +977,16 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-network up /opt/container/${cname}
 
 		if [ "${cname}" = "dom0" ]; then
+		    ${SBINDIR}/cube-cfg device vt:/dev/loop-control:/dev/loop-control
+		    ${SBINDIR}/cube-cfg device vt:/dev/loop0:/dev/loop0
+		    ${SBINDIR}/cube-cfg device vt:/dev/loop1:/dev/loop1
+		    ${SBINDIR}/cube-cfg device vt:/dev/loop2:/dev/loop2
+
 		    ${SBINDIR}/cube-cfg set cube.network.type:static
 		    ${SBINDIR}/cube-cfg set cube.network.ip:192.168.42.3/24
 		    ${SBINDIR}/cube-cfg attribute +vrf
 		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig vrf /opt/container/${cname}
+		    service_disable systemd-resolved.service ${cname}
 		fi
 
 		${SBINDIR}/cube-cfg gen ${cname}:cube
@@ -1023,9 +1029,11 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    if [ -e "pflask.cmd" ]; then
 			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig netprime /opt/container/${network_prime}
 			${SBINDIR}/cube-cfg gen ${network_prime}:cube
+			service_disable systemd-resolved.service ${cname}
 		    else
 			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig netprime \$\(cat\)
 			${SBINDIR}/cube-cfg gen ${network_prime}:oci
+			service_disable systemd-resolved.service ${cname}
 		    fi
 		)
 	    fi
