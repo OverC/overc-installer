@@ -1,0 +1,601 @@
+#!/bin/bash
+
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+
+if [ "$OVERC_DEBUG_SET_X_IF_SET" = 1 ] ; then
+    set -x
+fi
+
+usage()
+{
+cat << EOF
+
+ ${0##*/} <cmd> [options]
+
+ options:
+     -f/--force: force execute command without prompting
+     -o/--output <dir>: container output directory, defaults to /opt/container
+
+ commands:
+
+ ${0##*/} track <name>
+
+    start to track a container, take a snapshot of that container and create
+    a rollback history list if it does not already exist.
+
+      <name>: name of the container to be tracked
+
+ ${0##*/} untrack <name>
+
+    stop tracking a container, remove all the snapshots of that container and
+    delete the rollback history list if it exists.
+
+      <name>: name of the container to be untracked
+
+ ${0##*/} snapshot-create <name>
+
+    take a snapshot of the current container version and place it on the top of
+    the rollback history list.  If you take a snapshot before doing something
+    risky or experimental to the current container, you can easily rollback.
+
+      <name>: name of the container to be taken snapshot
+
+ ${0##*/} snapshot-del <name> <snapshot>
+
+    delete a given snapshot <snapshot> of container <name>, and remove it from
+    rollback history list as well.
+
+      <name>: name of the container
+
+      <snapshot>: ID of the snapshot, can be displayed by snapshot-list.
+
+ ${0##*/} snapshot-set <name> <snapshot>
+
+    choose a given snapshot <snapshot> as the next to be rollback on for
+    container <name>.
+
+      <name>: name of the container
+
+      <snapshot>: ID of the snapshot, can be displayed by snapshot-list.
+
+ ${0##*/} snapshot-list <name>
+
+    list all snapshots in the order as they are in rollback history list for
+    container <name>.
+
+      <name>: name of the container
+
+ ${0##*/} snapshot-cleanup <name>
+
+    cleanup snapshots not present in rollback history list anymore for
+    container <name>.
+
+      <name>: name of the container
+
+ ${0##*/} snapshot-delall <name>
+
+    delete all snapshots for container <name>, remove them from rollback history
+    list as well.
+
+      <name>: name of the container
+
+ ${0##*/} upgrade <name> [source]
+
+    upgrade to a new version of an existing container source, and switch the
+    current to be it. If the source is not provided, it will do runtime
+    upgrading in container if the container is running, you will be asked if
+    you want to stop, switch, then restart it. Upgrade will not happen if the
+    container is running, so if you don't confirm stopping it, the upgrade is
+    aborted. On success, the old version is placed at the top of the history
+    rollback list.
+
+      <name>: name of the container to be upgraded
+
+      [source]: container source to be used to upgrade to
+
+ ${0##*/} rollback <name>
+
+    switch the current container version to be the one at the top of the
+    history rollback list.  On success, the entry is removed from the history
+    list, and the previous container version that was just switched out, is
+    completely removed from the system as well.
+
+      <name>: name of the container to do the rollback
+
+EOF
+}
+
+# Text colors
+BLD_NOTE="\\033[1;29m"    # Bright base color
+BLD_WARNING="\\033[1;33m" # Bright yellow
+BLD_ERROR="\\033[1;31m"   # Bright red
+STD_NOTE="\\033[29m"      # Base color
+STD_WARNING="\\033[33m"   # Yellow
+STD_ERROR="\\033[31m"     # Red
+RST="\\033[0m"            # Reset colors
+
+#
+# Helper functions
+#
+log_info () {
+    echo -e $BLD_NOTE"[INFO]""$RST: $STD_NOTE$@$RST"
+}
+
+log_warn () {
+    echo -e $BLD_WARNING"[WARNING]""$RST: $STD_WARNING$@$RST" >&2
+}
+
+log_error () {
+    echo -e $BLD_ERROR"[ERROR]""$RST: $STD_ERROR$@$RST" >&2
+    return 1
+}
+
+is_container_available() {
+    [ -n "${container_name}" ] || return 1
+
+    ${SBINDIR}/cube-ctl list 2>/dev/null | grep -q "^${container_name}"
+    return $?
+}
+
+is_container_running() {
+    ${SBINDIR}/cube-ctl list | grep -q "^$container_name.*running"
+    return $?
+}
+
+is_snapshot_available() {
+    btrfs subvolume show ${container_dir}/overc-containers/${container_name}/${1} >/dev/null 2>&1
+    return $?
+}
+
+get_mount_fstype() {
+    local dir=$1
+    local mount_point=$(stat --format '%m' ${dir})
+    local mount_fstype=$(stat --file-system --format '%T' ${mount_point})
+
+    echo ${mount_fstype}
+}
+
+insert_history_entry() {
+    local entry_text=$1
+    local history_file=${container_dir}/overc-containers/${container_name}/.container_history
+    local tmpfile=$(mktemp)
+
+    if [ -f "$history_file" ]; then
+        echo "$entry_text" | cat - $history_file > $tmpfile
+        mv $tmpfile $history_file
+    else
+        echo "$entry_text" > $history_file
+    fi
+}
+
+delete_history_entry() {
+    local entry_text=$1
+    local history_file=${container_dir}/overc-containers/${container_name}/.container_history
+
+    sed -i "/$entry_text/d" $history_file
+}
+
+btrfs_subvolume_snapshot() {
+    local src=$1
+    local dest=$2
+
+    requiring_size=$(du -s $(realpath ${container_dir}/${container_name}) | awk '{print $1}')
+    available_size=$(df -a ${container_dir}/overc-containers | sed -n '2p' | awk '{print $4}')
+
+    if [ ${requiring_size} -lt $((${available_size}*1024)) ]; then
+        btrfs subvolume snapshot ${src} ${dest}
+    else
+        echo "*******************************************************************"
+        echo "  Warning: There isn't enough space left to snapshot conainer"
+        echo "*******************************************************************"
+        return 1
+    fi
+}
+
+run_container_command() {
+    local container="$1"
+    local cmd="$2"
+
+    if [ ${container} = "dom0" ]; then
+        $cmd
+    else
+        ${SBINDIR}/cube-ctl "$container:$cmd"
+    fi
+}
+
+rpm_upgrade() {
+    local container=$1
+
+    # Prepare a tmpfs rpm database
+    tempdir="/tmp/tmpd.$RANDOM"
+    run_container_command $container "mkdir -p $tempdir"
+    run_container_command $container "cp -r /var/lib/rpm $tempdir"
+    run_container_command $container "mount -t tmpfs tmpfs /var/lib/rpm"
+    run_container_command $container "cp -r $tempdir/rpm /var/lib/"
+
+    # Do upgrading
+    run_container_command $container "dnf upgrade --refresh"
+    local ret=$?
+
+    # Restore rpm database to persistent /var/lib
+    run_container_command $container "cp -r /var/lib/rpm $tempdir"
+    run_container_command $container "umount /var/lib/rpm"
+    run_container_command $container "cp -r $tempdir/rpm /var/lib/"
+    run_container_command $container "rm -rf $tempdir"
+    run_container_command $container "sed -i /^CUBEUPDATE:/d /etc/motd 2>/dev/null"
+
+    return $ret
+}
+
+#
+# Command functions
+#
+track_container() {
+    if [ -n "$(cat ${container_dir}/overc-containers/${container_name}/.container_history 2>/dev/null)" ]; then
+        log_error "container is already tracked"
+        return 1
+    fi
+
+    if [ ! -e "${container_dir}/${container_name}" ]; then
+        # wre might be called by installer, create container subdirectories according
+        # to the fstype of container_dir's mount point:
+        # a) create a subvolume if the fstype is btrfs
+        # b) create a subdirectory for other fstypes
+        local fstype=$(get_mount_fstype "${container_dir}")
+        local subvol_dir=${container_dir}/overc-containers/${container_name}/$(date +%s.%N)
+        mkdir -p ${subvol_dir%/*}
+        if [ "${fstype}" = "btrfs" ]; then
+            btrfs subvolume create ${subvol_dir}
+        else
+            mkdir -m 755 ${subvol_dir}
+        fi
+        ln -srfT ${subvol_dir} ${container_dir}/${container_name}
+    else
+        # we are at runtime, create a snapshot of container
+        create_snapshot ${container_name}
+    fi
+}
+
+untrack_container() {
+    if ! is_container_available; then
+        log_error "container is not available"
+        return 1
+    fi
+
+    if ! is_container_running; then
+        log_error "can not untrack a running container, please stop it firstly"
+        return 1
+    fi
+
+    echo "Untrack container will delete all snapshots"
+    if [ -n "${forced}" ]; then
+        answer="y"
+    else
+        echo -n "Proceed? (y/n) "
+        read answer
+    fi
+
+    if [ "${answer}" = "y" ]; then
+        delall_snapshots
+        local fstype=$(get_mount_fstype "${container_dir}")
+        if [ "${fstype}" = "btrfs" ]; then
+            btrfs subvolume delete -C $(realpath ${container_dir}/${container_name})
+        else
+            rm -rf $(realpath ${container_dir}/${container_name})
+        fi
+        rm -f ${container_dir}/${container_name}
+        rm -f ${container_dir}/overc-containers/${container_name}/.container_history
+    else
+        echo "Aborting"
+        return 1
+    fi
+}
+
+rollback_container() {
+    # Override global forced with parameter $1
+    [ -n "$1" ] && local forced=$1
+
+    if ! is_container_available; then
+        log_error "container is not available"
+        return 1
+    fi
+
+    latest_snapshot=$(head -n1 ${container_dir}/overc-containers/${container_name}/.container_history 2> /dev/null)
+    if [ -z "${latest_snapshot}" ]; then
+        log_error "No history for container to rollback to, please try track/snapshot-create firstly."
+        return 1
+    fi
+
+    echo "Will switch to: ${latest_snapshot}"
+    if [ -n "${forced}" ]; then
+        answer="y"
+    else
+        echo -n "Proceed? (y/n) "
+        read answer
+    fi
+
+    if [ "${answer}" = "y" ]; then
+        if is_container_running; then
+            if [ -n "$forced" ]; then
+                echo "Force enabled, stopping container"
+                answer="y"
+            else
+                echo -n "Stop, switch, then start it? (y/n) "
+                read answer
+            fi
+
+            if [ "${answer}" == "y" ]; then
+                if [ "${container_name}" != "dom0" ]; then
+                    ${SBINDIR}/cube-ctl stop ${container_name}
+                fi
+            else
+                echo "Aborting"
+                return 1
+            fi
+        fi
+
+        ln -srfT ${container_dir}/overc-containers/${container_name}/${latest_snapshot} ${container_dir}/${container_name}
+        delete_history_entry ${latest_snapshot}
+        if [ "${container_name}" = "dom0" ]; then
+            /sbin/reboot
+        else
+            cleanup_snapshots
+            ${SBINDIR}/cube-ctl start ${container_name}
+            log_info "Container had switched to ${latest_snapshot}"
+        fi
+    else
+        echo "No snapshot selected, aborting"
+        return 1
+    fi
+}
+
+upgrade_container() {
+    local container_src=$1
+
+    echo "Will upgrade container and reboot it if it's already running"
+    if [ -n "${forced}" ]; then
+        answer="y"
+    else
+        echo -n "Proceed? (y/n) "
+        read answer
+    fi
+
+    if [ "${answer}" != "y" ]; then
+        echo "Aborting"
+        return 1
+    fi
+
+    if [ -n "${container_src}" ]; then
+        if [ ! -e "${container_src}" ]; then
+            log_error "container source does not exist"
+            return 1
+        fi
+
+        local saved_snapshot=$(basename $(realpath ${container_dir}/${container_name} 2>/dev/null))
+        local new_snapshot=${container_dir}/overc-containers/${container_name}/$(date +%s.%N)
+        btrfs subvolume create ${new_snapshot}
+        ln -srfT ${new_snapshot} ${container_dir}/${container_name}
+        if [ "${container_name}" = "dom0" ]; then
+                ${SBINDIR}/cube-ctl add --auto essential -n ${container_name} -t cube -o ${container_dir} ${container_src} -F
+        else
+                ${SBINDIR}/cube-ctl add --auto dom0 -n ${container_name} -t oci -o ${container_dir} ${container_src} -F
+        fi
+        if [ $? != 0 ]; then
+            btrfs subvolume delete -C ${new_snapshot}
+            if [ -n "${saved_snapshot}" ]; then
+                ln -srfT ${container_dir}/overc-containers/${container_name}/${saved_snapshot} ${container_dir}/${container_name}
+            else
+                rm -rf ${container_dir}/${container_name}
+            fi
+            log_error "Install container source failed"
+            return 1
+        fi
+
+        if [ -n "${saved_snapshot}" ]; then
+            insert_history_entry ${saved_snapshot}
+        fi
+    else
+        # container source not provided, do dnf upgrade
+        create_snapshot || return 1
+        if ! eval ${package_manager}_upgrade "${container_name}"; then
+            log_error "Upgrade container with ${package_manager} failed, rollback to the latest"
+            rollback_container "1"
+            return 1
+        fi
+    fi
+
+    # dom0 can not cleanup itself at present, delay the cleanup in the next boot up.
+    if [ "${container_name}" = "dom0" ]; then
+        ln -sf /lib/systemd/system/overc_cleanup.service ${container_dir}/${container_name}/rootfs/etc/systemd/system/multi-user.target.wants/overc_cleanup.service
+    fi
+
+    if is_container_running; then
+        if [ "${container_name}" = "dom0" ]; then
+            /sbin/reboot
+        else
+            ${SBINDIR}/cube-ctl stop ${container_name}
+            ${SBINDIR}/cube-ctl start ${container_name}
+            log_info "container had upgraded to the latest version"
+        fi
+    fi
+}
+
+create_snapshot() {
+    if ! is_container_available; then
+        log_error "container is not available"
+        return 1
+    fi
+
+    fstype=$(get_mount_fstype "${container_dir}")
+    if [ "${fstype}" = "btrfs" ]; then
+        volname=`date +%s.%N`
+        src=${container_dir}/${container_name}
+        dest=${container_dir}/overc-containers/${container_name}/${volname}
+        btrfs_subvolume_snapshot ${src} ${dest} || return 1
+        insert_history_entry $volname
+    else
+        log_error "Container snapshot only supported on btrfs filesystem"
+        return 1
+    fi
+    log_info "Created snapshot ${volname} as the latest to rollback"
+}
+
+delete_snapshot() {
+    local snapshot_id=$1
+    local snapshot_dir=${container_dir}/overc-containers/${container_name}/${snapshot_id}
+
+    if ! is_container_available; then
+        log_error "container is not available" >&2
+        return 1
+    fi
+
+    if ! is_snapshot_available ${snapshot_id}; then
+        log_error "snapshot is not available"
+        return 1
+    fi
+
+    btrfs subvolume delete -C ${snapshot_dir}
+    delete_history_entry ${snapshot_id}
+    log_info "${snapshot_id} had been deleted form rollback history list"
+}
+
+set_snapshot() {
+    local snapshot_id=$1
+
+    if ! is_container_available; then
+        log_error "container is not available"
+        return 1
+    fi
+
+    if ! is_snapshot_available ${snapshot_id}; then
+        log_error "snapshot is not available"
+        return 1
+    fi
+
+    delete_history_entry ${snapshot_id}
+    insert_history_entry ${snapshot_id}
+    log_info "snapshot set to ${snapshot_id} for next rollback"
+}
+
+list_snapshots() {
+    if ! is_container_available; then
+        log_error "container is not available"
+        return 1
+    fi
+
+    awk '{print ++num, " ", $1;}' ${container_dir}/overc-containers/${container_name}/.container_history 2>/dev/null
+}
+
+cleanup_snapshots() {
+    if ! is_container_available; then
+        log_error "container is not available"
+        return 1
+    fi
+
+    snapshots_dir=${container_dir}/overc-containers/${container_name}
+    for snapshot_id in $(cd ${snapshots_dir}; ls); do
+        grep -q $snapshot_id ${snapshots_dir}/.container_history 2>/dev/null
+        local available=$?
+        if [ $available = 1 -a $snapshot_id != $(basename $(realpath ${container_dir}/${container_name})) ]; then
+            btrfs subvolume delete -C ${snapshots_dir}/${snapshot_id}
+        fi
+    done
+    log_info "The unused snapshots had been cleaned up"
+}
+
+delall_snapshots() {
+    cleanup_snapshots
+
+    for snapshot_id in $(cat ${container_dir}/overc-containers/${container_name}/.container_history 2>/dev/null); do
+        delete_snapshot ${snapshot_id}
+    done
+    log_info "All snapshots had been deleted"
+}
+
+
+#
+# Main script starts from here
+#
+if [ $# -lt 1 ]; then
+    usage
+    exit
+fi
+
+# SBINDIR can be set in installer at build time
+if [ -z "${SBINDIR}" ]; then
+    SBINDIR="/usr/sbin"
+fi
+
+forced=
+source_name=
+container_name=
+container_dir=/opt/container
+package_manager=rpm
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -f|--force)
+            forced=1
+            ;;
+        -o|--output)
+            container_dir=$(realpath $2 2>/dev/null)
+            shift
+            ;;
+        *)
+            subcmd=$1
+            container_name=$2
+            if [[ -n "$3" && "$3" != -* ]]; then
+                source_name=$3
+                shift 2
+            else
+                shift
+            fi
+            ;;
+    esac
+    shift
+done
+
+case "${subcmd}" in
+    track)
+        track_container
+        ;;
+    untrack)
+        untrack_container
+        ;;
+    snapshot-create)
+        create_snapshot
+        ;;
+    snapshot-del)
+        delete_snapshot ${source_name}
+        ;;
+    snapshot-set)
+        set_snapshot ${source_name}
+        ;;
+    snapshot-list)
+        list_snapshots
+        ;;
+    snapshot-cleanup)
+        cleanup_snapshots
+        ;;
+    snapshot-delall)
+        delall_snapshots
+        ;;
+    upgrade)
+        upgrade_container ${source_name}
+        ;;
+    rollback)
+        rollback_container
+        ;;
+    *)
+        usage
+        exit 1
+esac
+
+exit $?
