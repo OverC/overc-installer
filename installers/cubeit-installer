@@ -974,7 +974,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 		# We need a veth so we can connect to the ovs bridge
 		${SBINDIR}/cube-cfg device network-virt:veth-${cname}:veth-${cname}
-		${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-network up /opt/container/${cname}
+		${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-network up
 
 		if [ "${cname}" = "dom0" ]; then
 		    ${SBINDIR}/cube-cfg device vt:/dev/loop-control:/dev/loop-control
@@ -985,7 +985,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    ${SBINDIR}/cube-cfg set cube.network.type:static
 		    ${SBINDIR}/cube-cfg set cube.network.ip:192.168.42.3/24
 		    ${SBINDIR}/cube-cfg attribute +vrf
-		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig vrf /opt/container/${cname}
+		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig vrf
 		    service_disable systemd-resolved.service ${cname}
 		fi
 
@@ -1027,7 +1027,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    ${SBINDIR}/cube-cfg -v link ${network_prime}:2379 dom0:2379
 
 		    if [ -e "pflask.cmd" ]; then
-			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig netprime /opt/container/${network_prime}
+			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig netprime
 			${SBINDIR}/cube-cfg gen ${network_prime}:cube
 			service_disable systemd-resolved.service ${cname}
 		    else
