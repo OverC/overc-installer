@@ -4,7 +4,7 @@ After=local-fs.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/overc-installer/overc-cctl clean
+ExecStart=/opt/overc-installer/overc-ctl snapshot-cleanup dom0
 ExecStop=/bin/systemctl disable overc_cleanup.service
 
 [Install]
