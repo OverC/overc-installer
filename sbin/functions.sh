@@ -604,9 +604,9 @@ install_grub()
 	if [ ${GRUB_VER} == "0" ] && ( [[ ${device} = *nbd* ]] || [[ ${device} = *loop* ]] ); then
 	    mkdir -p ${mountpoint}/boot/grub
 	    echo "(hd0) /dev/${device}" > ${mountpoint}/boot/grub/device.map
-	    ${CMD_GRUB_INSTALL} --root-directory=${mountpoint} --no-floppy hd0 # > /dev/null 2>&1
+	    ${CMD_GRUB_INSTALL} --target=i386-pc --root-directory=${mountpoint} --no-floppy --modules=" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search" hd0 # > /dev/null 2>&1
 	else
-	    ${CMD_GRUB_INSTALL} --root-directory=${mountpoint} --no-floppy --recheck /dev/${device} # > /dev/null 2>&1
+	    ${CMD_GRUB_INSTALL} --target=i386-pc --root-directory=${mountpoint} --no-floppy --recheck --modules=" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search" /dev/${device} # > /dev/null 2>&1
 	    # Fedora 24 employs grub2-install which installs the files to DIR/grub2
 	    if [ -d "${mountpoint}/boot/grub2" ]; then
 		if ! mv "${mountpoint}/boot/grub2" "${mountpoint}/boot/grub"; then
