@@ -115,7 +115,7 @@ partition_config()
 		fi
 	fi
 	if [ "$INSTALL_TYPE" == "installer" ]; then
-		echo "BOOTPART_START=\"63s\"" >> ${tmpconf}
+		echo "BOOTPART_START=\"2048s\"" >> ${tmpconf}
 		echo "BOOTPART_END=\"${bootpartsize}\"" >> ${tmpconf}
 		echo "BOOTPART_FSTYPE=\"fat32\"" >> ${tmpconf}
 		echo "BOOTPART_LABEL=\"OVERCBOOT\"" >> ${tmpconf}
