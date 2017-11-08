@@ -449,6 +449,7 @@ if [ -z "${INSTALLER_TARGET_DIR}" ]; then
     INSTALLER_TARGET_DIR="/opt/installer"
 fi
 INSTALLER_TARGET_SBIN_DIR="${INSTALLER_TARGET_DIR}/sbin"
+INSTALLER_TARGET_INSTALLERS_DIR="${INSTALLER_TARGET_DIR}/installers"
 INSTALLER_TARGET_LIB_DIR="${INSTALLER_TARGET_DIR}/lib"
 INSTALLER_TARGET_CONFIG_DIR="${INSTALLER_TARGET_DIR}/config"
 INSTALLER_TARGET_FILES_DIR="${INSTALLER_TARGET_DIR}/files"
@@ -603,8 +604,10 @@ custom_install_rules()
 		return 1
 	fi
 
-	# put the installers in with the sbin files
-	cp ${INSTALLERS_DIR}/* ${mnt_rootfs}${INSTALLER_TARGET_SBIN_DIR}
+	recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_INSTALLERS_DIR}
+	assert_return $?
+
+	cp ${INSTALLERS_DIR}/* ${mnt_rootfs}${INSTALLER_TARGET_INSTALLERS_DIR}
 	if [ $? -ne 0 ]; then
 		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy installer files"
 		return 1
@@ -645,11 +648,22 @@ IFS=$OLDIFS
 	if ${X86_ARCH}; then
 		## Copy the hard drive GRUB configuration
 		for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
+			if [ -e ${d}/${INSTALL_GRUBUSBCFG} ] &&
+			[ ! -e ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBUSBCFG} ]; then
+				debugmsg ${DEBUG_CRIT} "INFO: found grub hd configuration ${d}/${INSTALL_GRUBUSBCFG}"
+				cp ${d}/${INSTALL_GRUBUSBCFG} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBUSBCFG}
+			fi
+
+			if [ -e "${d}/${INSTALL_GRUBUSBCFG}.p7b" ] &&
+			[ ! -e "${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBUSBCFG}.p7b" ]; then
+				cp -f "${d}/${INSTALL_GRUBUSBCFG}.p7b" "${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}"
+			fi
+
 			if [ -e ${d}/${INSTALL_GRUBHDCFG} ] &&
 			[ ! -e ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG} ]; then
 				debugmsg ${DEBUG_CRIT} "INFO: found grub hd configuration ${d}/${INSTALL_GRUBHDCFG}"
 				cp ${d}/${INSTALL_GRUBHDCFG} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG}
-	    		fi
+			fi
 
 			if [ -e "${d}/${INSTALL_GRUBHDCFG}.p7b" ] &&
 			[ ! -e "${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBHDCFG}.p7b" ]; then
@@ -736,7 +750,7 @@ IFS=$OLDIFS
 	if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    debugmsg ${DEBUG_INFO} "Copying Containers to install media"
 
-	    recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}/containers
+	    recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
 	    recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}
 
 	    # drop any properties and copy the containers to the installer
@@ -750,18 +764,21 @@ IFS=$OLDIFS
 				return 1
 			fi
 		fi
-		cp ${img} ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}/containers/
+		cp ${img} ${mnt_rootfs}/${INSTALLER_TARGET_IMAGES_DIR}
 	    done
 
 	    # create a configuration that can be read by the cubeit-installer
 	    if [ -v TARGET_CONFIG_FILE -a -n "$TARGET_CONFIG_FILE" ]; then
-		cat $TARGET_CONFIG_FILE |
-			sed "s|\${ARTIFACTS_DIR}|${INSTALLER_TARGET_IMAGES_DIR}/containers|g" > \
-			${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+		cp $TARGET_CONFIG_FILE ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+		NEED_CONFIG_USB=$(grep "source config-usb.sh" ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh)
+		if [ -v NEED_CONFIG_USB -a -n "$NEED_CONFIG_USB" ]; then
+			cp $(dirname $TARGET_CONFIG_FILE)/config-usb.sh \
+				${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-usb.sh
+		fi
 	    else
 		echo "HDINSTALL_CONTAINERS=\"\\" > ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 		for c in ${HDINSTALL_CONTAINERS}; do
-		    echo -n "${INSTALLER_TARGET_IMAGES_DIR}/containers/" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+		    echo -n "${INSTALLER_TARGET_IMAGES_DIR}/" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 		    echo -n `basename ${c}` >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 		    echo " \\" >> ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 		done
