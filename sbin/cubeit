@@ -844,7 +844,32 @@ disable_automounter
 
 case $TARGET_TYPE in
     block)
-	installer_main "$dev"
+	if [ -z "${TARGET_CONFIG_FILE}" ]; then
+	    if [ -n "${CONFIG_FILES}" ]; then
+		TARGET_CONFIG_FILE="${CONFIG_FILES}"
+	    else
+		TARGET_CONFIG_FILE="config-live.sh"
+	    fi
+	fi
+
+	device=$target
+	if [ -n "$INSTALLER_IMAGE" ]; then
+		dev=`basename $device`
+		installer_main "$dev"
+	else
+
+		if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ];then
+		    debugmsg ${DEBUG_INFO} $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
+			    --config ${TARGET_CONFIG_FILE} --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
+		    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
+			    --config ${TARGET_CONFIG_FILE} --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
+		else
+		    debugmsg ${DEBUG_INFO} $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
+			    --config ${TARGET_CONFIG_FILE} ${INSTALL_ROOTFS} $device
+		    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
+			    --config ${TARGET_CONFIG_FILE} ${INSTALL_ROOTFS} $device
+		fi
+	fi
 	;;
     dir)
 	# TODO: not currently implemented
