@@ -366,12 +366,12 @@ remove_partitions()
 	local count=0
 	local attempts=3
 
-	while partitions=$(/sbin/parted -s /dev/${device} print 2>/dev/null | grep '^ *[0-9]')
+	while partitions=$(${CMD_PARTED} -s /dev/${device} print 2>/dev/null | grep '^ *[0-9]')
 	do
 		for i in $(echo $partitions | awk '{print $1}')
 		do
 			debugmsg ${DEBUG_INFO}  "Removing partition $i on /dev/${device}"
-			/sbin/parted -s /dev/${device} "rm $i"
+			${CMD_PARTED} -s /dev/${device} "rm $i"
 		done
 	
 		if [ $count -gt $attempts ]; then
@@ -402,9 +402,9 @@ create_partition()
 	# use parted to mklabel msdos if no partition table yet exists on the device
 	unknown_part_table=$(parted /dev/${device} print 2>/dev/null | grep 'Partition Table' | grep -c unknown)
 	if [ $unknown_part_table -eq 1 ]; then
-	    /sbin/parted -s /dev/${device} "mklabel msdos" > /dev/null 2>&1
+	    ${CMD_PARTED} -s /dev/${device} "mklabel msdos" > /dev/null 2>&1
 	fi
-	/sbin/parted -s /dev/${device} "mkpart primary ${fstype} ${part_start} ${part_end}" > /dev/null 2>&1
+	${CMD_PARTED} -s /dev/${device} "mkpart primary ${fstype} ${part_start} ${part_end}" > /dev/null 2>&1
 	
 	if [ $? -ne 0 ]
 	then
@@ -1073,7 +1073,7 @@ installer_main()
 	assert $?
 
 	# make first partition bootable
-	/sbin/parted /dev/${device} set 1 boot on > /dev/null 2>&1
+	${CMD_PARTED} /dev/${device} set 1 boot on > /dev/null 2>&1
 
 	local p1
 	local p2
@@ -1162,4 +1162,27 @@ format_menuitems()
 		let itemcount++
 	done
 	return $itemcount
+}
+
+verify_commands()
+{
+	if [ -z "$CMD_GRUB_INSTALL" ] || [ ! -e "$CMD_GRUB_INSTALL" ]; then
+		CMD_GRUB_INSTALL=$(which grub-install)
+
+		if [ ! -e "$CMD_GRUB_INSTALL" ]; then
+			debugmsg ${DEBUG_INFO} "ERROR: Could not find grub-install"
+			false
+			assert $?
+		fi
+	fi
+
+	if [ -z "$CMD_PARTED" ] || [ ! -e "$CMD_PARTED" ]; then
+		CMD_PARTED=$(which parted)
+
+		if [ ! -e "$CMD_PARTED" ]; then
+			debugmsg ${DEBUG_INFO} "ERROR: Could not find parted"
+			false
+			assert $?
+		fi
+	fi
 }

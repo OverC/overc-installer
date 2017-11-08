@@ -801,6 +801,7 @@ HAVE_DCONF=1
 DESKTOP_SESSION=""
 verify_utility gsettings && HAVE_GSETTING=0
 verify_utility dconf && HAVE_DCONF=0
+verify_commands
 
 ps -ef|grep gnome-session|grep -v grep >/dev/null 2>&1
 [ $? -eq 0 ] && DESKTOP_SESSION="gnome"
