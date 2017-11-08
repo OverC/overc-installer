@@ -309,6 +309,9 @@ validate_usbstorage()
         if [ "x${driver}" == "xusb-storage" ]; then
                 rc=0
 		echo $(basename ${usbstorage_device})
+        elif [ "x${driver}" == "xvirtio_blk" ]; then
+                rc=0
+		echo $(basename ${usbstorage_device})
         else
                 debugmsg ${DEBUG_CRIT} "ERROR: Specified block device (${usbstorage_device}) is not a usb-storage device."
                 rc=1
