@@ -211,6 +211,12 @@ run_container_command() {
     fi
 }
 
+rpm_check_update() {
+    local container=$1
+
+    run_container_command $container "dnf -q check-update"
+}
+
 rpm_upgrade() {
     local container=$1
 
@@ -403,6 +409,13 @@ upgrade_container() {
             insert_history_entry ${saved_snapshot}
         fi
     else
+        # check update
+        eval ${package_manager}_check_update "${container_name}"
+        if [ $? != 100 ]; then
+            log_info "No newer version available for ${container_name}"
+            return 0
+        fi
+
         # container source not provided, do dnf upgrade
         create_snapshot || return 1
         if ! eval ${package_manager}_upgrade "${container_name}"; then
