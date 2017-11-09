@@ -770,6 +770,7 @@ IFS=$OLDIFS
 	    # create a configuration that can be read by the cubeit-installer
 	    if [ -v TARGET_CONFIG_FILE -a -n "$TARGET_CONFIG_FILE" ]; then
 		cp $TARGET_CONFIG_FILE ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
+		sed -i "s|\${ARTIFACTS_DIR}|${INSTALLER_TARGET_IMAGES_DIR}|g" ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh
 		NEED_CONFIG_USB=$(grep "source config-usb.sh" ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}/config-installer.sh)
 		if [ -v NEED_CONFIG_USB -a -n "$NEED_CONFIG_USB" ]; then
 			cp $(dirname $TARGET_CONFIG_FILE)/config-usb.sh \
