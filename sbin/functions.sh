@@ -573,81 +573,117 @@ install_bootloader()
 
 install_grub()
 {
-	local device="$1"
-	local mountpoint="$2"
+    local device="$1"
+    local bootpoint="$2"
+    local mountpoint="$3"
 
-	# if we are installing to a nbd device, assume that we are working in
-	# a virtual environment, and use "vda" as the boot device
-	echo ${device} | grep -q nbd
-	if [ $? -eq 0 ]; then
-	    p2="vda2"
-	else
-	    p2="${device}2"
+    # if we are installing to a nbd device, assume that we are working in
+    # a virtual environment, and use "vda" as the boot device
+    echo ${device} | grep -q nbd
+    if [ $? -eq 0 ]; then
+        p2="vda2"
+    else
+        p2="${device}2"
+    fi
+
+    # Create a mountpoint for bootpoint under mountpoint
+    mkdir -p ${mnt2}/mnt
+    mount --bind ${mnt1} ${mnt2}/mnt
+
+    debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
+
+    if ! [ -n "$DISTRIBUTION" ]; then
+        DISTRIBUTION="OverC"
+    fi
+
+    chroot ${mountpoint} /bin/bash -c "mount -t devtmpfs none /dev"
+    chroot ${mountpoint} /bin/bash -c "mount -t proc proc /proc"
+    chroot ${mountpoint} /bin/bash -c "mount -t sysfs sys /sys"
+
+    if [ -n "$loop_device" ]; then
+	chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --force --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search\" /dev/${device}"
+    else
+	chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --boot-directory=/mnt --force /dev/${device}"
+    fi
+
+    mkdir -p ${mountpoint}/mnt/grub
+    cat <<EOF >${mountpoint}/mnt/grub/grub.cfg
+set default="0"
+
+serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1
+terminal_input console serial
+terminal_output console serial
+set timeout=5
+
+menuentry "$DISTRIBUTION" {
+	insmod gzio
+	insmod ext2
+	insmod fat
+	search --no-floppy --label INSTBOOT --set=root
+	echo	'Loading Linux ...'
+	linux	/images/bzImage root=LABEL=INSTROOTFS ro rootwait $GRUB_KERNEL_PARAMS
+	echo	'Loading initial ramdisk ...'
+	initrd	/images/initrd
+}
+
+menuentry "$DISTRIBUTION recovery" {
+        insmod gzio
+        insmod ext2
+        insmod fat
+        search --no-floppy --label INSTBOOT --set=root
+        echo    'Loading Linux ...'
+        linux   /images/bzImage_bakup root=LABEL=INSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
+        echo    'Loading initial ramdisk ...'
+        initrd  /images/initrd
+}
+
+EOF
+
+    if [ -f ${mountpoint}/boot/efi/EFI/BOOT/boot*.efi ]; then
+	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
+	mkdir -p ${mountpoint}/mnt/EFI/BOOT
+	cp -a ${mountpoint}/boot/efi/EFI mnt
+
+	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
+	    cp "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/EFI/BOOT/grub.cfg
+	elif [ ! -f ${mountpoint}/mnt/EFI/BOOT/grub.cfg ]; then
+	    cat <<EOF >${mountpoint}/mnt/EFI/BOOT/grub.cfg
+set default="0"
+set timeout=5
+set color_normal='light-gray/black'
+set color_highlight='light-green/blue'
+
+menuentry "$DISTRIBUTION" {
+       chainloader /images/bzImage root=LABEL=INSTROOTFS ro rootwait initrd=/images/initrd
+}
+
+menuentry "$DISTRIBUTION recovery" {
+       chainloader /images/bzImage_bakup root=LABEL=INSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/images/initrd
+}
+
+menuentry 'Automatic Key Provision' {
+       chainloader /EFI/BOOT/LockDown.efi
+}
+EOF
 	fi
 
-	debugmsg ${DEBUG_INFO} "Checking GRUB consistency"
+	echo `basename ${mountpoint}/mnt/EFI/BOOT/boot*.efi` >${mountpoint}/mnt/startup.nsh
+	chmod +x ${mountpoint}/mnt/startup.nsh
+    fi
 
-	GRUB_VER=$( ${CMD_GRUB_INSTALL} --version | awk -F '.'  '{ print $1}' | awk -F ' ' '{print $NF}' )
-	# See if our grub config is a legacy menu.lst file
-	echo ${INSTALL_GRUBCFG} | grep -q menu
-	MENU_GRUB_CFG=$?
-	if [ ${MENU_GRUB_CFG} -ne 0 ] && [ ${GRUB_VER} == "0" ]; then
-		debugmsg ${DEBUG_CRIT} "ERROR: GRUB version is legacy but cfg file is not menu.lst style"
-		return 1
-	fi
-	if [ ${MENU_GRUB_CFG} -eq 0 ] && [ ${GRUB_VER} != "0" ]; then
-		debugmsg ${DEBUG_CRIT} "ERROR: GRUB config file is menu.lst style but GRUB version is 2"
-		return 1
-	fi
-
-	debugmsg ${DEBUG_INFO} "Installing the GRUB bootloader"
-
-	# --recheck doesn't function with loopback and nbd devices for grub legacy, write our own device.map
-	# additionally we have to use the 'grub name' with these devices or grub-install will fail
-	if [ ${GRUB_VER} == "0" ] && ( [[ ${device} = *nbd* ]] || [[ ${device} = *loop* ]] ); then
-	    mkdir -p ${mountpoint}/boot/grub
-	    echo "(hd0) /dev/${device}" > ${mountpoint}/boot/grub/device.map
-	    ${CMD_GRUB_INSTALL} --target=i386-pc --root-directory=${mountpoint} --no-floppy --modules=" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search" hd0 # > /dev/null 2>&1
-	else
-	    ${CMD_GRUB_INSTALL} --target=i386-pc --root-directory=${mountpoint} --no-floppy --recheck --modules=" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search" /dev/${device} # > /dev/null 2>&1
-	    # Fedora 24 employs grub2-install which installs the files to DIR/grub2
-	    if [ -d "${mountpoint}/boot/grub2" ]; then
-		if ! mv "${mountpoint}/boot/grub2" "${mountpoint}/boot/grub"; then
-		    debugmsg ${DEBUG_CRIT} "ERROR: Unable to rename ${mountpoint}/boot/grub2"
-		    return 1
-		fi
-	    fi
-	fi
-	if [ $? -ne 0 ]
-	then
-		debugmsg ${DEBUG_CRIT} "ERROR: Installation of grub failed on /dev/${dev}"
-		return 1
-	fi
-
-	if [ ${MENU_GRUB_CFG} -ne 0 ]; then
-		GRUB_CFG_NAME="grub.cfg"
-	else
-		GRUB_CFG_NAME="menu.lst"
-	fi
-
-	cp ${INSTALL_GRUBCFG} ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
-	if [ $? -ne 0 ]
-	then
-		debugmsg ${DEBUG_CRIT} "ERROR: Could not copy grub configuration file to ${mountpoint}/boot/grub/"
-		return 1
-	fi
+    debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
 
 	if [ -n "${INSTALL_KERNEL}" ]; then
 		local kernel_name=`basename ${INSTALL_KERNEL}`
 		local initramfs_name=`basename ${INSTALL_INITRAMFS}`
-		sed "s|%INSTALL_KERNEL%|${kernel_name}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
-		sed "s|%INSTALL_INITRAMFS%|${initramfs_name}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
-		sed "s|%INSTALLER_PARTITION%|${p2}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
-		sed "s|%ROOTFS_LABEL%|${ROOTFS_LABEL}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
+		sed "s|%INSTALL_KERNEL%|${kernel_name}|" -i ${mountpoint}/mnt/grub/grub.cfg
+		sed "s|%INSTALL_INITRAMFS%|${initramfs_name}|" -i ${mountpoint}/mnt/grub/grub.cfg
+		sed "s|%INSTALLER_PARTITION%|${p2}|" -i ${mountpoint}/mnt/grub/grub.cfg
+		sed "s|%ROOTFS_LABEL%|${ROOTFS_LABEL}|" -i ${mountpoint}/mnt/grub/grub.cfg
 		if ! [ -n "$DISTRIBUTION" ]; then
 			DISTRIBUTION="OverC"
 		fi
-		sed "s|%DISTRIBUTION%|${DISTRIBUTION}|" -i ${mountpoint}/boot/grub/${GRUB_CFG_NAME}
+		sed "s|%DISTRIBUTION%|${DISTRIBUTION}|" -i ${mountpoint}/mnt/grub/grub.cfg
 	else
 		debugmsg ${DEBUG_CRIT} "ERROR: Could not update grub configuration with install kernel"
 		return 1
@@ -659,8 +695,8 @@ install_grub()
 		debugmsg ${DEBUG_INFO} "Installing the EFI bootloader"
 		mkdir -p ${mountpoint}/EFI/BOOT/
 		cp $INSTALL_EFIBOOT ${mountpoint}/EFI/BOOT/
-		cp ${mountpoint}/boot/grub/${GRUB_CFG_NAME} ${mountpoint}/EFI/BOOT/
-		selsign "${mountpoint}/EFI/BOOT/${GRUB_CFG_NAME}"
+		cp ${mountpoint}/mnt/grub/grub.cfg ${mountpoint}/EFI/BOOT/
+		selsign "${mountpoint}/EFI/BOOT/grub.cfg"
 		echo `basename $INSTALL_EFIBOOT` >${mountpoint}/startup.nsh
 	else
 		cp ${BASEDIR}/startup.nsh ${mountpoint}/
@@ -668,7 +704,13 @@ install_grub()
 		sed -i "s/%INITRD%/\/images\/${initramfs_name}/" ${mountpoint}/startup.nsh
 		sed -i "s/%BZIMAGE%/\\\images\\\bzImage/" ${mountpoint}/startup.nsh
 	fi
-	chmod +x ${mountpoint}/startup.nsh
+	chmod +x ${mountpoint}/mnt/startup.nsh
+
+	umount ${mountpoint}/mnt
+
+	chroot ${mountpoint} /bin/bash -c "umount /sys"
+	chroot ${mountpoint} /bin/bash -c "umount /proc"
+	chroot ${mountpoint} /bin/bash -c "umount /dev"
 
 	return 0
 }
@@ -690,6 +732,7 @@ install_kernel()
 		return 1
 	fi
 
+	debugmsg ${DEBUG_INFO} "Copying ${kernel_src} to <boot>/images"
 	cp ${kernel_src} ${boot_part}/images/
 	if [ $? -ne 0 ]
 	then
@@ -698,6 +741,7 @@ install_kernel()
 	fi
 
 	if [ -f "${kernel_src}.p7b" ]; then
+	    debugmsg ${DEBUG_INFO} "Copying ${kernel_src}.p7b to <boot>/images"
 	    cp "${kernel_src}.p7b" "${boot_part}/images"
 	    if [ $? -ne 0 ]
 	    then
@@ -707,6 +751,7 @@ install_kernel()
 	fi
 
 	if [ -n ${initramfs} ]; then
+	        debugmsg ${DEBUG_INFO} "Copying ${initramfs} to <boot>/images/${initramfs_dest}"
 		cp ${initramfs} ${boot_part}/images/${initramfs_dest}
 		if [ $? -ne 0 ]
 		then
@@ -1102,9 +1147,14 @@ installer_main()
 
 	## Create new filesystems
 	debugmsg ${DEBUG_INFO} "Creating new filesystems "
+
+	BOOTPART_LABEL=INSTBOOT
+	debugmsg ${DEBUG_INFO} "Creating Partition:${p1} Type:${BOOTPART_FSTYPE} Label:${BOOTPART_LABEL}"
 	create_filesystem "${p1}" "${BOOTPART_FSTYPE}" "${BOOTPART_LABEL}"
 	assert $?
 
+	ROOTFS_LABEL=INSTROOTFS
+	debugmsg ${DEBUG_INFO} "Creating Partition:${p2} Type:${ROOTFS_FSTYPE} Label:${ROOTFS_LABEL}"
 	create_filesystem "${p2}" "${ROOTFS_FSTYPE}" "${ROOTFS_LABEL}"
 	assert $?
 
@@ -1128,7 +1178,7 @@ installer_main()
 
 	## Install Bootloader
 	if ${X86_ARCH}; then
-		install_grub "${dev}" "${mnt1}"
+		install_grub "${dev}" "${mnt1}" "${mnt2}"
 		assert $?
 	else	# arm architecture
 		install_dtb "${mnt1}" "${INSTALL_DTB}"

@@ -567,7 +567,7 @@ custom_install_rules()
 	##       INSTALL_INITRAMFS, since other routines read that global variable,
 	##       and align things like grub to that name.
 	debugmsg ${DEBUG_INFO} "Copying kernel image"
-	install_kernel "${INSTALL_KERNEL}" "${mnt_boot}" "${initramfs_source}" "`basename ${INSTALL_INITRAMFS}`"
+	install_kernel "${INSTALL_KERNEL}" "${mnt_boot}" "${initramfs_source}" "initrd"
 	assert_return $?
 
 	if [ -n "${INSTALL_ROOTFS}" ]; then
