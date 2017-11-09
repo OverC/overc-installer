@@ -125,15 +125,15 @@ RST="\\033[0m"            # Reset colors
 #
 # Helper functions
 #
-log_info () {
+log_info() {
     echo -e $BLD_NOTE"[INFO]""$RST: $STD_NOTE$@$RST"
 }
 
-log_warn () {
+log_warn() {
     echo -e $BLD_WARNING"[WARNING]""$RST: $STD_WARNING$@$RST" >&2
 }
 
-log_error () {
+log_error() {
     echo -e $BLD_ERROR"[ERROR]""$RST: $STD_ERROR$@$RST" >&2
     return 1
 }
