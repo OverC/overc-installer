@@ -1115,15 +1115,6 @@ installer_main()
 	mnt2=$(tmp_mount "${p2}")
 	assert $?
 
-	## Install Bootloader	
-	if ${X86_ARCH}; then
-		install_grub "${dev}" "${mnt1}"
-		assert $?
-	else	# arm architecture
-		install_dtb "${mnt1}" "${INSTALL_DTB}"
-		install_bootloader "${dev}" "${mnt1}" "${INSTALL_BOOTLOADER}" "${BOARD_NAME}"
-	fi
-
 	declare -f custom_install_rules > /dev/null 2>&1
 	if [ $? -ne 0 ]
 	then
@@ -1133,6 +1124,15 @@ installer_main()
 	else
 		custom_install_rules "${mnt1}" "${mnt2}"
 		assert $?
+	fi
+
+	## Install Bootloader
+	if ${X86_ARCH}; then
+		install_grub "${dev}" "${mnt1}"
+		assert $?
+	else	# arm architecture
+		install_dtb "${mnt1}" "${INSTALL_DTB}"
+		install_bootloader "${dev}" "${mnt1}" "${INSTALL_BOOTLOADER}" "${BOARD_NAME}"
 	fi
 
 	clean_up
