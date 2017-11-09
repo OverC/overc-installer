@@ -725,10 +725,16 @@ echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab
 echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> ${TMPMNT}/etc/fstab
 echo "LABEL=$CONTAINERLABEL /opt/container auto defaults 0 0" >> ${TMPMNT}/etc/fstab
 
+if [ -e /${IMAGESDIR}/config.smart ]; then
+    INSTALL_SMARTCONFIG="/${IMAGESDIR}/config.smart"
+fi
+
 if [ -e "$INSTALL_SMARTCONFIG" ]; then
-	cp $INSTALL_SMARTCONFIG ${TMPMNT}/var/lib/smart/config
-elif [ -e /${IMAGESDIR}/config.smart ]; then
-	cp /${IMAGESDIR}/config.smart ${TMPMNT}/var/lib/smart/config
+    if [ -d ${TMPMNT}/var/lib/smart ]; then
+        cp $INSTALL_SMARTCONFIG ${TMPMNT}/var/lib/smart/config
+    elif [ -d ${TMPMNT}/etc/dnf ]; then
+        cp $INSTALL_SMARTCONFIG ${TMPMNT}/etc/dnf/dnf.conf
+    fi
 fi
 
 # make essential system use vty 1 to login and disable the autoVTs of systemd
@@ -866,10 +872,12 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	rm -rf ${CONTAINERBASE}/var
 
 	if [ -e "$INSTALL_SMARTCONFIG" ]; then
-	    cp $INSTALL_SMARTCONFIG ${TMPMNT}/opt/container/$cname/rootfs/var/lib/smart/config
-	elif [ -e /${IMAGESDIR}/config.smart ]; then
-	    cp /${IMAGESDIR}/config.smart ${TMPMNT}/opt/container/$cname/rootfs/var/lib/smart/config
-	fi
+            if [ -d ${TMPMNT}/opt/container/$cname/rootfs/var/lib/smart ]; then
+                cp $INSTALL_SMARTCONFIG ${TMPMNT}/opt/container/$cname/rootfs/var/lib/smart/config
+            elif [ -d ${TMPMNT}/opt/container/$cname/rootfs/etc/dnf ]; then
+                cp $INSTALL_SMARTCONFIG ${TMPMNT}/opt/container/$cname/rootfs/etc/dnf/dnf.conf
+            fi
+        fi
 
 	rm ${TMPMNT}/tmp/$(basename $c)
     done
