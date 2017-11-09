@@ -21,6 +21,7 @@ cat << EOF
 
  options:
      -f/--force: force execute command without prompting
+     -r/--reboot: force to reboot after command executed
      -o/--output <dir>: container output directory, defaults to /opt/container
 
  commands:
@@ -344,10 +345,10 @@ rollback_container() {
         ln -srfT ${container_dir}/overc-containers/${container_name}/${latest_snapshot} ${container_dir}/${container_name}
         delete_history_entry ${latest_snapshot}
         if [ "${container_name}" = "dom0" ]; then
-            /sbin/reboot
+            [ -n "${reboot}" ] && /sbin/reboot
         else
             cleanup_snapshots
-            ${SBINDIR}/cube-ctl start ${container_name}
+            [ -n "${reboot}" ] && ${SBINDIR}/cube-ctl start ${container_name}
             log_info "Container had switched to ${latest_snapshot}"
         fi
     else
@@ -359,7 +360,7 @@ rollback_container() {
 upgrade_container() {
     local container_src=$1
 
-    echo "Will upgrade container and reboot it if it's already running"
+    echo "Will upgrade container"
     if [ -n "${forced}" ]; then
         answer="y"
     else
@@ -418,10 +419,12 @@ upgrade_container() {
 
     if is_container_running; then
         if [ "${container_name}" = "dom0" ]; then
-            /sbin/reboot
+            [ -n "${reboot}" ] && /sbin/reboot
         else
-            ${SBINDIR}/cube-ctl stop ${container_name}
-            ${SBINDIR}/cube-ctl start ${container_name}
+            if [ -n "${reboot}" ]; then
+                ${SBINDIR}/cube-ctl stop ${container_name}
+                ${SBINDIR}/cube-ctl start ${container_name}
+            fi
             log_info "container had upgraded to the latest version"
         fi
     fi
@@ -534,6 +537,7 @@ if [ -z "${SBINDIR}" ]; then
 fi
 
 forced=
+reboot=
 source_name=
 container_name=
 container_dir=/opt/container
@@ -543,6 +547,9 @@ while [ $# -gt 0 ]; do
     case "$1" in
         -f|--force)
             forced=1
+            ;;
+        -r|--reboot)
+            reboot=1
             ;;
         -o|--output)
             container_dir=$(realpath $2 2>/dev/null)
