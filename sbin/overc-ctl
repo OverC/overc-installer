@@ -228,7 +228,7 @@ rpm_upgrade() {
     run_container_command $container "cp -r $tempdir/rpm /var/lib/"
 
     # Do upgrading
-    run_container_command $container "dnf upgrade --refresh"
+    run_container_command $container "dnf -y upgrade --refresh"
     local ret=$?
 
     # Restore rpm database to persistent /var/lib
