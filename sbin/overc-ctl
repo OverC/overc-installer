@@ -306,8 +306,9 @@ untrack_container() {
 }
 
 rollback_container() {
-    # Override global forced with parameter $1
+    # Override global forced,reboot with parameter $1,$2
     [ -n "$1" ] && local forced=$1
+    [ -n "$2" ] && local reboot=$2
 
     if ! is_container_available; then
         log_error "container is not available"
@@ -420,7 +421,7 @@ upgrade_container() {
         create_snapshot || return 1
         if ! eval ${package_manager}_upgrade "${container_name}"; then
             log_error "Upgrade container with ${package_manager} failed, rollback to the latest"
-            rollback_container "1"
+            rollback_container "true" "true"
             return 1
         fi
     fi
