@@ -646,7 +646,12 @@ EOF
 
 	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
 	    cp "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/EFI/BOOT/grub.cfg
-	elif [ ! -f ${mountpoint}/mnt/EFI/BOOT/grub.cfg ]; then
+	else
+	    if [ -f ${mountpoint}/mnt/EFI/BOOT/grub.cfg ]; then
+	         debugmsg ${DEBUG_INFO} "[WARN]: Overriding provided EFI/BOOT/grub.cfg"
+	    else
+	         debugmsg ${DEBUG_INFO} "[INFO]: Writing EFI/BOOT/grub.cfg"
+	    fi
 	    cat <<EOF >${mountpoint}/mnt/EFI/BOOT/grub.cfg
 set default="0"
 set timeout=5
