@@ -642,7 +642,7 @@ EOF
     if [ -f ${mountpoint}/boot/efi/EFI/BOOT/boot*.efi ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
 	mkdir -p ${mountpoint}/mnt/EFI/BOOT
-	cp -a ${mountpoint}/boot/efi/EFI mnt
+	cp -a ${mountpoint}/boot/efi/EFI ${mountpoint}/mnt
 
 	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
 	    cp "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/EFI/BOOT/grub.cfg

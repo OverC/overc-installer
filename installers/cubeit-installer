@@ -498,7 +498,12 @@ debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
 tar --warning=no-timestamp --numeric-owner \
     --xattrs --xattrs-include=security\\.ima -xpf "${rootfs}"
 
-mount /dev/${fs_dev}1 mnt
+if [ -z "${BOOTTMPMNT}" ]; then
+    BOOTTMPMNT=`mktemp -d /tmp/pulsarmountXXXXX`
+    export BOOTTMPMNT
+fi
+mkdir -p ${BOOTTMPMNT}/mnt
+mount /dev/${fs_dev}1 ${BOOTTMPMNT}/mnt
 
 ## Process kernel into /boot
 if [ -e "${INSTALL_KERNEL}" ] ; then
@@ -508,25 +513,25 @@ if [ -e "${INSTALL_KERNEL}" ] ; then
 	else
 		inst_kernel=bzImage
 	fi
-	cp ${INSTALL_KERNEL} mnt/${inst_kernel}
-	cp ${INSTALL_KERNEL} mnt/${inst_kernel}_bakup
+	cp ${INSTALL_KERNEL} ${BOOTTMPMNT}/mnt/${inst_kernel}
+	cp ${INSTALL_KERNEL} ${BOOTTMPMNT}/mnt/${inst_kernel}_bakup
 elif ls boot/uImage-* >/dev/null 2>&1; then
-	cp boot/uImage-* mnt/uImage
+	cp boot/uImage-* ${BOOTTMPMNT}/mnt/uImage
 	#create a backup kernel for recovery boot
-	cp boot/uImage-* mnt/uImage_bakup
+	cp boot/uImage-* ${BOOTTMPMNT}/mnt/uImage_bakup
 elif ls boot/bzImage-* >/dev/null 2>&1; then
 	name=`basename boot/bzImage-*`
-	cp "boot/$name" mnt/bzImage
+	cp "boot/$name" ${BOOTTMPMNT}/mnt/bzImage
 	#create a backup kernel for recovery boot
-	cp "boot/$name" mnt/bzImage_bakup
+	cp "boot/$name" ${BOOTTMPMNT}/mnt/bzImage_bakup
 	if [ -f "boot/$name.p7b" ]; then
-		cp "boot/$name.p7b" mnt/bzImage.p7b
-		cp "boot/$name.p7b" mnt/bzImage_bakup.p7b
+		cp "boot/$name.p7b" ${BOOTTMPMNT}/mnt/bzImage.p7b
+		cp "boot/$name.p7b" ${BOOTTMPMNT}/mnt/bzImage_bakup.p7b
 	fi
 elif ls boot/fitImage-* >/dev/null 2>&1; then
-	cp boot/fitImage-* mnt/fitImage
+	cp boot/fitImage-* ${BOOTTMPMNT}/mnt/fitImage
 	#create a backup kernel for recovery boot
-	cp boot/fitImage-* mnt/fitImage_bakup
+	cp boot/fitImage-* ${BOOTTMPMNT}/mnt/fitImage_bakup
 fi
  
 ## Process initrd into /boot
@@ -535,9 +540,9 @@ img=`ls boot/*Image-* 2> /dev/null`
 # then find it in ${IMAGESDIR}
 # create both a initrd-<version> and initrd
 if [ -e "$INSTALL_INITRAMFS" ]; then
-	cp $INSTALL_INITRAMFS mnt/initrd
+	cp $INSTALL_INITRAMFS ${BOOTTMPMNT}/mnt/initrd
 	if [ -f "${INSTALL_INITRAMFS}.p7b" ]; then
-	    cp -f "${INSTALL_INITRAMFS}.p7b" mnt/initrd.p7b
+	    cp -f "${INSTALL_INITRAMFS}.p7b" ${BOOTTMPMNT}/mnt/initrd.p7b
 	fi
 elif [ -n "$img" ] ; then
 	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs ($INSTALL_INITRAMFS)"
@@ -549,9 +554,9 @@ elif [ -n "$img" ] ; then
 	#with different name, but they are the same file, so here just copy one
 	#of them is ok.
 	for i in $( ls ${IMAGESDIR}/*-initramfs-*.cpio.gz ); do
-		cp /$i mnt/initrd
+		cp /$i ${BOOTTMPMNT}/mnt/initrd
 		if [ -f "/$i.p7b" ]; then
-		    cp -f "/$i.p7b" mnt/initrd.p7b
+		    cp -f "/$i.p7b" ${BOOTTMPMNT}/mnt/initrd.p7b
 		fi
 		break
 	done
@@ -562,6 +567,8 @@ if [ -n "${INSTALL_MODULES}" ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: installing kernel modules (${INSTALL_MODULES##*/})"
 	tar --numeric-owner -xpf ${INSTALL_MODULES}
 fi
+
+umount ${BOOTTMPMNT}/mnt
 
 if [ $btrfs -eq 1 ]; then
 	# get the subvolume id of /mnt/rootfs using:
@@ -645,13 +652,13 @@ EOF
 
     if [ -f boot/efi/EFI/BOOT/boot*.efi ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
-	mkdir -p mnt/EFI/BOOT
-	cp -a boot/efi/EFI mnt
+	mkdir -p ${TMPMNT}/mnt/EFI/BOOT
+	cp -a boot/efi/EFI ${TMPMNT}/mnt
 
 	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
-	    cp "${INSTALL_GRUBEFI_CFG}" mnt/EFI/BOOT/grub.cfg
-	elif [ ! -f mnt/EFI/BOOT/grub.cfg ]; then
-	    cat <<EOF >mnt/EFI/BOOT/grub.cfg
+	    cp "${INSTALL_GRUBEFI_CFG}" ${TMPMNT}/mnt/EFI/BOOT/grub.cfg
+	elif [ ! -f ${TMPMNT}/mnt/EFI/BOOT/grub.cfg ]; then
+	    cat <<EOF >${TMPMNT}/mnt/EFI/BOOT/grub.cfg
 set default="0"
 set timeout=5
 set color_normal='light-gray/black'
@@ -671,29 +678,29 @@ menuentry 'Automatic Key Provision' {
 EOF
 	fi
 
-	echo `basename mnt/EFI/BOOT/boot*.efi` >mnt/startup.nsh
-	chmod +x mnt/startup.nsh
+	echo `basename ${TMPMNT}/mnt/EFI/BOOT/boot*.efi` >${TMPMNT}/mnt/startup.nsh
+	chmod +x ${TMPMNT}/mnt/startup.nsh
     else
-	install -m 0755 ${SBINDIR}/startup.nsh mnt/
-	sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" mnt/startup.nsh
-	sed -i "s/%INITRD%/${initrd}/" mnt/startup.nsh
-	sed -i "s/%BZIMAGE%/bzImage/" mnt/startup.nsh
+	install -m 0755 ${SBINDIR}/startup.nsh ${TMPMNT}/mnt/
+	sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" ${TMPMNT}/mnt/startup.nsh
+	sed -i "s/%INITRD%/${initrd}/" ${TMPMNT}/mnt/startup.nsh
+	sed -i "s/%BZIMAGE%/bzImage/" ${TMPMNT}/mnt/startup.nsh
     fi
 else # arm architecture
     if [ -e "${INSTALL_DTB}" ]; then
-        install_dtb "./mnt" "${INSTALL_DTB}"
+        install_dtb "${TMPMNT}/mnt" "${INSTALL_DTB}"
     elif [ -e "${IMAGESDIR}/dtb" ]; then
-        install_dtb "./mnt" "${IMAGESDIR}/dtb"
+        install_dtb "${TMPMNT}/mnt" "${IMAGESDIR}/dtb"
     fi
     if [ -e "${INSTALL_BOOTLOADER}" ]; then
         if [ -e "${INSTALL_BOOTLOADER_ENV}" ]; then
-	    install_bootloader "${raw_dev}" "./mnt" ${INSTALL_BOOTLOADER} "${BOARD_NAME}" ${INSTALL_BOOTLOADER_ENV}
+	    install_bootloader "${raw_dev}" "${TMPMNT}/mnt" ${INSTALL_BOOTLOADER} "${BOARD_NAME}" ${INSTALL_BOOTLOADER_ENV}
         else
-	    install_bootloader "${raw_dev}" "./mnt" ${INSTALL_BOOTLOADER} "${BOARD_NAME}"
+	    install_bootloader "${raw_dev}" "${TMPMNT}/mnt" ${INSTALL_BOOTLOADER} "${BOARD_NAME}"
 	fi
     elif [ -e ${IMAGESDIR}/*_boot.bin ]; then
 	BOARD_NAME=`basename ${IMAGESDIR}/*_boot.bin | sed 's/_boot\.bin//'`
-	install_bootloader "${raw_dev}" "./mnt" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
+	install_bootloader "${raw_dev}" "${TMPMNT}/mnt" "${IMAGESDIR}/${BOARD_NAME}_boot.bin" "${BOARD_NAME}"
     fi
 fi
 
