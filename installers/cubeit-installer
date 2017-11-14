@@ -1096,8 +1096,11 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	debugmsg ${DEBUG_INFO} "[INFO]: Set initial user."
 	sed -i "s/^\(initial_user:\).*$/\1 ${INITIAL_USER}/" \
 	    ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
-	echo "initial_passwd: `cat $CONFIG_FILES | grep INITIAL_PASSWD | cut -f 2 -d=`" \
-	    >> ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
+            if [ ! -z "${INITIAL_PASSWD}" ]; then
+	        debugmsg ${DEBUG_INFO} "[INFO]: Set initial password."
+	        echo "initial_passwd: ${INITIAL_PASSWD}" \
+	            >> ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
+            fi
     fi
 
     if [ -n "${LOCAL_CUSTOM_HDD_POST_FUNCS}" ]; then
