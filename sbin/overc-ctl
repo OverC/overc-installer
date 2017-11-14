@@ -281,7 +281,7 @@ untrack_container() {
         return 1
     fi
 
-    echo "Untrack container will delete all snapshots"
+    log_info "Untrack container will delete all snapshots"
     if [ -n "${forced}" ]; then
         answer="y"
     else
@@ -300,7 +300,7 @@ untrack_container() {
         rm -f ${container_dir}/${container_name}
         rm -f ${container_dir}/overc-containers/${container_name}/.container_history
     else
-        echo "Aborting"
+        log_error "Aborting"
         return 1
     fi
 }
@@ -321,7 +321,7 @@ rollback_container() {
         return 1
     fi
 
-    echo "Will switch to: ${latest_snapshot}"
+    log_info "Will switch to: ${latest_snapshot}"
     if [ -n "${forced}" ]; then
         answer="y"
     else
@@ -332,7 +332,7 @@ rollback_container() {
     if [ "${answer}" = "y" ]; then
         if is_container_running; then
             if [ -n "$forced" ]; then
-                echo "Force enabled, stopping container"
+                log_info "Force enabled"
                 answer="y"
             else
                 echo -n "Stop, switch, then start it? (y/n) "
@@ -344,7 +344,7 @@ rollback_container() {
                     ${SBINDIR}/cube-ctl stop ${container_name}
                 fi
             else
-                echo "Aborting"
+                log_error "Aborting"
                 return 1
             fi
         fi
@@ -356,10 +356,10 @@ rollback_container() {
         else
             cleanup_snapshots
             [ -n "${reboot}" ] && ${SBINDIR}/cube-ctl start ${container_name}
-            log_info "Container had switched to ${latest_snapshot}"
         fi
+        log_info "Container had switched to ${latest_snapshot}"
     else
-        echo "No snapshot selected, aborting"
+        log_error "No snapshot selected, aborting"
         return 1
     fi
 }
@@ -367,7 +367,7 @@ rollback_container() {
 upgrade_container() {
     local container_src=$1
 
-    echo "Will upgrade container"
+    log_info "Will upgrade container"
     if [ -n "${forced}" ]; then
         answer="y"
     else
@@ -376,7 +376,7 @@ upgrade_container() {
     fi
 
     if [ "${answer}" != "y" ]; then
-        echo "Aborting"
+        log_error "Aborting"
         return 1
     fi
 
