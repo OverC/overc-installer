@@ -601,7 +601,7 @@ install_grub()
     chroot ${mountpoint} /bin/bash -c "mount -t sysfs sys /sys"
 
     if [ -n "$loop_device" ]; then
-	chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --force --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search\" /dev/${device}"
+	chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --force --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search chain\" /dev/${device}"
     else
 	chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --boot-directory=/mnt --force /dev/${device}"
     fi
