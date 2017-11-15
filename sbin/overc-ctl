@@ -434,14 +434,12 @@ upgrade_container() {
     if is_container_running; then
         if [ "${container_name}" = "dom0" ]; then
             [ -n "${reboot}" ] && /sbin/reboot
-        else
-            if [ -n "${reboot}" ]; then
-                ${SBINDIR}/cube-ctl stop ${container_name}
-                ${SBINDIR}/cube-ctl start ${container_name}
-            fi
-            log_info "container had upgraded to the latest version"
+        elif [ -n "${reboot}" ]; then
+            ${SBINDIR}/cube-ctl stop ${container_name}
+            ${SBINDIR}/cube-ctl start ${container_name}
         fi
     fi
+    log_info "container had upgraded to the latest version"
 }
 
 create_snapshot() {
