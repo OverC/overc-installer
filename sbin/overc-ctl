@@ -87,6 +87,12 @@ cat << EOF
 
       <name>: name of the container
 
+ ${0##*/} check-update <name>
+
+    check for available package upgrades
+
+      <name>: name of the container
+
  ${0##*/} upgrade <name> [source]
 
     upgrade to a new version of an existing container source, and switch the
@@ -339,7 +345,7 @@ rollback_container() {
                 read answer
             fi
 
-            if [ "${answer}" == "y" ]; then
+            if [ "${answer}" = "y" ]; then
                 if [ "${container_name}" != "dom0" ]; then
                     ${SBINDIR}/cube-ctl stop ${container_name}
                 fi
@@ -360,6 +366,17 @@ rollback_container() {
         log_info "Container had switched to ${latest_snapshot}"
     else
         log_error "No snapshot selected, aborting"
+        return 1
+    fi
+}
+
+check_update() {
+    eval ${package_manager}_check_update "${container_name}"
+    if [ $? = 100 ]; then
+        log_info "Newer package upgrades available for ${container_name}"
+        return 0
+    else
+        log_info "No newer package upgrades available for ${container_name}"
         return 1
     fi
 }
@@ -410,10 +427,8 @@ upgrade_container() {
             insert_history_entry ${saved_snapshot}
         fi
     else
-        # check update
-        eval ${package_manager}_check_update "${container_name}"
-        if [ $? != 100 ]; then
-            log_info "No newer version available for ${container_name}"
+        # No newer package upgrades should not be treated as a failure, return 0
+        if ! check_update; then
             return 0
         fi
 
@@ -605,6 +620,9 @@ case "${subcmd}" in
         ;;
     snapshot-delall)
         delall_snapshots
+        ;;
+    check-update)
+        check_update
         ;;
     upgrade)
         upgrade_container ${source_name}
