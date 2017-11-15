@@ -58,7 +58,7 @@ function extract_container_name
     # [<prefix>]<type>-<name>-<rest>
     #
     # <prefix>: optional filename prefix
-    # <type>: cube, docker, lxc
+    # <type>: cube, docker, lxc, oci
     # <name>: dom or <string>
     # 
     # if name is 'dom', the next character or -<string> is the
@@ -100,6 +100,20 @@ function extract_container_name
     # <prefix>container-<name>-<rest>
     if [ "$type" = "container" ]; then
 	output=$type-$name
+    fi
+
+    # Other valid types
+    if [ "$type" = "docker" ] || \
+       [ "$type" = "oci" ]  || \
+       [ "$type" = "lxc" ]; then
+	case $name in
+	    dom*)
+		output=$name
+		;;
+	    *)
+		output=$type-$name
+		;;
+	esac
     fi
 
     echo ${output}
