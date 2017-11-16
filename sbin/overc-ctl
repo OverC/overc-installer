@@ -220,7 +220,7 @@ run_container_command() {
 rpm_check_update() {
     local container=$1
 
-    run_container_command $container "dnf -q check-update"
+    run_container_command $container "dnf -q check-update --refresh"
 }
 
 rpm_upgrade() {
