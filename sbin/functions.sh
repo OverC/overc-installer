@@ -1152,13 +1152,17 @@ installer_main()
 
 	## Create new filesystems
 	debugmsg ${DEBUG_INFO} "Creating new filesystems "
-
-	BOOTPART_LABEL=INSTBOOT
+	if [ ! -n $BOOTPART_LABEL ]; then
+		BOOTPART_LABEL=INSTBOOT
+	fi
 	debugmsg ${DEBUG_INFO} "Creating Partition:${p1} Type:${BOOTPART_FSTYPE} Label:${BOOTPART_LABEL}"
 	create_filesystem "${p1}" "${BOOTPART_FSTYPE}" "${BOOTPART_LABEL}"
 	assert $?
 
-	ROOTFS_LABEL=INSTROOTFS
+	if [ ! -n $ROOTFS_LABEL ]; then
+		ROOTFS_LABEL=INSTROOTFS
+	fi
+
 	debugmsg ${DEBUG_INFO} "Creating Partition:${p2} Type:${ROOTFS_FSTYPE} Label:${ROOTFS_LABEL}"
 	create_filesystem "${p2}" "${ROOTFS_FSTYPE}" "${ROOTFS_LABEL}"
 	assert $?
