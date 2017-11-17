@@ -645,7 +645,7 @@ EOF
 	cp -a ${mountpoint}/boot/efi/EFI ${mountpoint}/mnt
 
 	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
-	    cp "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/EFI/BOOT/grub.cfg
+	    cp -rf "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/grub/grub.cfg
 	else
 	    if [ -f ${mountpoint}/mnt/EFI/BOOT/grub.cfg ]; then
 	         debugmsg ${DEBUG_INFO} "[WARN]: Overriding provided EFI/BOOT/grub.cfg"
@@ -680,9 +680,8 @@ EOF
 
 	if [ -n "${INSTALL_KERNEL}" ]; then
 		local kernel_name=`basename ${INSTALL_KERNEL}`
-		local initramfs_name=`basename ${INSTALL_INITRAMFS}`
 		sed "s|%INSTALL_KERNEL%|${kernel_name}|" -i ${mountpoint}/mnt/grub/grub.cfg
-		sed "s|%INSTALL_INITRAMFS%|${initramfs_name}|" -i ${mountpoint}/mnt/grub/grub.cfg
+		sed "s|%INSTALL_INITRAMFS%|initrd|" -i ${mountpoint}/mnt/grub/grub.cfg
 		sed "s|%INSTALLER_PARTITION%|${p2}|" -i ${mountpoint}/mnt/grub/grub.cfg
 		sed "s|%ROOTFS_LABEL%|${ROOTFS_LABEL}|" -i ${mountpoint}/mnt/grub/grub.cfg
 		if ! [ -n "$DISTRIBUTION" ]; then
@@ -698,11 +697,11 @@ EOF
 
 	if [ -n "${INSTALL_EFIBOOT}" ] && [ -e "${INSTALL_EFIBOOT}" ]; then
 		debugmsg ${DEBUG_INFO} "Installing the EFI bootloader"
-		mkdir -p ${mountpoint}/EFI/BOOT/
-		cp $INSTALL_EFIBOOT ${mountpoint}/EFI/BOOT/
-		cp ${mountpoint}/mnt/grub/grub.cfg ${mountpoint}/EFI/BOOT/
-		selsign "${mountpoint}/EFI/BOOT/grub.cfg"
-		echo `basename $INSTALL_EFIBOOT` >${mountpoint}/startup.nsh
+		mkdir -p ${mountpoint}/mnt/EFI/BOOT/
+		cp $INSTALL_EFIBOOT ${mountpoint}/mnt/EFI/BOOT/
+		cp ${mountpoint}/mnt/grub/grub.cfg ${mountpoint}/mnt/EFI/BOOT/
+		selsign "${mountpoint}/mnt/EFI/BOOT/grub.cfg"
+		echo `basename $INSTALL_EFIBOOT` >${mountpoint}/mnt/startup.nsh
 	else
 		cp ${BASEDIR}/startup.nsh ${mountpoint}/
 		sed -i "s/%ROOTLABEL%/${ROOTFS_LABEL}/" ${mountpoint}/startup.nsh
@@ -716,7 +715,6 @@ EOF
 	chroot ${mountpoint} /bin/bash -c "umount /sys"
 	chroot ${mountpoint} /bin/bash -c "umount /proc"
 	chroot ${mountpoint} /bin/bash -c "umount /dev"
-
 	return 0
 }
 
