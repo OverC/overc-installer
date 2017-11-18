@@ -93,19 +93,15 @@ cat << EOF
 
       <name>: name of the container
 
- ${0##*/} upgrade <name> [source]
+ ${0##*/} upgrade <name>
 
-    upgrade to a new version of an existing container source, and switch the
-    current to be it. If the source is not provided, it will do runtime
-    upgrading in container if the container is running, you will be asked if
-    you want to stop, switch, then restart it. Upgrade will not happen if the
-    container is running, so if you don't confirm stopping it, the upgrade is
-    aborted. On success, the old version is placed at the top of the history
+    do runtime upgrading in container if the container is running, you will be
+    asked if you want to stop, switch, then restart it. Upgrade will not happen
+    if the container is running, so if you don't confirm stopping it, the upgrade
+    is aborted. On success, the old version is placed at the top of the history
     rollback list.
 
       <name>: name of the container to be upgraded
-
-      [source]: container source to be used to upgrade to
 
  ${0##*/} rollback <name>
 
@@ -132,15 +128,15 @@ RST="\\033[0m"            # Reset colors
 # Helper functions
 #
 log_info() {
-    echo -e $BLD_NOTE"[INFO]""$RST: $STD_NOTE$@$RST"
+    echo -e ${BLD_NOTE}"[INFO]""${RST}: ${STD_NOTE}${@}${RST}"
 }
 
 log_warn() {
-    echo -e $BLD_WARNING"[WARNING]""$RST: $STD_WARNING$@$RST" >&2
+    echo -e ${BLD_WARNING}"[WARNING]""${RST}: ${STD_WARNING}${@}${RST}" >&2
 }
 
 log_error() {
-    echo -e $BLD_ERROR"[ERROR]""$RST: $STD_ERROR$@$RST" >&2
+    echo -e ${BLD_ERROR}"[ERROR]""${RST}: ${STD_ERROR}${@}${RST}" >&2
     return 1
 }
 
@@ -148,21 +144,23 @@ is_container_available() {
     [ -n "${container_name}" ] || return 1
 
     ${SBINDIR}/cube-ctl list 2>/dev/null | grep -q "^${container_name}"
-    return $?
+    return ${?}
 }
 
 is_container_running() {
     ${SBINDIR}/cube-ctl list | grep -q "^$container_name.*running"
-    return $?
+    return ${?}
 }
 
 is_snapshot_available() {
-    btrfs subvolume show ${container_dir}/overc-containers/${container_name}/${1} >/dev/null 2>&1
-    return $?
+    local snapshot=${1}
+
+    btrfs subvolume show ${snapshots_dir}/${container_name}/${snapshot} >/dev/null 2>&1
+    return ${?}
 }
 
 get_mount_fstype() {
-    local dir=$1
+    local dir=${1}
     local mount_point=$(stat --format '%m' ${dir})
     local mount_fstype=$(stat --file-system --format '%T' ${mount_point})
 
@@ -170,31 +168,38 @@ get_mount_fstype() {
 }
 
 insert_history_entry() {
-    local entry_text=$1
-    local history_file=${container_dir}/overc-containers/${container_name}/.container_history
+    local entry_text=${1}
+    local history_file=${snapshots_dir}/${container_name}/.container_history
     local tmpfile=$(mktemp)
 
-    if [ -f "$history_file" ]; then
-        echo "$entry_text" | cat - $history_file > $tmpfile
-        mv $tmpfile $history_file
+    if [ -f "${history_file}" ]; then
+        echo "${entry_text}" | cat - ${history_file} > ${tmpfile}
+        mv ${tmpfile} ${history_file}
     else
-        echo "$entry_text" > $history_file
+        echo "${entry_text}" > ${history_file}
     fi
 }
 
 delete_history_entry() {
-    local entry_text=$1
-    local history_file=${container_dir}/overc-containers/${container_name}/.container_history
+    local entry_text=${1}
+    local history_file=${snapshots_dir}/${container_name}/.container_history
 
-    sed -i "/$entry_text/d" $history_file
+    sed -i "/${entry_text}/d" ${history_file}
 }
 
 btrfs_subvolume_snapshot() {
-    local src=$1
-    local dest=$2
+    local src=${1}
+    local dest=${2}
+    local dest_dir=$(dirname ${dest})
 
-    requiring_size=$(du -s $(realpath ${container_dir}/${container_name}) | awk '{print $1}')
-    available_size=$(df -a ${container_dir}/overc-containers | sed -n '2p' | awk '{print $4}')
+    # Ensure the parent directory of 'dest' exists, but the 'dest' itself
+    # does not, or else the btrfs will create a snapshot inside 'dest'
+    # instead of creating it.
+    mkdir -p ${dest_dir}
+    [ -e "$dest" ] && rm -rf $dest
+
+    local requiring_size=$(du -s ${src} | awk '{print $1}')
+    local available_size=$(df -a ${dest_dir} | sed -n '2p' | awk '{print $4}')
 
     if [ ${requiring_size} -lt $((${available_size}*1024)) ]; then
         btrfs subvolume snapshot ${src} ${dest}
@@ -206,70 +211,103 @@ btrfs_subvolume_snapshot() {
     fi
 }
 
+btrfs_subvolume_create() {
+    local subvol=${1}
+
+    btrfs subvolume create ${subvol}
+}
+
+btrfs_subvolume_delete() {
+    local subvol_root=${1}
+    local subvols=$(btrfs subvolume list -o ${subvol_root} | awk '{print $NF}' | sed "s#workdir#${subvol_root}#")
+
+    # Delete all subvolumes recursively in reverse order
+    for subvol in $(echo ${subvols} | tr ' ' '\n' | tac | tr '\n' ' '); do
+        btrfs subvolume delete -C ${subvol}
+    done
+    btrfs subvolume delete -C ${subvol_root}
+}
+
 run_container_command() {
-    local container="$1"
-    local cmd="$2"
+    local container=${1}
+    local cmd="${2}"
 
     if [ ${container} = "dom0" ]; then
-        $cmd
+        ${cmd}
     else
-        ${SBINDIR}/cube-ctl "$container:$cmd"
+        ${SBINDIR}/cube-ctl "${container}:${cmd}"
     fi
 }
 
 rpm_check_update() {
-    local container=$1
+    local container=${1}
 
-    run_container_command $container "dnf -q check-update --refresh"
+    run_container_command ${container} "dnf -q check-update --refresh"
 }
 
 rpm_upgrade() {
-    local container=$1
+    local container=${1}
 
     # Prepare a tmpfs rpm database
-    tempdir="/tmp/tmpd.$RANDOM"
-    run_container_command $container "mkdir -p $tempdir"
-    run_container_command $container "cp -r /var/lib/rpm $tempdir"
-    run_container_command $container "mount -t tmpfs tmpfs /var/lib/rpm"
-    run_container_command $container "cp -r $tempdir/rpm /var/lib/"
+    tempdir="/tmp/tmpd.${RANDOM}"
+    run_container_command ${container} "mkdir -p ${tempdir}"
+    run_container_command ${container} "cp -r /var/lib/rpm ${tempdir}"
+    run_container_command ${container} "mount -t tmpfs tmpfs /var/lib/rpm"
+    run_container_command ${container} "cp -r ${tempdir}/rpm /var/lib/"
 
     # Do upgrading
-    run_container_command $container "dnf -y upgrade --refresh"
-    local ret=$?
+    run_container_command ${container} "dnf -y upgrade --refresh"
+    local ret=${?}
 
     # Restore rpm database to persistent /var/lib
-    run_container_command $container "cp -r /var/lib/rpm $tempdir"
-    run_container_command $container "umount /var/lib/rpm"
-    run_container_command $container "cp -r $tempdir/rpm /var/lib/"
-    run_container_command $container "rm -rf $tempdir"
-    run_container_command $container "sed -i /^CUBEUPDATE:/d /etc/motd 2>/dev/null"
+    run_container_command ${container} "cp -r /var/lib/rpm ${tempdir}"
+    run_container_command ${container} "umount /var/lib/rpm"
+    run_container_command ${container} "cp -r ${tempdir}/rpm /var/lib/"
+    run_container_command ${container} "rm -rf ${tempdir}"
+    run_container_command ${container} "sed -i /^CUBEUPDATE:/d /etc/motd"
 
-    return $ret
+    return ${ret}
+}
+
+switch_to_snapshot() {
+    local container=${1}
+    local snapshot=${2}
+
+    if [ ${container} = "dom0" ]; then
+        # dom0 can not reload itself, so we create a file tag here, it
+        # will be checked when essential boots up.
+        echo ${snapshot} > ${snapshots_dir}/${container}/.need_reload
+    else
+        btrfs_subvolume_delete ${container_dir}/${container}
+        btrfs_subvolume_snapshot ${snapshots_dir}/${container}/${snapshot} ${container_dir}/${container}
+        btrfs_subvolume_delete ${snapshots_dir}/${container}/${snapshot}
+        delete_history_entry ${snapshot}
+    fi
 }
 
 #
 # Command functions
 #
 track_container() {
-    if [ -n "$(cat ${container_dir}/overc-containers/${container_name}/.container_history 2>/dev/null)" ]; then
+    if [ -n "$(cat ${snapshots_dir}/${container_name}/.container_history 2>/dev/null)" ]; then
         log_error "container is already tracked"
         return 1
     fi
 
-    if [ ! -e "${container_dir}/${container_name}" ]; then
+    if [ "$(realpath ${container_dir})" != "/opt/container" ]; then
         # wre might be called by installer, create container subdirectories according
         # to the fstype of container_dir's mount point:
         # a) create a subvolume if the fstype is btrfs
         # b) create a subdirectory for other fstypes
         local fstype=$(get_mount_fstype "${container_dir}")
-        local subvol_dir=${container_dir}/overc-containers/${container_name}/$(date +%s.%N)
+        local subvol_dir=${container_dir}/${container_name}
         mkdir -p ${subvol_dir%/*}
+        [ -e $subvol_dir ] && rm -rf $subvol_dir
         if [ "${fstype}" = "btrfs" ]; then
-            btrfs subvolume create ${subvol_dir}
+            btrfs_subvolume_create ${subvol_dir}
         else
             mkdir -m 755 ${subvol_dir}
         fi
-        ln -srfT ${subvol_dir} ${container_dir}/${container_name}
     else
         # we are at runtime, create a snapshot of container
         create_snapshot ${container_name}
@@ -299,12 +337,14 @@ untrack_container() {
         delall_snapshots
         local fstype=$(get_mount_fstype "${container_dir}")
         if [ "${fstype}" = "btrfs" ]; then
-            btrfs subvolume delete -C $(realpath ${container_dir}/${container_name})
+            btrfs_subvolume_delete ${container_dir}/${container_name}
         else
-            rm -rf $(realpath ${container_dir}/${container_name})
+            rm -rf ${container_dir}/${container_name}
         fi
-        rm -f ${container_dir}/${container_name}
-        rm -f ${container_dir}/overc-containers/${container_name}/.container_history
+
+        if [ -f ${snapshots_dir}/${container_name}/.container_history ]; then
+            rm -f ${snapshots_dir}/${container_name}/.container_history
+        fi
     else
         log_error "Aborting"
         return 1
@@ -313,15 +353,15 @@ untrack_container() {
 
 rollback_container() {
     # Override global forced,reboot with parameter $1,$2
-    [ -n "$1" ] && local forced=$1
-    [ -n "$2" ] && local reboot=$2
+    [ -n "${1}" ] && local forced=${1}
+    [ -n "${2}" ] && local reboot=${2}
 
     if ! is_container_available; then
         log_error "container is not available"
         return 1
     fi
 
-    latest_snapshot=$(head -n1 ${container_dir}/overc-containers/${container_name}/.container_history 2> /dev/null)
+    latest_snapshot=$(head -n1 ${snapshots_dir}/${container_name}/.container_history 2> /dev/null)
     if [ -z "${latest_snapshot}" ]; then
         log_error "No history for container to rollback to, please try track/snapshot-create firstly."
         return 1
@@ -337,7 +377,7 @@ rollback_container() {
 
     if [ "${answer}" = "y" ]; then
         if is_container_running; then
-            if [ -n "$forced" ]; then
+            if [ -n "${forced}" ]; then
                 log_info "Force enabled"
                 answer="y"
             else
@@ -355,8 +395,8 @@ rollback_container() {
             fi
         fi
 
-        ln -srfT ${container_dir}/overc-containers/${container_name}/${latest_snapshot} ${container_dir}/${container_name}
-        delete_history_entry ${latest_snapshot}
+        switch_to_snapshot ${container_name} ${latest_snapshot}
+
         if [ "${container_name}" = "dom0" ]; then
             [ -n "${reboot}" ] && /sbin/reboot
         else
@@ -382,8 +422,6 @@ check_update() {
 }
 
 upgrade_container() {
-    local container_src=$1
-
     log_info "Will upgrade container"
     if [ -n "${forced}" ]; then
         answer="y"
@@ -397,53 +435,22 @@ upgrade_container() {
         return 1
     fi
 
-    if [ -n "${container_src}" ]; then
-        if [ ! -e "${container_src}" ]; then
-            log_error "container source does not exist"
-            return 1
-        fi
+    # No newer package upgrades should not be treated as a failure, return 0
+    if ! check_update; then
+        return 0
+    fi
 
-        local saved_snapshot=$(basename $(realpath ${container_dir}/${container_name} 2>/dev/null))
-        local new_snapshot=${container_dir}/overc-containers/${container_name}/$(date +%s.%N)
-        btrfs subvolume create ${new_snapshot}
-        ln -srfT ${new_snapshot} ${container_dir}/${container_name}
-        if [ "${container_name}" = "dom0" ]; then
-                ${SBINDIR}/cube-ctl add --auto essential -n ${container_name} -t cube -o ${container_dir} ${container_src} -F
-        else
-                ${SBINDIR}/cube-ctl add --auto dom0 -n ${container_name} -t oci -o ${container_dir} ${container_src} -F
-        fi
-        if [ $? != 0 ]; then
-            btrfs subvolume delete -C ${new_snapshot}
-            if [ -n "${saved_snapshot}" ]; then
-                ln -srfT ${container_dir}/overc-containers/${container_name}/${saved_snapshot} ${container_dir}/${container_name}
-            else
-                rm -rf ${container_dir}/${container_name}
-            fi
-            log_error "Install container source failed"
-            return 1
-        fi
-
-        if [ -n "${saved_snapshot}" ]; then
-            insert_history_entry ${saved_snapshot}
-        fi
-    else
-        # No newer package upgrades should not be treated as a failure, return 0
-        if ! check_update; then
-            return 0
-        fi
-
-        # container source not provided, do dnf upgrade
-        create_snapshot || return 1
-        if ! eval ${package_manager}_upgrade "${container_name}"; then
-            log_error "Upgrade container with ${package_manager} failed, rollback to the latest"
-            rollback_container "true" "true"
-            return 1
-        fi
+    create_snapshot || return 1
+    if ! eval ${package_manager}_upgrade "${container_name}"; then
+        log_error "Upgrade container with ${package_manager} failed, rollback to the latest"
+        rollback_container "true" "true"
+        return 1
     fi
 
     # dom0 can not cleanup itself at present, delay the cleanup in the next boot up.
     if [ "${container_name}" = "dom0" ]; then
-        ln -sf /lib/systemd/system/overc_cleanup.service ${container_dir}/${container_name}/rootfs/etc/systemd/system/multi-user.target.wants/overc_cleanup.service
+        ln -sf /lib/systemd/system/overc_cleanup.service \
+            ${container_dir}/${container_name}/rootfs/etc/systemd/system/multi-user.target.wants/overc_cleanup.service
     fi
 
     if is_container_running; then
@@ -467,9 +474,9 @@ create_snapshot() {
     if [ "${fstype}" = "btrfs" ]; then
         volname=`date +%s.%N`
         src=${container_dir}/${container_name}
-        dest=${container_dir}/overc-containers/${container_name}/${volname}
+        dest=${snapshots_dir}/${container_name}/${volname}
         btrfs_subvolume_snapshot ${src} ${dest} || return 1
-        insert_history_entry $volname
+        insert_history_entry ${volname}
     else
         log_error "Container snapshot only supported on btrfs filesystem"
         return 1
@@ -478,40 +485,40 @@ create_snapshot() {
 }
 
 delete_snapshot() {
-    local snapshot_id=$1
-    local snapshot_dir=${container_dir}/overc-containers/${container_name}/${snapshot_id}
+    local snapshot=${1}
+    local snapshot_dir=${snapshots_dir}/${container_name}/${snapshot}
 
     if ! is_container_available; then
         log_error "container is not available" >&2
         return 1
     fi
 
-    if ! is_snapshot_available ${snapshot_id}; then
+    if ! is_snapshot_available ${snapshot}; then
         log_error "snapshot is not available"
         return 1
     fi
 
-    btrfs subvolume delete -C ${snapshot_dir}
-    delete_history_entry ${snapshot_id}
-    log_info "${snapshot_id} had been deleted form rollback history list"
+    btrfs_subvolume_delete ${snapshot_dir}
+    delete_history_entry ${snapshot}
+    log_info "${snapshot} had been deleted form rollback history list"
 }
 
 set_snapshot() {
-    local snapshot_id=$1
+    local snapshot=${1}
 
     if ! is_container_available; then
         log_error "container is not available"
         return 1
     fi
 
-    if ! is_snapshot_available ${snapshot_id}; then
+    if ! is_snapshot_available ${snapshot}; then
         log_error "snapshot is not available"
         return 1
     fi
 
-    delete_history_entry ${snapshot_id}
-    insert_history_entry ${snapshot_id}
-    log_info "snapshot set to ${snapshot_id} for next rollback"
+    delete_history_entry ${snapshot}
+    insert_history_entry ${snapshot}
+    log_info "snapshot set to ${snapshot} for next rollback"
 }
 
 list_snapshots() {
@@ -520,7 +527,7 @@ list_snapshots() {
         return 1
     fi
 
-    awk '{print ++num, " ", $1;}' ${container_dir}/overc-containers/${container_name}/.container_history 2>/dev/null
+    awk '{print ++num, " ", $1;}' ${snapshots_dir}/${container_name}/.container_history 2>/dev/null
 }
 
 cleanup_snapshots() {
@@ -529,12 +536,9 @@ cleanup_snapshots() {
         return 1
     fi
 
-    snapshots_dir=${container_dir}/overc-containers/${container_name}
-    for snapshot_id in $(cd ${snapshots_dir}; ls); do
-        grep -q $snapshot_id ${snapshots_dir}/.container_history 2>/dev/null
-        local available=$?
-        if [ $available = 1 -a $snapshot_id != $(basename $(realpath ${container_dir}/${container_name})) ]; then
-            btrfs subvolume delete -C ${snapshots_dir}/${snapshot_id}
+    for snapshot in $(cd ${snapshots_dir}/${container_name}; ls); do
+        if ! grep -q ${snapshot} ${snapshots_dir}/${container_name}/.container_history 2>/dev/null; then
+            btrfs_subvolume_delete ${snapshots_dir}/${container_name}/${snapshot}
         fi
     done
     log_info "The unused snapshots had been cleaned up"
@@ -543,8 +547,8 @@ cleanup_snapshots() {
 delall_snapshots() {
     cleanup_snapshots
 
-    for snapshot_id in $(cat ${container_dir}/overc-containers/${container_name}/.container_history 2>/dev/null); do
-        delete_snapshot ${snapshot_id}
+    for snapshot in $(cat ${snapshots_dir}/${container_name}/.container_history 2>/dev/null); do
+        delete_snapshot ${snapshot}
     done
     log_info "All snapshots had been deleted"
 }
@@ -553,7 +557,7 @@ delall_snapshots() {
 #
 # Main script starts from here
 #
-if [ $# -lt 1 ]; then
+if [ ${#} -lt 1 ]; then
     usage
     exit
 fi
@@ -568,10 +572,11 @@ reboot=
 source_name=
 container_name=
 container_dir=/opt/container
+snapshots_dir=/opt/container/.snapshots
 package_manager=rpm
 
-while [ $# -gt 0 ]; do
-    case "$1" in
+while [ ${#} -gt 0 ]; do
+    case "${1}" in
         -f|--force)
             forced=1
             ;;
@@ -579,14 +584,14 @@ while [ $# -gt 0 ]; do
             reboot=1
             ;;
         -o|--output)
-            container_dir=$(realpath $2 2>/dev/null)
+            container_dir=$(realpath ${2} 2>/dev/null)
             shift
             ;;
         *)
-            subcmd=$1
-            container_name=$2
-            if [[ -n "$3" && "$3" != -* ]]; then
-                source_name=$3
+            subcmd=${1}
+            container_name=${2}
+            if [[ -n "${3}" && "${3}" != -* ]]; then
+                source_name=${3}
                 shift 2
             else
                 shift
@@ -625,7 +630,7 @@ case "${subcmd}" in
         check_update
         ;;
     upgrade)
-        upgrade_container ${source_name}
+        upgrade_container
         ;;
     rollback)
         rollback_container
