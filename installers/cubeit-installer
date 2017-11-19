@@ -867,10 +867,10 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	case $container_src in
 	    *-dom0-*)
-		${SBINDIR}/cube-ctl add --auto essential -n ${cname} -t cube -o ${CONTAINERBASE} ${c}
+		${SBINDIR}/cube-ctl add --track --auto essential -n ${cname} -t cube -o ${CONTAINERBASE} ${c}
 		;;
 	    *)
-		${SBINDIR}/cube-ctl add --auto dom0 -n ${cname} -t oci -o ${CONTAINERBASE} ${c}
+		${SBINDIR}/cube-ctl add --track --auto dom0 -n ${cname} -t oci -o ${CONTAINERBASE} ${c}
 		;;
 	esac
 
