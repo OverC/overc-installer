@@ -17,6 +17,7 @@ INSTALL_MODULES=""
 INSTALL_GRUBHDCFG="grub-hd.cfg"
 INSTALL_GRUBUSBCFG="grub-usb.cfg"
 INSTALL_GRUBCFG="${INSTALLER_FILES_DIR}/${INSTALL_GRUBUSBCFG}"
+INSTALL_GRUBEFI_CFG="${INSTALLER_FILES_DIR}/${INSTALL_GRUBUSBCFG}"
 ### End included in PREREQ_FILES.
 
 ## List of prerequisite files for the installer to check. If you overwrite any
