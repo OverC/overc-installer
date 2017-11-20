@@ -12,6 +12,7 @@ NETWORK_DEVICE="enp0s3"
 ## Uncomment for grub legacy
 #INSTALL_GRUBUSBCFG="menu.lst.initramfs-installer"
 #INSTALL_GRUBCFG="${INSTALLER_FILES_DIR}/${INSTALL_GRUBUSBCFG}"
+#INSTALL_GRUBEFI_CFG="${INSTALLER_FILES_DIR}/${INSTALL_GRUBUSBCFG}"
 
 # Recalculate PREREQ_FILES
 calc_prereq_files
