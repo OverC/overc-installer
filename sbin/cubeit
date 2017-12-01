@@ -645,6 +645,13 @@ IFS=$OLDIFS
 		fi
 	done
 
+        #disable overc-conftools service for installer system
+        #overc-conftools will config the network which is not 
+        #need for installer system, such as bridge configuration.
+        if [ -d ${mnt_rootfs}/etc/systemd/system ]; then
+		ln -sf /dev/null ${mnt_rootfs}/etc/systemd/system/overc-conftools.service
+        fi
+
 	if ${X86_ARCH}; then
 		## Copy the hard drive GRUB configuration
 		for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
