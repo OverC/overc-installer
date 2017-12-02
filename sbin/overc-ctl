@@ -184,7 +184,7 @@ delete_history_entry() {
     local entry_text=${1}
     local history_file=${snapshots_dir}/${container_name}/.container_history
 
-    sed -i "/${entry_text}/d" ${history_file}
+    sed -i "/${entry_text}/d" ${history_file} 2>/dev/null
 }
 
 btrfs_subvolume_snapshot() {
@@ -536,7 +536,7 @@ cleanup_snapshots() {
         return 1
     fi
 
-    for snapshot in $(cd ${snapshots_dir}/${container_name}; ls); do
+    for snapshot in $(cd ${snapshots_dir}/${container_name} 2>/dev/null && ls); do
         if ! grep -q ${snapshot} ${snapshots_dir}/${container_name}/.container_history 2>/dev/null; then
             btrfs_subvolume_delete ${snapshots_dir}/${container_name}/${snapshot}
         fi
