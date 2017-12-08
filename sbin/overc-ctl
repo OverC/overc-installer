@@ -219,7 +219,7 @@ btrfs_subvolume_create() {
 
 btrfs_subvolume_delete() {
     local subvol_root=${1}
-    local subvols=$(btrfs subvolume list -o ${subvol_root} | awk '{print $NF}' | sed "s#workdir#${subvol_root}#")
+    local subvols=$(btrfs subvolume list -o ${subvol_root} | awk '{print $NF}' | sed "s#^.*/#${subvol_root}/#")
 
     # Delete all subvolumes recursively in reverse order
     for subvol in $(echo ${subvols} | tr ' ' '\n' | tac | tr '\n' ' '); do
