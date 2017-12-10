@@ -443,7 +443,7 @@ upgrade_container() {
     create_snapshot || return 1
     if ! eval ${package_manager}_upgrade "${container_name}"; then
         log_error "Upgrade container with ${package_manager} failed, rollback to the latest"
-        rollback_container "true" "true"
+        rollback_container "true" ""
         return 1
     fi
 
