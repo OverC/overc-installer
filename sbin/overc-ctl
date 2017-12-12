@@ -320,8 +320,8 @@ untrack_container() {
         return 1
     fi
 
-    if ! is_container_running; then
-        log_error "can not untrack a running container, please stop it firstly"
+    if is_container_running; then
+        log_error "can not untrack a running container, please stop it first"
         return 1
     fi
 
@@ -337,7 +337,10 @@ untrack_container() {
         delall_snapshots
         local fstype=$(get_mount_fstype "${container_dir}")
         if [ "${fstype}" = "btrfs" ]; then
-            btrfs_subvolume_delete ${container_dir}/${container_name}
+            btrfs_subvolume_delete ${container_dir}/${container_name} 2> /dev/null
+            if [ -d "${container_dir}/${container_name}" ]; then
+                rm -rf ${container_dir}/${container_name}
+            fi
         else
             rm -rf ${container_dir}/${container_name}
         fi
@@ -466,7 +469,7 @@ upgrade_container() {
 
 create_snapshot() {
     if ! is_container_available; then
-        log_error "container is not available"
+        log_error "container ${container_name} is not available"
         return 1
     fi
 
@@ -500,7 +503,7 @@ delete_snapshot() {
 
     btrfs_subvolume_delete ${snapshot_dir}
     delete_history_entry ${snapshot}
-    log_info "${snapshot} had been deleted form rollback history list"
+    log_info "${snapshot} have been deleted from rollback history list"
 }
 
 set_snapshot() {
@@ -541,7 +544,7 @@ cleanup_snapshots() {
             btrfs_subvolume_delete ${snapshots_dir}/${container_name}/${snapshot}
         fi
     done
-    log_info "The unused snapshots had been cleaned up"
+    log_info "The unused snapshots have been cleaned up"
 }
 
 delall_snapshots() {
@@ -550,7 +553,7 @@ delall_snapshots() {
     for snapshot in $(cat ${snapshots_dir}/${container_name}/.container_history 2>/dev/null); do
         delete_snapshot ${snapshot}
     done
-    log_info "All snapshots had been deleted"
+    log_info "All snapshots have been deleted"
 }
 
 
