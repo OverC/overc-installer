@@ -1109,14 +1109,30 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	done
     fi
 
-    #prepare the firmwares in essential
-    if [ $(readlink ${TMPMNT}/lib/firmware) ]; then
-        if [ ! -d ${TMPMNT}/var/lib/cube/essential/lib/firmware ]; then
-            mkdir -p ${TMPMNT}/var/lib/cube/essential/lib/firmware
-        fi
-        cp -a ${TMPMNT}/opt/container/dom0/rootfs/lib/firmware/* ${TMPMNT}/var/lib/cube/essential/lib/firmware
+    #
+    # prepare the firmware in essential
+    #
+    # The config* should set the FIRMWARE_INSTALL variable to the list of firmware
+    # elements that should be pre-populated to essential. '*' will copy all of
+    # the available firmware
+    #
+    if [ -n "${FIRMWARE_INSTALL}" ]; then
+	if [ $(readlink ${TMPMNT}/lib/firmware) ]; then
+            if [ ! -d ${TMPMNT}/var/lib/cube/essential/lib/firmware ]; then
+		mkdir -p ${TMPMNT}/var/lib/cube/essential/lib/firmware
+	    fi
+	    # we don't want '*' to expand in the variable
+	    set -f
+	    for f in ${FIRMWARE_INSTALL}; do
+		# but we do want it to expand here
+		set +f
+		cp -a ${TMPMNT}/opt/container/dom0/rootfs/lib/firmware/${f} ${TMPMNT}/var/lib/cube/essential/lib/firmware/
+	    done
+	    # in case the loop didn't iterate, lets put things back
+	    set +f
+	fi
     fi
-    
+
     sync
     umount ${TMPMNT}/opt/container
 
