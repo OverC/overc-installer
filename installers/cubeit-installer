@@ -1108,6 +1108,13 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    ${f}
 	done
     fi
+
+    #prepare the firmwares in essential
+    if [ ! -d ${TMPMNT}/var/lib/cube/essential/lib/firmware ]; then
+        mkdir -p ${TMPMNT}/var/lib/cube/essential/lib/firmware
+    fi
+    cp -a ${TMPMNT}/opt/container/dom0/rootfs/lib/firmware/* ${TMPMNT}/var/lib/cube/essential/lib/firmware
+    
     sync
     umount ${TMPMNT}/opt/container
 
