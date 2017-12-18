@@ -289,24 +289,34 @@ switch_to_snapshot() {
 # Command functions
 #
 track_container() {
-    if is_container_available; then
-        log_error "container ${container_name} is already tracked"
+    # Check if it's already been tracked.
+    if btrfs subvolume show ${container_dir}/${container_name} >/dev/null 2>&1; then
+        log_error "Container ${container_name} has already been tracked."
         return 1
     fi
 
-    # Create container subdirectories according to the fstype of container_dir's
-    # mount point:
-    # a) create a subvolume if the fstype is btrfs
-    # b) create a subdirectory for other fstypes
+    # Check if it's mounted on a btrfs partition.
     local fstype=$(get_mount_fstype "${container_dir}")
-    local subvol_dir=${container_dir}/${container_name}
-    mkdir -p ${subvol_dir%/*}
-    [ -e $subvol_dir ] && rm -rf $subvol_dir
-    if [ "${fstype}" = "btrfs" ]; then
-        btrfs_subvolume_create ${subvol_dir}
-    else
-        mkdir -m 755 ${subvol_dir}
+    if [ "${fstype}" != "btrfs" ]; then
+        log_error "Tracking mode only supports btrfs, the current fstype of ${container_dir} is: ${fstype}"
+        return 1
     fi
+
+    # Create a temporary subvolume.
+    local subvol_name=`date +%s.%N`
+    mkdir -p ${snapshots_dir}/${container_name}
+    btrfs_subvolume_create ${snapshots_dir}/${container_name}/${subvol_name}
+
+    # Copy data to the temporary subvolume.
+    tar --xattrs --xattrs-include='*' -cf - -C ${container_dir}/${container_name} -p . | \
+        tar --xattrs --xattrs-include='*' -xf - -C ${snapshots_dir}/${container_name}/${subvol_name}
+
+    # Track the container.(Create a snapshot)
+    rm -rf ${container_dir}/${container_name}
+    btrfs_subvolume_snapshot ${snapshots_dir}/${container_name}/${subvol_name} ${container_dir}/${container_name}
+
+    # Delete the temporary subvolume.
+    btrfs_subvolume_delete ${snapshots_dir}/${container_name}/${subvol_name}
 }
 
 untrack_container() {
@@ -583,6 +593,7 @@ while [ ${#} -gt 0 ]; do
             ;;
         -o|--output)
             container_dir=$(realpath ${2} 2>/dev/null)
+            snapshots_dir=${container_dir}/.snapshots
             shift
             ;;
         *)
