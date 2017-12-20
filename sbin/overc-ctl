@@ -152,10 +152,17 @@ is_container_running() {
     return ${?}
 }
 
+is_subvolume() {
+    local subvolume=${1}
+
+    btrfs subvolume show $subvolume >/dev/null 2>&1
+    return ${?}
+}
+
 is_snapshot_available() {
     local snapshot=${1}
 
-    btrfs subvolume show ${snapshots_dir}/${container_name}/${snapshot} >/dev/null 2>&1
+    is_subvolume ${snapshots_dir}/${container_name}/${snapshot}
     return ${?}
 }
 
@@ -340,18 +347,10 @@ untrack_container() {
 
     if [ "${answer}" = "y" ]; then
         delall_snapshots
-        local fstype=$(get_mount_fstype "${container_dir}")
-        if [ "${fstype}" = "btrfs" ]; then
+        if is_subvolume ${container_dir}/${container_name} ; then
             btrfs_subvolume_delete ${container_dir}/${container_name} 2> /dev/null
-            if [ -d "${container_dir}/${container_name}" ]; then
-                rm -rf ${container_dir}/${container_name}
-            fi
         else
             rm -rf ${container_dir}/${container_name}
-        fi
-
-        if [ -f ${snapshots_dir}/${container_name}/.container_history ]; then
-            rm -f ${snapshots_dir}/${container_name}/.container_history
         fi
     else
         log_error "Aborting"
