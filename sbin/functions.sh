@@ -619,9 +619,9 @@ menuentry "$DISTRIBUTION" {
 	insmod gzio
 	insmod ext2
 	insmod fat
-	search --no-floppy --label INSTBOOT --set=root
+	search --no-floppy --label OVERCBOOT --set=root
 	echo	'Loading Linux ...'
-	linux	/images/bzImage root=LABEL=INSTROOTFS ro rootwait $GRUB_KERNEL_PARAMS
+	linux	/images/bzImage root=LABEL=OVERCINSTROOTFS ro rootwait $GRUB_KERNEL_PARAMS
 	echo	'Loading initial ramdisk ...'
 	initrd	/images/initrd
 }
@@ -630,9 +630,9 @@ menuentry "$DISTRIBUTION recovery" {
         insmod gzio
         insmod ext2
         insmod fat
-        search --no-floppy --label INSTBOOT --set=root
+        search --no-floppy --label OVERCBOOT --set=root
         echo    'Loading Linux ...'
-        linux   /images/bzImage_bakup root=LABEL=INSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
+        linux   /images/bzImage_bakup root=LABEL=OVERCINSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
         echo    'Loading initial ramdisk ...'
         initrd  /images/initrd
 }
@@ -659,11 +659,11 @@ set color_normal='light-gray/black'
 set color_highlight='light-green/blue'
 
 menuentry "$DISTRIBUTION" {
-       chainloader /images/bzImage root=LABEL=INSTROOTFS ro rootwait initrd=/images/initrd
+       chainloader /images/bzImage root=LABEL=OVERCINSTROOTFS ro rootwait initrd=/images/initrd
 }
 
 menuentry "$DISTRIBUTION recovery" {
-       chainloader /images/bzImage_bakup root=LABEL=INSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/images/initrd
+       chainloader /images/bzImage_bakup root=LABEL=OVERCINSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/images/initrd
 }
 
 menuentry 'Automatic Key Provision' {
@@ -1151,14 +1151,14 @@ installer_main()
 	## Create new filesystems
 	debugmsg ${DEBUG_INFO} "Creating new filesystems "
 	if [ ! -n $BOOTPART_LABEL ]; then
-		BOOTPART_LABEL=INSTBOOT
+		BOOTPART_LABEL=OVERCBOOT
 	fi
 	debugmsg ${DEBUG_INFO} "Creating Partition:${p1} Type:${BOOTPART_FSTYPE} Label:${BOOTPART_LABEL}"
 	create_filesystem "${p1}" "${BOOTPART_FSTYPE}" "${BOOTPART_LABEL}"
 	assert $?
 
 	if [ ! -n $ROOTFS_LABEL ]; then
-		ROOTFS_LABEL=INSTROOTFS
+		ROOTFS_LABEL=OVERCINSTROOTFS
 	fi
 
 	debugmsg ${DEBUG_INFO} "Creating Partition:${p2} Type:${ROOTFS_FSTYPE} Label:${ROOTFS_LABEL}"
