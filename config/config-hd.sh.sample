@@ -24,7 +24,10 @@ EVAL_NAME="Nucleo-T Evaluation"
 HARDDRIVE_DEVICE="/sys/class/scsi_disk/0:0:0:0/device"
 HARDDRIVE_MODEL="ST9120822SB     "
 
-BOOTPART_START="0"
+## Uncomment to use GPT (installer image - not live)
+#INSTALL_USE_GPT=1
+
+BOOTPART_START="2048s"
 BOOTPART_END="250M"
 BOOTPART_FSTYPE="fat32"
 BOOTPART_LABEL="OVERCBOOT"

@@ -399,11 +399,6 @@ create_partition()
 	fi
 
 	debugmsg ${DEBUG_INFO} "Creating partition ${device}${partnum}"
-	# use parted to mklabel msdos if no partition table yet exists on the device
-	unknown_part_table=$(parted /dev/${device} print 2>/dev/null | grep 'Partition Table' | grep -c unknown)
-	if [ $unknown_part_table -eq 1 ]; then
-	    ${CMD_PARTED} -s /dev/${device} "mklabel msdos" > /dev/null 2>&1
-	fi
 	${CMD_PARTED} -s /dev/${device} "mkpart primary ${fstype} ${part_start} ${part_end}" > /dev/null 2>&1
 	
 	if [ $? -ne 0 ]
@@ -1111,10 +1106,17 @@ installer_main()
 	## Unmount any partitions on device
 	umount_partitions "$device"
 	assert $?
-	
-	## Remove all existing partitions
-	remove_partitions "$device"
-	assert $?
+
+	## Create GPT table unless MBR(msdos) is desired. Since we are creating
+	## a new partition table there is no need to remove existing partitions.
+	if [ -n "$INSTALL_USE_GPT" ]
+	then
+	    debugmsg ${DEBUG_INFO} "Creating new GPT partition table"
+	    ${CMD_PARTED} -s /dev/${device} "mklabel gpt" > /dev/null 2>&1
+	else
+	    debugmsg ${DEBUG_INFO} "Creating new MBR partition table"
+	    ${CMD_PARTED} -s /dev/${device} "mklabel msdos" > /dev/null 2>&1
+	fi
 	
 	## Create new partitions
 	debugmsg ${DEBUG_INFO} "Creating new partitions"
@@ -1153,17 +1155,16 @@ installer_main()
 
 	## Create new filesystems
 	debugmsg ${DEBUG_INFO} "Creating new filesystems "
-	if [ ! -n $BOOTPART_LABEL ]; then
+	if [ -z "$BOOTPART_LABEL" ]; then
 		BOOTPART_LABEL=OVERCBOOT
 	fi
 	debugmsg ${DEBUG_INFO} "Creating Partition:${p1} Type:${BOOTPART_FSTYPE} Label:${BOOTPART_LABEL}"
 	create_filesystem "${p1}" "${BOOTPART_FSTYPE}" "${BOOTPART_LABEL}"
 	assert $?
 
-	if [ ! -n $ROOTFS_LABEL ]; then
+	if [ -z "$ROOTFS_LABEL" ]; then
 		ROOTFS_LABEL=OVERCINSTROOTFS
 	fi
-
 	debugmsg ${DEBUG_INFO} "Creating Partition:${p2} Type:${ROOTFS_FSTYPE} Label:${ROOTFS_LABEL}"
 	create_filesystem "${p2}" "${ROOTFS_FSTYPE}" "${ROOTFS_LABEL}"
 	assert $?

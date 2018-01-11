@@ -9,6 +9,9 @@ HDINSTALL_CONTAINERS="${ARTIFACTS_DIR}/cube-dom0-genericx86-64.tar.bz2:vty=2:mer
 
 NETWORK_DEVICE="enp0s3"
 
+## Uncomment to use GPT (installer image - not live)
+#INSTALL_USE_GPT=1
+
 ## Uncomment for grub legacy
 #INSTALL_GRUBUSBCFG="menu.lst.initramfs-installer"
 #INSTALL_GRUBCFG="${INSTALLER_FILES_DIR}/${INSTALL_GRUBUSBCFG}"
