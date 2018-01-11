@@ -1106,18 +1106,18 @@ installer_main()
 	assert $?
 	
 	## Unmount any partitions on device
-	umount_partitions "$dev"
+	umount_partitions "$device"
 	assert $?
 	
 	## Remove all existing partitions
-	remove_partitions "$dev"
+	remove_partitions "$device"
 	assert $?
 	
 	## Create new partitions
 	debugmsg ${DEBUG_INFO} "Creating new partitions"
-	create_partition "${dev}" 1 ${BOOTPART_FSTYPE} ${BOOTPART_START} ${BOOTPART_END}
+	create_partition "${device}" 1 ${BOOTPART_FSTYPE} ${BOOTPART_START} ${BOOTPART_END}
 	assert $?
-	create_partition "${dev}" 2 ${ROOTFS_FSTYPE} ${ROOTFS_START} ${ROOTFS_END}
+	create_partition "${device}" 2 ${ROOTFS_FSTYPE} ${ROOTFS_START} ${ROOTFS_END}
 	assert $?
 
 	# make first partition bootable
@@ -1131,13 +1131,13 @@ installer_main()
 	# Give the system 30 seconds to do the job
 	while [ ${try_cnt} -lt 30 ];
 	do
-		if [ -e /dev/${dev}1 ]; then
-			p1="${dev}1"
-			p2="${dev}2"
+		if [ -e /dev/${device}1 ]; then
+			p1="${device}1"
+			p2="${device}2"
 		fi
-		if [ -e /dev/${dev}p1 ]; then
-			p1="${dev}p1"
-			p2="${dev}p2"
+		if [ -e /dev/${device}p1 ]; then
+			p1="${device}p1"
+			p2="${device}p2"
 		fi
 		if [ -n "${p1}" ] && [ -n "${p2}" ]; then break; fi
 		let try_cnt++
@@ -1185,11 +1185,11 @@ installer_main()
 
 	## Install Bootloader
 	if ${X86_ARCH}; then
-		install_grub "${dev}" "${mnt1}" "${mnt2}"
+		install_grub "${device}" "${mnt1}" "${mnt2}"
 		assert $?
 	else	# arm architecture
 		install_dtb "${mnt1}" "${INSTALL_DTB}"
-		install_bootloader "${dev}" "${mnt1}" "${INSTALL_BOOTLOADER}" "${BOARD_NAME}"
+		install_bootloader "${device}" "${mnt1}" "${INSTALL_BOOTLOADER}" "${BOARD_NAME}"
 	fi
 
 	clean_up
