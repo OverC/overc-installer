@@ -582,8 +582,8 @@ install_grub()
     fi
 
     # Create a mountpoint for bootpoint under mountpoint
-    mkdir -p ${mnt2}/mnt
-    mount --bind ${mnt1} ${mnt2}/mnt
+    mkdir -p ${mountpoint}/mnt
+    mount --bind ${bootpoint} ${mountpoint}/mnt
 
     debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
 
