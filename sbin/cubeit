@@ -657,7 +657,7 @@ IFS=$OLDIFS
 		for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
 			if [ -e ${d}/${INSTALL_GRUBUSBCFG} ] &&
 			[ ! -e ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBUSBCFG} ]; then
-				debugmsg ${DEBUG_CRIT} "INFO: found grub hd configuration ${d}/${INSTALL_GRUBUSBCFG}"
+				debugmsg ${DEBUG_CRIT} "INFO: found grub usb configuration ${d}/${INSTALL_GRUBUSBCFG}"
 				cp ${d}/${INSTALL_GRUBUSBCFG} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBUSBCFG}
 			fi
 
