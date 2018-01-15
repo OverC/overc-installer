@@ -568,7 +568,10 @@ install_bootloader()
 
 write_grub_cfg()
 {
-	cat <<EOF >"$1"
+	local base="$1"
+	local bootlabel=$2
+	local rootlabel=$3
+	cat <<EOF >"$4"
 set default="0"
 
 serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1
@@ -580,22 +583,22 @@ menuentry "$DISTRIBUTION" {
 	insmod gzio
 	insmod ext2
 	insmod fat
-	search --no-floppy --label OVERCBOOT --set=root
+	search --no-floppy --label $bootlabel --set=root
 	echo	'Loading Linux ...'
-	linux	/images/bzImage root=LABEL=OVERCINSTROOTFS ro rootwait $GRUB_KERNEL_PARAMS
+	linux	$base/bzImage root=LABEL=$rootlabel ro rootwait $GRUB_KERNEL_PARAMS
 	echo	'Loading initial ramdisk ...'
-	initrd	/images/initrd
+	initrd	$base/initrd
 }
 
 menuentry "$DISTRIBUTION recovery" {
         insmod gzio
         insmod ext2
         insmod fat
-        search --no-floppy --label OVERCBOOT --set=root
+        search --no-floppy --label $bootlabel --set=root
         echo    'Loading Linux ...'
-        linux   /images/bzImage_bakup root=LABEL=OVERCINSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
+        linux   $base/bzImage_bakup root=LABEL=$rootlabel rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
         echo    'Loading initial ramdisk ...'
-        initrd  /images/initrd
+        initrd  $base/initrd
 }
 
 EOF
@@ -603,18 +606,20 @@ EOF
 
 write_grub_efi_cfg()
 {
-	cat <<EOF >"$1"
+	local base="$1"
+	local rootlabel=$2
+	cat <<EOF >"$3"
 set default="0"
 set timeout=5
 set color_normal='light-gray/black'
 set color_highlight='light-green/blue'
 
 menuentry "$DISTRIBUTION" {
-       chainloader /images/bzImage root=LABEL=OVERCINSTROOTFS ro rootwait initrd=/images/initrd
+       chainloader $base/bzImage root=LABEL=$rootlabel ro rootwait initrd=$base/initrd
 }
 
 menuentry "$DISTRIBUTION recovery" {
-       chainloader /images/bzImage_bakup root=LABEL=OVERCINSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/images/initrd
+       chainloader $base/bzImage_bakup root=LABEL=$rootlabel rootflags=subvol=rootfs_bakup ro rootwait initrd=$base/initrd
 }
 
 menuentry 'Automatic Key Provision' {
@@ -686,7 +691,7 @@ install_grub()
 	# in /boot/grub/grub.cfg. User supplied INSTALL_EFIBOOT firmware files may search
 	# for grub.cfg in /boot/EFI/BOOT/ (the current default if using bitbake artifacts)
 	debugmsg ${DEBUG_INFO} "[INFO]: setting grub up"
-	write_grub_cfg ${mountpoint}/mnt/grub/grub.cfg
+	write_grub_cfg "/images" "OVERCBOOT" "OVERCINSTROOTFS" ${mountpoint}/mnt/grub/grub.cfg
 
 	if [ -n "$efi" ]; then
 		if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
@@ -694,7 +699,7 @@ install_grub()
 			cp -rf "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/grub/grub.cfg
 		else
 			debugmsg ${DEBUG_INFO} "[INFO]: Using 'hardcoded' config"
-			write_grub_efi_cfg ${mountpoint}/mnt/grub/grub.cfg
+			write_grub_efi_cfg "/images" "OVERCINSTROOTFS" ${mountpoint}/mnt/grub/grub.cfg
 		fi
 		echo `basename ${mountpoint}/mnt/EFI/BOOT/boot*.efi` >${mountpoint}/mnt/startup.nsh
 		make_cfg_substitutions ${mountpoint}/mnt/grub/grub.cfg

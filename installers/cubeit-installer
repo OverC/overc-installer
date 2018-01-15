@@ -611,37 +611,7 @@ if ${X86_ARCH}; then
     fi
 
     mkdir -p ${TMPMNT}/mnt/grub
-    cat <<EOF >${TMPMNT}/mnt/grub/grub.cfg
-set default="0"
-
-serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1
-terminal_input console serial
-terminal_output console serial
-set timeout=5
-
-menuentry "$DISTRIBUTION" {
-	insmod gzio
-	insmod ext2
-	insmod fat
-	search --no-floppy --label OVERCBOOT --set=root 
-	echo	'Loading Linux ...'
-	linux	/bzImage root=LABEL=OVERCROOTFS ro rootwait $GRUB_KERNEL_PARAMS
-	echo	'Loading initial ramdisk ...'
-	initrd	/initrd
-}
-
-menuentry "$DISTRIBUTION recovery" {
-        insmod gzio
-        insmod ext2
-        insmod fat
-        search --no-floppy --label OVERCBOOT --set=root 
-        echo    'Loading Linux ...'
-        linux   /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
-        echo    'Loading initial ramdisk ...'
-        initrd  /initrd
-}
-
-EOF
+    write_grub_cfg "" "OVERCBOOT" "OVERCROOTFS" ${TMPMNT}/mnt/grub/grub.cfg
 
     debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
     
@@ -658,24 +628,7 @@ EOF
 	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
 	    cp "${INSTALL_GRUBEFI_CFG}" ${TMPMNT}/mnt/EFI/BOOT/grub.cfg
 	elif [ ! -f ${TMPMNT}/mnt/EFI/BOOT/grub.cfg ]; then
-	    cat <<EOF >${TMPMNT}/mnt/EFI/BOOT/grub.cfg
-set default="0"
-set timeout=5
-set color_normal='light-gray/black'
-set color_highlight='light-green/blue'
-
-menuentry "$DISTRIBUTION" {
-       chainloader /bzImage root=LABEL=OVERCROOTFS ro rootwait initrd=/initrd
-}
-
-menuentry "$DISTRIBUTION recovery" {
-       chainloader /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/initrd
-}
-
-menuentry 'Automatic Key Provision' {
-       chainloader /EFI/BOOT/LockDown.efi
-}
-EOF
+	    write_grub_efi_cfg "" "OVERCROOTFS" ${TMPMNT}/mnt/EFI/BOOT/grub.cfg
 	fi
 
 	echo `basename ${TMPMNT}/mnt/EFI/BOOT/boot*.efi` >${TMPMNT}/mnt/startup.nsh
