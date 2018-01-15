@@ -566,6 +566,83 @@ install_bootloader()
     echo "install_bootloader: default function, add implementation via: override_function"
 }
 
+write_grub_cfg()
+{
+	cat <<EOF >"$1"
+set default="0"
+
+serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1
+terminal_input console serial
+terminal_output console serial
+set timeout=5
+
+menuentry "$DISTRIBUTION" {
+	insmod gzio
+	insmod ext2
+	insmod fat
+	search --no-floppy --label OVERCBOOT --set=root
+	echo	'Loading Linux ...'
+	linux	/images/bzImage root=LABEL=OVERCINSTROOTFS ro rootwait $GRUB_KERNEL_PARAMS
+	echo	'Loading initial ramdisk ...'
+	initrd	/images/initrd
+}
+
+menuentry "$DISTRIBUTION recovery" {
+        insmod gzio
+        insmod ext2
+        insmod fat
+        search --no-floppy --label OVERCBOOT --set=root
+        echo    'Loading Linux ...'
+        linux   /images/bzImage_bakup root=LABEL=OVERCINSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
+        echo    'Loading initial ramdisk ...'
+        initrd  /images/initrd
+}
+
+EOF
+}
+
+write_grub_efi_cfg()
+{
+	cat <<EOF >"$1"
+set default="0"
+set timeout=5
+set color_normal='light-gray/black'
+set color_highlight='light-green/blue'
+
+menuentry "$DISTRIBUTION" {
+       chainloader /images/bzImage root=LABEL=OVERCINSTROOTFS ro rootwait initrd=/images/initrd
+}
+
+menuentry "$DISTRIBUTION recovery" {
+       chainloader /images/bzImage_bakup root=LABEL=OVERCINSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/images/initrd
+}
+
+menuentry 'Automatic Key Provision' {
+       chainloader /EFI/BOOT/LockDown.efi
+}
+EOF
+}
+
+make_cfg_substitutions()
+{
+	cfg_file=$1
+
+	if [ -f ${cfg_file} ] && [ -n "${INSTALL_KERNEL}" ]; then
+		local kernel_name=`basename ${INSTALL_KERNEL}`
+		sed -e "s|%INSTALL_KERNEL%|${kernel_name}|" \
+		    -e "s|%INSTALL_INITRAMFS%|initrd|" \
+		    -e "s|%INSTALLER_PARTITION%|${p2}|" \
+		    -e "s|%ROOTFS_LABEL%|${ROOTFS_LABEL}|" -i ${cfg_file}
+		if [ -z "$DISTRIBUTION" ]; then
+		        DISTRIBUTION="OverC"
+		fi
+		sed "s|%DISTRIBUTION%|${DISTRIBUTION}|" -i ${cfg_file}
+	else
+		debugmsg ${DEBUG_CRIT} "ERROR: Could not update grub configuration with install kernel"
+		return 1
+	fi
+}
+
 install_grub()
 {
 	local device="$1"
@@ -602,37 +679,7 @@ install_grub()
 	fi
 
 	mkdir -p ${mountpoint}/mnt/grub
-	cat <<EOF >${mountpoint}/mnt/grub/grub.cfg
-set default="0"
-
-serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1
-terminal_input console serial
-terminal_output console serial
-set timeout=5
-
-menuentry "$DISTRIBUTION" {
-	insmod gzio
-	insmod ext2
-	insmod fat
-	search --no-floppy --label OVERCBOOT --set=root
-	echo	'Loading Linux ...'
-	linux	/images/bzImage root=LABEL=OVERCINSTROOTFS ro rootwait $GRUB_KERNEL_PARAMS
-	echo	'Loading initial ramdisk ...'
-	initrd	/images/initrd
-}
-
-menuentry "$DISTRIBUTION recovery" {
-        insmod gzio
-        insmod ext2
-        insmod fat
-        search --no-floppy --label OVERCBOOT --set=root
-        echo    'Loading Linux ...'
-        linux   /images/bzImage_bakup root=LABEL=OVERCINSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
-        echo    'Loading initial ramdisk ...'
-        initrd  /images/initrd
-}
-
-EOF
+	write_grub_cfg ${mountpoint}/mnt/grub/grub.cfg
 
 	if [ -f ${mountpoint}/boot/efi/EFI/BOOT/boot*.efi ]; then
 		debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
@@ -647,24 +694,7 @@ EOF
 		    else
 		         debugmsg ${DEBUG_INFO} "[INFO]: Writing EFI/BOOT/grub.cfg"
 		    fi
-		    cat <<EOF >${mountpoint}/mnt/EFI/BOOT/grub.cfg
-set default="0"
-set timeout=5
-set color_normal='light-gray/black'
-set color_highlight='light-green/blue'
-
-menuentry "$DISTRIBUTION" {
-       chainloader /images/bzImage root=LABEL=OVERCINSTROOTFS ro rootwait initrd=/images/initrd
-}
-
-menuentry "$DISTRIBUTION recovery" {
-       chainloader /images/bzImage_bakup root=LABEL=OVERCINSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/images/initrd
-}
-
-menuentry 'Automatic Key Provision' {
-       chainloader /EFI/BOOT/LockDown.efi
-}
-EOF
+		    write_grub_efi_cfg ${mountpoint}/mnt/EFI/BOOT/grub.cfg
 		fi
 
 		echo `basename ${mountpoint}/mnt/EFI/BOOT/boot*.efi` >${mountpoint}/mnt/startup.nsh
@@ -673,20 +703,8 @@ EOF
 
 	debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
 
-	if [ -n "${INSTALL_KERNEL}" ]; then
-		local kernel_name=`basename ${INSTALL_KERNEL}`
-		sed "s|%INSTALL_KERNEL%|${kernel_name}|" -i ${mountpoint}/mnt/grub/grub.cfg
-		sed "s|%INSTALL_INITRAMFS%|initrd|" -i ${mountpoint}/mnt/grub/grub.cfg
-		sed "s|%INSTALLER_PARTITION%|${p2}|" -i ${mountpoint}/mnt/grub/grub.cfg
-		sed "s|%ROOTFS_LABEL%|${ROOTFS_LABEL}|" -i ${mountpoint}/mnt/grub/grub.cfg
-		if ! [ -n "$DISTRIBUTION" ]; then
-			DISTRIBUTION="OverC"
-		fi
-		sed "s|%DISTRIBUTION%|${DISTRIBUTION}|" -i ${mountpoint}/mnt/grub/grub.cfg
-	else
-		debugmsg ${DEBUG_CRIT} "ERROR: Could not update grub configuration with install kernel"
-		return 1
-	fi
+	make_cfg_substitutions ${mountpoint}/mnt/grub/grub.cfg
+	assert $?
 
 	#install efi boot
 
