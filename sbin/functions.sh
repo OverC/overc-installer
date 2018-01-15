@@ -648,6 +648,7 @@ install_grub()
 	local device="$1"
 	local bootpoint="$2"
 	local mountpoint="$3"
+	local efi=""
 
 	# if we are installing to a nbd device, assume that we are working in
 	# a virtual environment, and use "vda" as the boot device
@@ -672,62 +673,54 @@ install_grub()
 	chroot ${mountpoint} /bin/bash -c "mount -t proc proc /proc"
 	chroot ${mountpoint} /bin/bash -c "mount -t sysfs sys /sys"
 
-	if [ -n "$loop_device" ]; then
-		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --force --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search chain\" /dev/${device}"
+	grub_target=$(ls ${mountpoint}/usr/lib*/grub/)
+	echo "$grub_target" | grep -q "efi"
+	if [ $? -eq 0 ]; then
+		efi=t
+		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force --removable --efi-directory=/mnt /dev/${device}"
 	else
-		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --boot-directory=/mnt --force /dev/${device}"
+		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force /dev/${device}"
 	fi
 
-	mkdir -p ${mountpoint}/mnt/grub
+	# NOTE: grub-install will install BOOTX64.EFI which will search for the grub.cfg
+	# in /boot/grub/grub.cfg. User supplied INSTALL_EFIBOOT firmware files may search
+	# for grub.cfg in /boot/EFI/BOOT/ (the current default if using bitbake artifacts)
+	debugmsg ${DEBUG_INFO} "[INFO]: setting grub up"
 	write_grub_cfg ${mountpoint}/mnt/grub/grub.cfg
 
-	if [ -f ${mountpoint}/boot/efi/EFI/BOOT/boot*.efi ]; then
-		debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
-		mkdir -p ${mountpoint}/mnt/EFI/BOOT
-		cp -a ${mountpoint}/boot/efi/EFI ${mountpoint}/mnt
-
+	if [ -n "$efi" ]; then
 		if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
-		    cp -rf "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/grub/grub.cfg
+			debugmsg ${DEBUG_INFO} "[INFO]: Using user supplied config '${INSTALL_GRUBEFI_CFG}'"
+			cp -rf "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/grub/grub.cfg
 		else
-		    if [ -f ${mountpoint}/mnt/EFI/BOOT/grub.cfg ]; then
-		         debugmsg ${DEBUG_INFO} "[WARN]: Overriding provided EFI/BOOT/grub.cfg"
-		    else
-		         debugmsg ${DEBUG_INFO} "[INFO]: Writing EFI/BOOT/grub.cfg"
-		    fi
-		    write_grub_efi_cfg ${mountpoint}/mnt/EFI/BOOT/grub.cfg
+			debugmsg ${DEBUG_INFO} "[INFO]: Using 'hardcoded' config"
+			write_grub_efi_cfg ${mountpoint}/mnt/grub/grub.cfg
 		fi
-
 		echo `basename ${mountpoint}/mnt/EFI/BOOT/boot*.efi` >${mountpoint}/mnt/startup.nsh
+		make_cfg_substitutions ${mountpoint}/mnt/grub/grub.cfg
+		assert $?
+
+		if [ -n "${INSTALL_EFIBOOT}" ] && [ -e "${INSTALL_EFIBOOT}" ]; then
+			debugmsg ${DEBUG_INFO} "[INFO]: Installing user supplied EFI '${INSTALL_EFIBOOT}'"
+			# Most UEFI will search for BOOTX64.EFI before resorting to startup.nsh
+			# so install $INSTALL_EFIBOOT as BOOTX64.EFI to speed up the boot and to
+			# prevent the default BOOTX64.EFI installed by grub-install being used.
+			cp $INSTALL_EFIBOOT ${mountpoint}/mnt/EFI/BOOT/BOOTX64.EFI
+			mv ${mountpoint}/mnt/grub/grub.cfg ${mountpoint}/mnt/EFI/BOOT/
+			selsign "${mountpoint}/mnt/EFI/BOOT/grub.cfg"
+			echo BOOTX64.EFI >${mountpoint}/mnt/startup.nsh
+		fi
 		chmod +x ${mountpoint}/mnt/startup.nsh
 	fi
 
 	debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
-
-	make_cfg_substitutions ${mountpoint}/mnt/grub/grub.cfg
-	assert $?
-
-	#install efi boot
-
-	if [ -n "${INSTALL_EFIBOOT}" ] && [ -e "${INSTALL_EFIBOOT}" ]; then
-		debugmsg ${DEBUG_INFO} "Installing the EFI bootloader"
-		mkdir -p ${mountpoint}/mnt/EFI/BOOT/
-		cp $INSTALL_EFIBOOT ${mountpoint}/mnt/EFI/BOOT/
-		cp ${mountpoint}/mnt/grub/grub.cfg ${mountpoint}/mnt/EFI/BOOT/
-		selsign "${mountpoint}/mnt/EFI/BOOT/grub.cfg"
-		echo `basename $INSTALL_EFIBOOT` >${mountpoint}/mnt/startup.nsh
-	else
-		cp ${BASEDIR}/startup.nsh ${mountpoint}/
-		sed -i "s/%ROOTLABEL%/${ROOTFS_LABEL}/" ${mountpoint}/startup.nsh
-		sed -i "s/%INITRD%/\/images\/${initramfs_name}/" ${mountpoint}/startup.nsh
-		sed -i "s/%BZIMAGE%/\\\images\\\bzImage/" ${mountpoint}/startup.nsh
-	fi
-	chmod +x ${mountpoint}/mnt/startup.nsh
 
 	umount ${mountpoint}/mnt
 
 	chroot ${mountpoint} /bin/bash -c "umount /sys"
 	chroot ${mountpoint} /bin/bash -c "umount /proc"
 	chroot ${mountpoint} /bin/bash -c "umount /dev"
+
 	return 0
 }
 
