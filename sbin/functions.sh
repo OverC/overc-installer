@@ -568,41 +568,41 @@ install_bootloader()
 
 install_grub()
 {
-    local device="$1"
-    local bootpoint="$2"
-    local mountpoint="$3"
+	local device="$1"
+	local bootpoint="$2"
+	local mountpoint="$3"
 
-    # if we are installing to a nbd device, assume that we are working in
-    # a virtual environment, and use "vda" as the boot device
-    echo ${device} | grep -q nbd
-    if [ $? -eq 0 ]; then
-        p2="vda2"
-    else
-        p2="${device}2"
-    fi
+	# if we are installing to a nbd device, assume that we are working in
+	# a virtual environment, and use "vda" as the boot device
+	echo ${device} | grep -q nbd
+	if [ $? -eq 0 ]; then
+	    p2="vda2"
+	else
+	    p2="${device}2"
+	fi
 
-    # Create a mountpoint for bootpoint under mountpoint
-    mkdir -p ${mountpoint}/mnt
-    mount --bind ${bootpoint} ${mountpoint}/mnt
+	# Create a mountpoint for bootpoint under mountpoint
+	mkdir -p ${mountpoint}/mnt
+	mount --bind ${bootpoint} ${mountpoint}/mnt
 
-    debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
+	debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
 
-    if ! [ -n "$DISTRIBUTION" ]; then
-        DISTRIBUTION="OverC"
-    fi
+	if ! [ -n "$DISTRIBUTION" ]; then
+	    DISTRIBUTION="OverC"
+	fi
 
-    chroot ${mountpoint} /bin/bash -c "mount -t devtmpfs none /dev"
-    chroot ${mountpoint} /bin/bash -c "mount -t proc proc /proc"
-    chroot ${mountpoint} /bin/bash -c "mount -t sysfs sys /sys"
+	chroot ${mountpoint} /bin/bash -c "mount -t devtmpfs none /dev"
+	chroot ${mountpoint} /bin/bash -c "mount -t proc proc /proc"
+	chroot ${mountpoint} /bin/bash -c "mount -t sysfs sys /sys"
 
-    if [ -n "$loop_device" ]; then
-	chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --force --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search chain\" /dev/${device}"
-    else
-	chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --boot-directory=/mnt --force /dev/${device}"
-    fi
+	if [ -n "$loop_device" ]; then
+		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --force --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search chain\" /dev/${device}"
+	else
+		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --boot-directory=/mnt --force /dev/${device}"
+	fi
 
-    mkdir -p ${mountpoint}/mnt/grub
-    cat <<EOF >${mountpoint}/mnt/grub/grub.cfg
+	mkdir -p ${mountpoint}/mnt/grub
+	cat <<EOF >${mountpoint}/mnt/grub/grub.cfg
 set default="0"
 
 serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1
@@ -634,20 +634,20 @@ menuentry "$DISTRIBUTION recovery" {
 
 EOF
 
-    if [ -f ${mountpoint}/boot/efi/EFI/BOOT/boot*.efi ]; then
-	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
-	mkdir -p ${mountpoint}/mnt/EFI/BOOT
-	cp -a ${mountpoint}/boot/efi/EFI ${mountpoint}/mnt
+	if [ -f ${mountpoint}/boot/efi/EFI/BOOT/boot*.efi ]; then
+		debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
+		mkdir -p ${mountpoint}/mnt/EFI/BOOT
+		cp -a ${mountpoint}/boot/efi/EFI ${mountpoint}/mnt
 
-	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
-	    cp -rf "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/grub/grub.cfg
-	else
-	    if [ -f ${mountpoint}/mnt/EFI/BOOT/grub.cfg ]; then
-	         debugmsg ${DEBUG_INFO} "[WARN]: Overriding provided EFI/BOOT/grub.cfg"
-	    else
-	         debugmsg ${DEBUG_INFO} "[INFO]: Writing EFI/BOOT/grub.cfg"
-	    fi
-	    cat <<EOF >${mountpoint}/mnt/EFI/BOOT/grub.cfg
+		if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
+		    cp -rf "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/grub/grub.cfg
+		else
+		    if [ -f ${mountpoint}/mnt/EFI/BOOT/grub.cfg ]; then
+		         debugmsg ${DEBUG_INFO} "[WARN]: Overriding provided EFI/BOOT/grub.cfg"
+		    else
+		         debugmsg ${DEBUG_INFO} "[INFO]: Writing EFI/BOOT/grub.cfg"
+		    fi
+		    cat <<EOF >${mountpoint}/mnt/EFI/BOOT/grub.cfg
 set default="0"
 set timeout=5
 set color_normal='light-gray/black'
@@ -665,13 +665,13 @@ menuentry 'Automatic Key Provision' {
        chainloader /EFI/BOOT/LockDown.efi
 }
 EOF
+		fi
+
+		echo `basename ${mountpoint}/mnt/EFI/BOOT/boot*.efi` >${mountpoint}/mnt/startup.nsh
+		chmod +x ${mountpoint}/mnt/startup.nsh
 	fi
 
-	echo `basename ${mountpoint}/mnt/EFI/BOOT/boot*.efi` >${mountpoint}/mnt/startup.nsh
-	chmod +x ${mountpoint}/mnt/startup.nsh
-    fi
-
-    debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
+	debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
 
 	if [ -n "${INSTALL_KERNEL}" ]; then
 		local kernel_name=`basename ${INSTALL_KERNEL}`
@@ -687,7 +687,7 @@ EOF
 		debugmsg ${DEBUG_CRIT} "ERROR: Could not update grub configuration with install kernel"
 		return 1
 	fi
-	
+
 	#install efi boot
 
 	if [ -n "${INSTALL_EFIBOOT}" ] && [ -e "${INSTALL_EFIBOOT}" ]; then
