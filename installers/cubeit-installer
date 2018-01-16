@@ -492,6 +492,7 @@ debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
 tar --warning=no-timestamp --numeric-owner \
     --xattrs --xattrs-include=security\\.ima -xpf "${rootfs}"
 
+# mount the boot partition
 if [ -z "${BOOTTMPMNT}" ]; then
     BOOTTMPMNT=`mktemp -d /tmp/pulsarmountXXXXX`
     export BOOTTMPMNT
@@ -562,6 +563,8 @@ if [ -n "${INSTALL_MODULES}" ]; then
 	tar --numeric-owner -xpf ${INSTALL_MODULES}
 fi
 
+# unmount the /boot partition so we can
+# remount it as part of TMPMNT
 umount ${BOOTTMPMNT}/mnt
 
 if [ $btrfs -eq 1 ]; then
@@ -575,9 +578,10 @@ if [ $btrfs -eq 1 ]; then
 	umount ${TMPMNT}/rootfs/mnt
 	umount ${TMPMNT}/
 	mount -o subvolid=${subvol} /dev/${rootfs_dev} ${TMPMNT}
-	mount /dev/${fs_dev}1 ${TMPMNT}/mnt
 	cd ${TMPMNT}/
 fi
+# remount /boot
+mount /dev/${fs_dev}1 ${TMPMNT}/mnt
 
 # A fixup for virtual installs. If we've booted off a usb device
 # our device will be 'vdb', but since qemu can't re-order bootable
