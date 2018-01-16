@@ -2,7 +2,7 @@
 INSTALL_DTB="${ARTIFACTS_DIR}/dtb"
 INSTALL_BOOTLOADER="${ARTIFACTS_DIR}/uboot.bin"
 
-## Uncomment to use GPT (installer image - not live)
+## Uncomment to use GPT
 #INSTALL_USE_GPT=1
 
 # fsl-ls10xx or xilinx-zynq
