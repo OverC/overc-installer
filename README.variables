@@ -5,6 +5,14 @@ INSTALL_GRUBCFG:      The grub configuration file used when creating an
                       installer image (unused when creating a live image).
 
 
+INSTALL_USE_GPT:      When creating a new partition table use GUID
+                      Partition Table. It it usually best to use GPT
+                      when your target system uses UEFI. Usually you
+                      want to combine this with including 'efi' in
+                      MACHINE_FEATURES when building your images.
+		      The default is to use MBR.
+
+
 INSTALL_ROOTFS:       The 'bare metal' rootfs image. Passed to the installer
                       when performing an install or creating a live image.
 

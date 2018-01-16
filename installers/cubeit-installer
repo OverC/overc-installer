@@ -130,7 +130,7 @@ while [ $# -gt 0 ]; do
             shift
             ;;
     --partition_layout)
-            FDISK_PARTITION_LAYOUT_INPUT="$2"
+            PARTITION_LAYOUT_INPUT="$2"
             shift
             ;;
     --encrypt)
@@ -359,7 +359,8 @@ if [ -z "${ttyconsolecn}" ]; then
     fi
 fi
 
-# create partitions
+# Create partitions. The basic OverC installation will use
+# 4 partitions:
 # 
 #  1: boot
 #  2: swap
@@ -371,48 +372,41 @@ SWAPLABEL="SWAP"
 ROOTLABEL="OVERCROOTFS"
 CONTAINERLABEL="OVERCCN"
 
-PARTITIONTYPE=""
-
-if test ! $(which fdisk); then
-	debugmsg ${DEBUG_CRIT} "[ERROR]: Unable to find 'fdisk'."
-	debugmsg ${DEBUG_CRIT} "[ERROR]: Please ensure fdisk is installed and in your PATH."
+# Ensure the parted application is available
+if test ! $(which parted); then
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Unable to find 'parted'."
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Please ensure parted is installed and in your PATH."
 	exit 1
 fi
-# Get supported fdisk command line options
-avail_fdisk_options=$(fdisk -h | grep "^\ *-" | cut -d',' -f1 | xargs)
 
-
-if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ]; then
-        FDISK_PARTITION_LAYOUT="${FDISK_PARTITION_LAYOUT_INPUT}"
-elif [ -z "${FDISK_PARTITION_LAYOUT}" ]; then
-        FDISK_PARTITION_LAYOUT="${SBINDIR}/fdisk-4-partition-layout.txt"
-        # This fdisk-4-partition-layout.txt file only suitable to mbr partition type,
-        # but not all fdisk versions support -t. So we test and assign if it is available
-
-	# If fdisk supports the '-t' disklabel option use it. Determine which variant to
-	# use, prefer to use 'mbr' when available (though currently the same as 'dos')
-	if [[ $avail_fdisk_options == *"-t"* ]]; then
-		if $(fdisk -t mbr 2>&1 | grep -q unsupported); then
-			PARTITIONTYPE="-t dos"
-		else
-			PARTITIONTYPE="-t mbr"
-		fi
-	fi
+if [ -n "${PARTITION_LAYOUT_INPUT}" ]; then
+        PARTITION_LAYOUT="${PARTITION_LAYOUT_INPUT}"
+elif [ -z "${PARTITION_LAYOUT}" ]; then
+        PARTITION_LAYOUT="${SBINDIR}/4-partition-layout.txt"
 fi
 
-debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${FDISK_PARTITION_LAYOUT})"
-debugmsg ${DEBUG_INFO} "          1) boot"
-debugmsg ${DEBUG_INFO} "          2) swap"
-debugmsg ${DEBUG_INFO} "          3) root"
-debugmsg ${DEBUG_INFO} "          4) container"
+debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${PARTITION_LAYOUT})"
+
 # We partition the raw device as passed to the script. This is
 # nuke and pave .. so be careful!
-if [ -f ${FDISK_PARTITION_LAYOUT} ]; then
-        fdisk ${PARTITIONTYPE} /dev/${raw_dev} < ${FDISK_PARTITION_LAYOUT} >/dev/null 2>&1
+if [ -f ${PARTITION_LAYOUT} ]; then
+	parted_cmds="mklabel msdos"
+	if [ -n "$INSTALL_USE_GPT" ]; then
+	    parted_cmds="mklabel gpt"
+	fi
+	while read cmd;	do
+	    parted_cmds="$parted_cmds $cmd"
+	done < ${PARTITION_LAYOUT}
+	parted --script /dev/${raw_dev} $parted_cmds >/dev/null 2>&1
+	if [ $? -ne 0 ]; then
+	    debugmsg ${DEBUG_CRIT} "[ERROR]: Failed to partition disk"
+	    exit 1
+	fi
 else
-        debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find the fdisk partitions file ${FDISK_PARTITION_LAYOUT}"
+        debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find the partition script file ${PARTITION_LAYOUT}"
         exit 1
 fi
+
 # For filesystem creation, we need the partitions. But some devices
 # name them differently than a hard disk (i.e mmcblk or nbd) and 
 # have 'p' in the partion names. In that case, we need to create a
@@ -442,7 +436,7 @@ mkswap -L $SWAPLABEL /dev/${fs_dev}2
 
 set -e
 debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
-mkfs.vfat -I -n $BOOTLABEL /dev/${fs_dev}1
+mkfs.vfat -F32 -I -n $BOOTLABEL /dev/${fs_dev}1
 
 ## define the device file names for rootfs and container filesystem
 rootfs_dev=${fs_dev}3

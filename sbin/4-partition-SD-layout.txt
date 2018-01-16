@@ -1,0 +1,5 @@
+mkpart primary fat32 4096s 260MB
+set 1 boot on
+mkpart primary linux-swap 260MB 1028MB
+mkpart primary btrfs 1028MB 3076MB
+mkpart primary btrfs 3076MB 100%

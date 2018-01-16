@@ -24,7 +24,7 @@ EVAL_NAME="Nucleo-T Evaluation"
 HARDDRIVE_DEVICE="/sys/class/scsi_disk/0:0:0:0/device"
 HARDDRIVE_MODEL="ST9120822SB     "
 
-## Uncomment to use GPT (installer image - not live)
+## Uncomment to use GPT
 #INSTALL_USE_GPT=1
 
 BOOTPART_START="2048s"
