@@ -133,6 +133,10 @@ while [ $# -gt 0 ]; do
             PARTITION_LAYOUT_INPUT="$2"
             shift
             ;;
+    --container_partition)
+            CONTAINER_PARTITION="$2"
+            shift
+            ;;
     --encrypt)
             do_encryption=1
             ;;
@@ -440,7 +444,12 @@ mkfs.vfat -F32 -I -n $BOOTLABEL /dev/${fs_dev}1
 
 ## define the device file names for rootfs and container filesystem
 rootfs_dev=${fs_dev}3
-container_fs_dev=${fs_dev}4
+
+if [ -n "${CONTAINER_PARTITION}" ]; then
+	container_fs_dev=${fs_dev}${CONTAINER_PARTITION}
+else
+	container_fs_dev=${fs_dev}4
+fi
 
 if [ $do_encryption -eq 1 ]; then
     ## Evict all objects for the first creation.
