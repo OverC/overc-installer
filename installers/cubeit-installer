@@ -755,7 +755,7 @@ ln -sf /lib/systemd/system/getty@.service ${TMPMNT}/etc/systemd/system/getty.tar
 
 # Disable all unneeded services in essential
 if [ -z "${SERVICE_DISABLE_ESSENTIAL}" ]; then
-    SERVICE_DISABLE_ESSENTIAL="systemd-resolved.service systemd-networkd.service systemd-timesyncd.service"
+    SERVICE_DISABLE_ESSENTIAL="systemd-resolved.service systemd-networkd.service systemd-timesyncd.service xinetd.service dnf-makecache.service"
 fi
 if [ -n "${SERVICE_DISABLE_ESSENTIAL}" ]; then
     for s in ${SERVICE_DISABLE_ESSENTIAL}; do
@@ -1004,9 +1004,11 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    ${SBINDIR}/cube-cfg set cube.network.ip:192.168.42.3/24
 		    ${SBINDIR}/cube-cfg attribute +vrf
 		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig vrf
+
 		    service_disable systemd-resolved.service ${cname}
 		    service_disable systemd-networkd.service ${cname}
 		    service_disable systemd-timesyncd.service ${cname}
+		    service_disable dnf-makecache.service ${cname}
 		fi
 
 		${SBINDIR}/cube-cfg gen ${cname}:cube
