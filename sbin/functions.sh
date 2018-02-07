@@ -976,15 +976,19 @@ service_disable()
     local slinks
 
     services="${services%.service}.service"
+    sockets=$(basename --suffix .service ${services})
+    sockets="${sockets}.socket"
     local debug_msg="[INFO]: Can not find the service ${services} to disable"
 
     if [ -z "${cname}" ]; then
         # For essential
-        slinks=`find ${TMPMNT}/etc/systemd/ -name ${services} 2>/dev/null`
+        slinks=$(find ${TMPMNT}/etc/systemd/ -name ${services} 2>/dev/null)
+        sockets=$(find ${TMPMNT}/etc/systemd/ -name ${sockets} 2>/dev/null)
         debug_msg="${debug_msg} for essential."
     else
         # For containers
-        slinks=`find ${TMPMNT}/opt/container/${cname}/rootfs/etc/systemd/ -name ${services} 2>/dev/null`
+        slinks=$(find ${TMPMNT}/opt/container/${cname}/rootfs/etc/systemd/ -name ${services} 2>/dev/null)
+        sockets=$(find ${TMPMNT}/opt/container/${cname}/rootfs/etc/systemd/ -name ${sockets} 2>/dev/null)
         debug_msg="${debug_msg} for ${cname}."
     fi
 
@@ -992,8 +996,7 @@ service_disable()
         debugmsg ${DEBUG_INFO} ${debug_msg}
         return 1
     fi
-
-    rm -f ${slinks}
+    rm -f ${slinks} ${sockets}
     return 0
 }
 
