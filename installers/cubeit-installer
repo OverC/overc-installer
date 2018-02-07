@@ -753,7 +753,10 @@ for k in ${gettys}; do
 done
 ln -sf /lib/systemd/system/getty@.service ${TMPMNT}/etc/systemd/system/getty.target.wants/getty@tty1.service
 
-# Disable all not needed services in essentail
+# Disable all unneeded services in essential
+if [ -z "${SERVICE_DISABLE_ESSENTIAL}" ]; then
+    SERVICE_DISABLE_ESSENTIAL="systemd-resolved.service systemd-networkd.service systemd-timesyncd.service"
+fi
 if [ -n "${SERVICE_DISABLE_ESSENTIAL}" ]; then
     for s in ${SERVICE_DISABLE_ESSENTIAL}; do
         service_disable ${s}
@@ -771,9 +774,9 @@ regen_container_config() {
     (
 	cd ${outdir}${cname}
 	if [ -e "pflask.cmd" ]; then
-	    ${SBINDIR}/cube-cfg gen ${cname}:cube
+	    ${SBINDIR}/cube-cfg -o ${outdir}${cname} gen ${cname}:cube
 	else
-	    ${SBINDIR}/cube-cfg gen ${cname}:oci
+	    ${SBINDIR}/cube-cfg -o ${outdir}${cname} gen ${cname}:oci
 	fi
 
 	if [ -n "${prep_flag}" ]; then
@@ -901,7 +904,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	if [ "${devicemgr}" = "self" ]; then
 	    (
 		cd ${TMPMNT}/opt/container/${cname}
-		${SBINDIR}/cube-cfg set cube.device.mgr:self
+		${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} set cube.device.mgr:self
 	    )
 	fi
 
@@ -915,13 +918,13 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	if [ "${ttyconsolecn}" == "${cname}" -o -n "$consoleattr" ]; then
 	    (
 		cd ${TMPMNT}/opt/container/${cname}
-		${SBINDIR}/cube-cfg set cube.console.mgr:screen-tty
+		${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} set cube.console.mgr:screen-tty
 		regen_container_config ${TMPMNT}/opt/container/ ${cname}
 	    )
 	else
 	    (
 		cd ${TMPMNT}/opt/container/${cname}
-		${SBINDIR}/cube-cfg set cube.console.mgr:tty
+		${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} set cube.console.mgr:tty
 		regen_container_config ${TMPMNT}/opt/container/ ${cname}
 	    )
 	fi
@@ -946,7 +949,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	    (
 		cd ${TMPMNT}/opt/container/${cname}
-		${SBINDIR}/cube-cfg device vt:/dev/tty${vty_num}:/dev/tty${vty_num}
+		${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} device vt:/dev/tty${vty_num}:/dev/tty${vty_num}
 		regen_container_config ${TMPMNT}/opt/container/ ${cname} prep
 	    )
 	fi
@@ -1002,6 +1005,8 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    ${SBINDIR}/cube-cfg attribute +vrf
 		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig vrf
 		    service_disable systemd-resolved.service ${cname}
+		    service_disable systemd-networkd.service ${cname}
+		    service_disable systemd-timesyncd.service ${cname}
 		fi
 
 		${SBINDIR}/cube-cfg gen ${cname}:cube
