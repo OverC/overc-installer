@@ -137,6 +137,10 @@ while [ $# -gt 0 ]; do
             CONTAINER_PARTITION="$2"
             shift
             ;;
+    --container_partition)
+            CONTAINER_PARTITION="$2"
+            shift
+            ;;
     --encrypt)
             do_encryption=1
             ;;
