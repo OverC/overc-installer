@@ -130,7 +130,7 @@ while [ $# -gt 0 ]; do
             shift
             ;;
     --partition_layout)
-            FDISK_PARTITION_LAYOUT_INPUT="$2"
+            PARTITION_LAYOUT_INPUT="$2"
             shift
             ;;
     --encrypt)
@@ -359,7 +359,8 @@ if [ -z "${ttyconsolecn}" ]; then
     fi
 fi
 
-# create partitions
+# Create partitions. The basic OverC installation will use
+# 4 partitions:
 # 
 #  1: boot
 #  2: swap
@@ -371,48 +372,41 @@ SWAPLABEL="SWAP"
 ROOTLABEL="OVERCROOTFS"
 CONTAINERLABEL="OVERCCN"
 
-PARTITIONTYPE=""
-
-if test ! $(which fdisk); then
-	debugmsg ${DEBUG_CRIT} "[ERROR]: Unable to find 'fdisk'."
-	debugmsg ${DEBUG_CRIT} "[ERROR]: Please ensure fdisk is installed and in your PATH."
+# Ensure the parted application is available
+if test ! $(which parted); then
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Unable to find 'parted'."
+	debugmsg ${DEBUG_CRIT} "[ERROR]: Please ensure parted is installed and in your PATH."
 	exit 1
 fi
-# Get supported fdisk command line options
-avail_fdisk_options=$(fdisk -h | grep "^\ *-" | cut -d',' -f1 | xargs)
 
-
-if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ]; then
-        FDISK_PARTITION_LAYOUT="${FDISK_PARTITION_LAYOUT_INPUT}"
-elif [ -z "${FDISK_PARTITION_LAYOUT}" ]; then
-        FDISK_PARTITION_LAYOUT="${SBINDIR}/fdisk-4-partition-layout.txt"
-        # This fdisk-4-partition-layout.txt file only suitable to mbr partition type,
-        # but not all fdisk versions support -t. So we test and assign if it is available
-
-	# If fdisk supports the '-t' disklabel option use it. Determine which variant to
-	# use, prefer to use 'mbr' when available (though currently the same as 'dos')
-	if [[ $avail_fdisk_options == *"-t"* ]]; then
-		if $(fdisk -t mbr 2>&1 | grep -q unsupported); then
-			PARTITIONTYPE="-t dos"
-		else
-			PARTITIONTYPE="-t mbr"
-		fi
-	fi
+if [ -n "${PARTITION_LAYOUT_INPUT}" ]; then
+        PARTITION_LAYOUT="${PARTITION_LAYOUT_INPUT}"
+elif [ -z "${PARTITION_LAYOUT}" ]; then
+        PARTITION_LAYOUT="${SBINDIR}/4-partition-layout.txt"
 fi
 
-debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${FDISK_PARTITION_LAYOUT})"
-debugmsg ${DEBUG_INFO} "          1) boot"
-debugmsg ${DEBUG_INFO} "          2) swap"
-debugmsg ${DEBUG_INFO} "          3) root"
-debugmsg ${DEBUG_INFO} "          4) container"
+debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${PARTITION_LAYOUT})"
+
 # We partition the raw device as passed to the script. This is
 # nuke and pave .. so be careful!
-if [ -f ${FDISK_PARTITION_LAYOUT} ]; then
-        fdisk ${PARTITIONTYPE} /dev/${raw_dev} < ${FDISK_PARTITION_LAYOUT} >/dev/null 2>&1
+if [ -f ${PARTITION_LAYOUT} ]; then
+	parted_cmds="mklabel msdos"
+	if [ -n "$INSTALL_USE_GPT" ]; then
+	    parted_cmds="mklabel gpt"
+	fi
+	while read cmd;	do
+	    parted_cmds="$parted_cmds $cmd"
+	done < ${PARTITION_LAYOUT}
+	parted --script /dev/${raw_dev} $parted_cmds >/dev/null 2>&1
+	if [ $? -ne 0 ]; then
+	    debugmsg ${DEBUG_CRIT} "[ERROR]: Failed to partition disk"
+	    exit 1
+	fi
 else
-        debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find the fdisk partitions file ${FDISK_PARTITION_LAYOUT}"
+        debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find the partition script file ${PARTITION_LAYOUT}"
         exit 1
 fi
+
 # For filesystem creation, we need the partitions. But some devices
 # name them differently than a hard disk (i.e mmcblk or nbd) and 
 # have 'p' in the partion names. In that case, we need to create a
@@ -442,7 +436,7 @@ mkswap -L $SWAPLABEL /dev/${fs_dev}2
 
 set -e
 debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
-mkfs.vfat -I -n $BOOTLABEL /dev/${fs_dev}1
+mkfs.vfat -F32 -I -n $BOOTLABEL /dev/${fs_dev}1
 
 ## define the device file names for rootfs and container filesystem
 rootfs_dev=${fs_dev}3
@@ -498,6 +492,7 @@ debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
 tar --warning=no-timestamp --numeric-owner \
     --xattrs --xattrs-include=security\\.ima -xpf "${rootfs}"
 
+# mount the boot partition
 if [ -z "${BOOTTMPMNT}" ]; then
     BOOTTMPMNT=`mktemp -d /tmp/pulsarmountXXXXX`
     export BOOTTMPMNT
@@ -568,6 +563,8 @@ if [ -n "${INSTALL_MODULES}" ]; then
 	tar --numeric-owner -xpf ${INSTALL_MODULES}
 fi
 
+# unmount the /boot partition so we can
+# remount it as part of TMPMNT
 umount ${BOOTTMPMNT}/mnt
 
 if [ $btrfs -eq 1 ]; then
@@ -581,9 +578,10 @@ if [ $btrfs -eq 1 ]; then
 	umount ${TMPMNT}/rootfs/mnt
 	umount ${TMPMNT}/
 	mount -o subvolid=${subvol} /dev/${rootfs_dev} ${TMPMNT}
-	mount /dev/${fs_dev}1 ${TMPMNT}/mnt
 	cd ${TMPMNT}/
 fi
+# remount /boot
+mount /dev/${fs_dev}1 ${TMPMNT}/mnt
 
 # A fixup for virtual installs. If we've booted off a usb device
 # our device will be 'vdb', but since qemu can't re-order bootable
@@ -604,88 +602,32 @@ if ${X86_ARCH}; then
     chroot ${TMPMNT} /bin/bash -c "mount -t proc proc /proc"
     chroot ${TMPMNT} /bin/bash -c "mount -t sysfs sys /sys"
 
-    if [ -n "$loop_device" ]; then
-	chroot ${TMPMNT} /bin/bash -c "grub-install --target=i386-pc --force --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search chain\" /dev/${raw_dev}"
+    grub_target=$(ls ${TMPMNT}/usr/lib*/grub/)
+    echo "$grub_target" | grep -q "efi"
+    if [ $? -eq 0 ]; then
+	efi=t
+	chroot ${TMPMNT} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force --removable --efi-directory=/mnt /dev/${raw_dev}"
     else
-	chroot ${TMPMNT} /bin/bash -c "grub-install --target=i386-pc --boot-directory=/mnt --force /dev/${raw_dev}"
+	chroot ${TMPMNT} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force /dev/${raw_dev}"
     fi
 
-    mkdir -p ${TMPMNT}/mnt/grub
-    cat <<EOF >${TMPMNT}/mnt/grub/grub.cfg
-set default="0"
+    debugmsg ${DEBUG_INFO} "[INFO]: setting grub up"
+    write_grub_cfg "" "OVERCBOOT" "OVERCROOTFS" ${TMPMNT}/mnt/grub/grub.cfg
 
-serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1
-terminal_input console serial
-terminal_output console serial
-set timeout=5
-
-menuentry "$DISTRIBUTION" {
-	insmod gzio
-	insmod ext2
-	insmod fat
-	search --no-floppy --label OVERCBOOT --set=root 
-	echo	'Loading Linux ...'
-	linux	/bzImage root=LABEL=OVERCROOTFS ro rootwait $GRUB_KERNEL_PARAMS
-	echo	'Loading initial ramdisk ...'
-	initrd	/initrd
-}
-
-menuentry "$DISTRIBUTION recovery" {
-        insmod gzio
-        insmod ext2
-        insmod fat
-        search --no-floppy --label OVERCBOOT --set=root 
-        echo    'Loading Linux ...'
-        linux   /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
-        echo    'Loading initial ramdisk ...'
-        initrd  /initrd
-}
-
-EOF
-
-    debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
-    
-    # fixups for virtual installs
-    if [ "${raw_dev}" = "vdb" ]; then
-	sed -i "s/${raw_dev}/${final_dev}/" ${TMPMNT}/boot/grub/grub.cfg
-    fi
-
-    if [ -f boot/efi/EFI/BOOT/boot*.efi ]; then
-	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
-	mkdir -p ${TMPMNT}/mnt/EFI/BOOT
-	cp -a boot/efi/EFI ${TMPMNT}/mnt
-
+    if [ -n "$efi" ]; then
 	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
-	    cp "${INSTALL_GRUBEFI_CFG}" ${TMPMNT}/mnt/EFI/BOOT/grub.cfg
-	elif [ ! -f ${TMPMNT}/mnt/EFI/BOOT/grub.cfg ]; then
-	    cat <<EOF >${TMPMNT}/mnt/EFI/BOOT/grub.cfg
-set default="0"
-set timeout=5
-set color_normal='light-gray/black'
-set color_highlight='light-green/blue'
-
-menuentry "$DISTRIBUTION" {
-       chainloader /bzImage root=LABEL=OVERCROOTFS ro rootwait initrd=/initrd
-}
-
-menuentry "$DISTRIBUTION recovery" {
-       chainloader /bzImage_bakup root=LABEL=OVERCROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/initrd
-}
-
-menuentry 'Automatic Key Provision' {
-       chainloader /EFI/BOOT/LockDown.efi
-}
-EOF
+	    debugmsg ${DEBUG_INFO} "[INFO]: Using user supplied config '${INSTALL_GRUBEFI_CFG}'"
+	    cp "${INSTALL_GRUBEFI_CFG}" ${TMPMNT}/mnt/grub/grub.cfg
+	else
+	    debugmsg ${DEBUG_INFO} "[INFO]: Using 'hardcoded' config"
+	    write_grub_efi_cfg "" "OVERCROOTFS" ${TMPMNT}/mnt/grub/grub.cfg
 	fi
-
 	echo `basename ${TMPMNT}/mnt/EFI/BOOT/boot*.efi` >${TMPMNT}/mnt/startup.nsh
 	chmod +x ${TMPMNT}/mnt/startup.nsh
-    else
-	install -m 0755 ${SBINDIR}/startup.nsh ${TMPMNT}/mnt/
-	sed -i "s/%ROOTLABEL%/${ROOTLABEL}/" ${TMPMNT}/mnt/startup.nsh
-	sed -i "s/%INITRD%/${initrd}/" ${TMPMNT}/mnt/startup.nsh
-	sed -i "s/%BZIMAGE%/bzImage/" ${TMPMNT}/mnt/startup.nsh
     fi
+
+    debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
+
 else # arm architecture
     if [ -e "${INSTALL_DTB}" ]; then
         install_dtb "${TMPMNT}/mnt" "${INSTALL_DTB}"

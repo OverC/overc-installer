@@ -399,11 +399,6 @@ create_partition()
 	fi
 
 	debugmsg ${DEBUG_INFO} "Creating partition ${device}${partnum}"
-	# use parted to mklabel msdos if no partition table yet exists on the device
-	unknown_part_table=$(parted /dev/${device} print 2>/dev/null | grep 'Partition Table' | grep -c unknown)
-	if [ $unknown_part_table -eq 1 ]; then
-	    ${CMD_PARTED} -s /dev/${device} "mklabel msdos" > /dev/null 2>&1
-	fi
 	${CMD_PARTED} -s /dev/${device} "mkpart primary ${fstype} ${part_start} ${part_end}" > /dev/null 2>&1
 	
 	if [ $? -ne 0 ]
@@ -571,43 +566,12 @@ install_bootloader()
     echo "install_bootloader: default function, add implementation via: override_function"
 }
 
-install_grub()
+write_grub_cfg()
 {
-    local device="$1"
-    local bootpoint="$2"
-    local mountpoint="$3"
-
-    # if we are installing to a nbd device, assume that we are working in
-    # a virtual environment, and use "vda" as the boot device
-    echo ${device} | grep -q nbd
-    if [ $? -eq 0 ]; then
-        p2="vda2"
-    else
-        p2="${device}2"
-    fi
-
-    # Create a mountpoint for bootpoint under mountpoint
-    mkdir -p ${mnt2}/mnt
-    mount --bind ${mnt1} ${mnt2}/mnt
-
-    debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
-
-    if ! [ -n "$DISTRIBUTION" ]; then
-        DISTRIBUTION="OverC"
-    fi
-
-    chroot ${mountpoint} /bin/bash -c "mount -t devtmpfs none /dev"
-    chroot ${mountpoint} /bin/bash -c "mount -t proc proc /proc"
-    chroot ${mountpoint} /bin/bash -c "mount -t sysfs sys /sys"
-
-    if [ -n "$loop_device" ]; then
-	chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --force --boot-directory=/mnt --modules=\" boot linux ext2 fat serial part_msdos part_gpt normal iso9660 search chain\" /dev/${device}"
-    else
-	chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=i386-pc --boot-directory=/mnt --force /dev/${device}"
-    fi
-
-    mkdir -p ${mountpoint}/mnt/grub
-    cat <<EOF >${mountpoint}/mnt/grub/grub.cfg
+	local base="$1"
+	local bootlabel=$2
+	local rootlabel=$3
+	cat <<EOF >"$4"
 set default="0"
 
 serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1
@@ -619,102 +583,149 @@ menuentry "$DISTRIBUTION" {
 	insmod gzio
 	insmod ext2
 	insmod fat
-	search --no-floppy --label INSTBOOT --set=root
+	search --no-floppy --label $bootlabel --set=root
 	echo	'Loading Linux ...'
-	linux	/images/bzImage root=LABEL=INSTROOTFS ro rootwait $GRUB_KERNEL_PARAMS
+	linux	$base/bzImage root=LABEL=$rootlabel ro rootwait $GRUB_KERNEL_PARAMS
 	echo	'Loading initial ramdisk ...'
-	initrd	/images/initrd
+	initrd	$base/initrd
 }
 
 menuentry "$DISTRIBUTION recovery" {
         insmod gzio
         insmod ext2
         insmod fat
-        search --no-floppy --label INSTBOOT --set=root
+        search --no-floppy --label $bootlabel --set=root
         echo    'Loading Linux ...'
-        linux   /images/bzImage_bakup root=LABEL=INSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
+        linux   $base/bzImage_bakup root=LABEL=$rootlabel rootflags=subvol=rootfs_bakup ro rootwait $GRUB_RECOVERY_KERNEL_PARAMS
         echo    'Loading initial ramdisk ...'
-        initrd  /images/initrd
+        initrd  $base/initrd
 }
 
 EOF
+}
 
-    if [ -f ${mountpoint}/boot/efi/EFI/BOOT/boot*.efi ]; then
-	debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
-	mkdir -p ${mountpoint}/mnt/EFI/BOOT
-	cp -a ${mountpoint}/boot/efi/EFI ${mountpoint}/mnt
-
-	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
-	    cp -rf "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/grub/grub.cfg
-	else
-	    if [ -f ${mountpoint}/mnt/EFI/BOOT/grub.cfg ]; then
-	         debugmsg ${DEBUG_INFO} "[WARN]: Overriding provided EFI/BOOT/grub.cfg"
-	    else
-	         debugmsg ${DEBUG_INFO} "[INFO]: Writing EFI/BOOT/grub.cfg"
-	    fi
-	    cat <<EOF >${mountpoint}/mnt/EFI/BOOT/grub.cfg
+write_grub_efi_cfg()
+{
+	local base="$1"
+	local rootlabel=$2
+	cat <<EOF >"$3"
 set default="0"
 set timeout=5
 set color_normal='light-gray/black'
 set color_highlight='light-green/blue'
 
 menuentry "$DISTRIBUTION" {
-       chainloader /images/bzImage root=LABEL=INSTROOTFS ro rootwait initrd=/images/initrd
+       chainloader $base/bzImage root=LABEL=$rootlabel ro rootwait initrd=$base/initrd
 }
 
 menuentry "$DISTRIBUTION recovery" {
-       chainloader /images/bzImage_bakup root=LABEL=INSTROOTFS rootflags=subvol=rootfs_bakup ro rootwait initrd=/images/initrd
+       chainloader $base/bzImage_bakup root=LABEL=$rootlabel rootflags=subvol=rootfs_bakup ro rootwait initrd=$base/initrd
 }
 
 menuentry 'Automatic Key Provision' {
        chainloader /EFI/BOOT/LockDown.efi
 }
 EOF
-	fi
+}
 
-	echo `basename ${mountpoint}/mnt/EFI/BOOT/boot*.efi` >${mountpoint}/mnt/startup.nsh
-	chmod +x ${mountpoint}/mnt/startup.nsh
-    fi
+make_cfg_substitutions()
+{
+	cfg_file=$1
 
-    debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
-
-	if [ -n "${INSTALL_KERNEL}" ]; then
+	if [ -f ${cfg_file} ] && [ -n "${INSTALL_KERNEL}" ]; then
 		local kernel_name=`basename ${INSTALL_KERNEL}`
-		sed "s|%INSTALL_KERNEL%|${kernel_name}|" -i ${mountpoint}/mnt/grub/grub.cfg
-		sed "s|%INSTALL_INITRAMFS%|initrd|" -i ${mountpoint}/mnt/grub/grub.cfg
-		sed "s|%INSTALLER_PARTITION%|${p2}|" -i ${mountpoint}/mnt/grub/grub.cfg
-		sed "s|%ROOTFS_LABEL%|${ROOTFS_LABEL}|" -i ${mountpoint}/mnt/grub/grub.cfg
-		if ! [ -n "$DISTRIBUTION" ]; then
-			DISTRIBUTION="OverC"
+		sed -e "s|%INSTALL_KERNEL%|${kernel_name}|" \
+		    -e "s|%INSTALL_INITRAMFS%|initrd|" \
+		    -e "s|%INSTALLER_PARTITION%|${p2}|" \
+		    -e "s|%ROOTFS_LABEL%|${ROOTFS_LABEL}|" -i ${cfg_file}
+		if [ -z "$DISTRIBUTION" ]; then
+		        DISTRIBUTION="OverC"
 		fi
-		sed "s|%DISTRIBUTION%|${DISTRIBUTION}|" -i ${mountpoint}/mnt/grub/grub.cfg
+		sed "s|%DISTRIBUTION%|${DISTRIBUTION}|" -i ${cfg_file}
 	else
 		debugmsg ${DEBUG_CRIT} "ERROR: Could not update grub configuration with install kernel"
 		return 1
 	fi
-	
-	#install efi boot
+}
 
-	if [ -n "${INSTALL_EFIBOOT}" ] && [ -e "${INSTALL_EFIBOOT}" ]; then
-		debugmsg ${DEBUG_INFO} "Installing the EFI bootloader"
-		mkdir -p ${mountpoint}/mnt/EFI/BOOT/
-		cp $INSTALL_EFIBOOT ${mountpoint}/mnt/EFI/BOOT/
-		cp ${mountpoint}/mnt/grub/grub.cfg ${mountpoint}/mnt/EFI/BOOT/
-		selsign "${mountpoint}/mnt/EFI/BOOT/grub.cfg"
-		echo `basename $INSTALL_EFIBOOT` >${mountpoint}/mnt/startup.nsh
+install_grub()
+{
+	local device="$1"
+	local bootpoint="$2"
+	local mountpoint="$3"
+	local efi=""
+
+	# if we are installing to a nbd device, assume that we are working in
+	# a virtual environment, and use "vda" as the boot device
+	echo ${device} | grep -q nbd
+	if [ $? -eq 0 ]; then
+	    p2="vda2"
 	else
-		cp ${BASEDIR}/startup.nsh ${mountpoint}/
-		sed -i "s/%ROOTLABEL%/${ROOTFS_LABEL}/" ${mountpoint}/startup.nsh
-		sed -i "s/%INITRD%/\/images\/${initramfs_name}/" ${mountpoint}/startup.nsh
-		sed -i "s/%BZIMAGE%/\\\images\\\bzImage/" ${mountpoint}/startup.nsh
+	    p2="${device}2"
 	fi
-	chmod +x ${mountpoint}/mnt/startup.nsh
+
+	# Create a mountpoint for bootpoint under mountpoint
+	mkdir -p ${mountpoint}/mnt
+	mount --bind ${bootpoint} ${mountpoint}/mnt
+
+	debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
+
+	if ! [ -n "$DISTRIBUTION" ]; then
+	    DISTRIBUTION="OverC"
+	fi
+
+	chroot ${mountpoint} /bin/bash -c "mount -t devtmpfs none /dev"
+	chroot ${mountpoint} /bin/bash -c "mount -t proc proc /proc"
+	chroot ${mountpoint} /bin/bash -c "mount -t sysfs sys /sys"
+
+	grub_target=$(ls ${mountpoint}/usr/lib*/grub/)
+	echo "$grub_target" | grep -q "efi"
+	if [ $? -eq 0 ]; then
+		efi=t
+		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force --removable --efi-directory=/mnt /dev/${device}"
+	else
+		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force /dev/${device}"
+	fi
+
+	# NOTE: grub-install will install BOOTX64.EFI which will search for the grub.cfg
+	# in /boot/grub/grub.cfg. User supplied INSTALL_EFIBOOT firmware files may search
+	# for grub.cfg in /boot/EFI/BOOT/ (the current default if using bitbake artifacts)
+	debugmsg ${DEBUG_INFO} "[INFO]: setting grub up"
+	write_grub_cfg "/images" "OVERCBOOT" "OVERCINSTROOTFS" ${mountpoint}/mnt/grub/grub.cfg
+
+	if [ -n "$efi" ]; then
+		if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
+			debugmsg ${DEBUG_INFO} "[INFO]: Using user supplied config '${INSTALL_GRUBEFI_CFG}'"
+			cp -rf "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/grub/grub.cfg
+		else
+			debugmsg ${DEBUG_INFO} "[INFO]: Using 'hardcoded' config"
+			write_grub_efi_cfg "/images" "OVERCINSTROOTFS" ${mountpoint}/mnt/grub/grub.cfg
+		fi
+		echo `basename ${mountpoint}/mnt/EFI/BOOT/boot*.efi` >${mountpoint}/mnt/startup.nsh
+		make_cfg_substitutions ${mountpoint}/mnt/grub/grub.cfg
+		assert $?
+
+		if [ -n "${INSTALL_EFIBOOT}" ] && [ -e "${INSTALL_EFIBOOT}" ]; then
+			debugmsg ${DEBUG_INFO} "[INFO]: Installing user supplied EFI '${INSTALL_EFIBOOT}'"
+			# Most UEFI will search for BOOTX64.EFI before resorting to startup.nsh
+			# so install $INSTALL_EFIBOOT as BOOTX64.EFI to speed up the boot and to
+			# prevent the default BOOTX64.EFI installed by grub-install being used.
+			cp $INSTALL_EFIBOOT ${mountpoint}/mnt/EFI/BOOT/BOOTX64.EFI
+			mv ${mountpoint}/mnt/grub/grub.cfg ${mountpoint}/mnt/EFI/BOOT/
+			selsign "${mountpoint}/mnt/EFI/BOOT/grub.cfg"
+			echo BOOTX64.EFI >${mountpoint}/mnt/startup.nsh
+		fi
+		chmod +x ${mountpoint}/mnt/startup.nsh
+	fi
+
+	debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
 
 	umount ${mountpoint}/mnt
 
 	chroot ${mountpoint} /bin/bash -c "umount /sys"
 	chroot ${mountpoint} /bin/bash -c "umount /proc"
 	chroot ${mountpoint} /bin/bash -c "umount /dev"
+
 	return 0
 }
 
@@ -1109,18 +1120,25 @@ installer_main()
 	assert $?
 	
 	## Unmount any partitions on device
-	umount_partitions "$dev"
+	umount_partitions "$device"
 	assert $?
-	
-	## Remove all existing partitions
-	remove_partitions "$dev"
-	assert $?
+
+	## Create GPT table unless MBR(msdos) is desired. Since we are creating
+	## a new partition table there is no need to remove existing partitions.
+	if [ -n "$INSTALL_USE_GPT" ]
+	then
+	    debugmsg ${DEBUG_INFO} "Creating new GPT partition table"
+	    ${CMD_PARTED} -s /dev/${device} "mklabel gpt" > /dev/null 2>&1
+	else
+	    debugmsg ${DEBUG_INFO} "Creating new MBR partition table"
+	    ${CMD_PARTED} -s /dev/${device} "mklabel msdos" > /dev/null 2>&1
+	fi
 	
 	## Create new partitions
 	debugmsg ${DEBUG_INFO} "Creating new partitions"
-	create_partition "${dev}" 1 ${BOOTPART_FSTYPE} ${BOOTPART_START} ${BOOTPART_END}
+	create_partition "${device}" 1 ${BOOTPART_FSTYPE} ${BOOTPART_START} ${BOOTPART_END}
 	assert $?
-	create_partition "${dev}" 2 ${ROOTFS_FSTYPE} ${ROOTFS_START} ${ROOTFS_END}
+	create_partition "${device}" 2 ${ROOTFS_FSTYPE} ${ROOTFS_START} ${ROOTFS_END}
 	assert $?
 
 	# make first partition bootable
@@ -1134,13 +1152,13 @@ installer_main()
 	# Give the system 30 seconds to do the job
 	while [ ${try_cnt} -lt 30 ];
 	do
-		if [ -e /dev/${dev}1 ]; then
-			p1="${dev}1"
-			p2="${dev}2"
+		if [ -e /dev/${device}1 ]; then
+			p1="${device}1"
+			p2="${device}2"
 		fi
-		if [ -e /dev/${dev}p1 ]; then
-			p1="${dev}p1"
-			p2="${dev}p2"
+		if [ -e /dev/${device}p1 ]; then
+			p1="${device}p1"
+			p2="${device}p2"
 		fi
 		if [ -n "${p1}" ] && [ -n "${p2}" ]; then break; fi
 		let try_cnt++
@@ -1153,17 +1171,16 @@ installer_main()
 
 	## Create new filesystems
 	debugmsg ${DEBUG_INFO} "Creating new filesystems "
-	if [ ! -n $BOOTPART_LABEL ]; then
-		BOOTPART_LABEL=INSTBOOT
+	if [ -z "$BOOTPART_LABEL" ]; then
+		BOOTPART_LABEL=OVERCBOOT
 	fi
 	debugmsg ${DEBUG_INFO} "Creating Partition:${p1} Type:${BOOTPART_FSTYPE} Label:${BOOTPART_LABEL}"
 	create_filesystem "${p1}" "${BOOTPART_FSTYPE}" "${BOOTPART_LABEL}"
 	assert $?
 
-	if [ ! -n $ROOTFS_LABEL ]; then
-		ROOTFS_LABEL=INSTROOTFS
+	if [ -z "$ROOTFS_LABEL" ]; then
+		ROOTFS_LABEL=OVERCINSTROOTFS
 	fi
-
 	debugmsg ${DEBUG_INFO} "Creating Partition:${p2} Type:${ROOTFS_FSTYPE} Label:${ROOTFS_LABEL}"
 	create_filesystem "${p2}" "${ROOTFS_FSTYPE}" "${ROOTFS_LABEL}"
 	assert $?
@@ -1188,11 +1205,11 @@ installer_main()
 
 	## Install Bootloader
 	if ${X86_ARCH}; then
-		install_grub "${dev}" "${mnt1}" "${mnt2}"
+		install_grub "${device}" "${mnt1}" "${mnt2}"
 		assert $?
 	else	# arm architecture
 		install_dtb "${mnt1}" "${INSTALL_DTB}"
-		install_bootloader "${dev}" "${mnt1}" "${INSTALL_BOOTLOADER}" "${BOARD_NAME}"
+		install_bootloader "${device}" "${mnt1}" "${INSTALL_BOOTLOADER}" "${BOARD_NAME}"
 	fi
 
 	clean_up

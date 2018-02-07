@@ -58,7 +58,7 @@ cat << EOF
 		  The configuration script indicates what specific images will be used
 
      --loop <loop device>: if the default / automatic selection of the loopback device
-                           is causing partitioning/fdisk errors an explicit loop device
+                           is causing partitioning errors an explicit loop device
                            can be specified, i.e. --loop /dev/loop2
      --ima-sign: perform IMA signing for the rootfs and container images
      --ima-key-pass: the password of IMA signing key
@@ -164,7 +164,7 @@ while [ $# -gt 0 ]; do
     -v) verbose=t
             ;;
     --partition_layout)
-            FDISK_PARTITION_LAYOUT_INPUT="$2"
+            PARTITION_LAYOUT_INPUT="$2"
             shift
             ;;
          *) break
@@ -657,7 +657,7 @@ IFS=$OLDIFS
 		for d in ${CONFIG_DIRS} ${INSTALLER_FILES_DIR}; do
 			if [ -e ${d}/${INSTALL_GRUBUSBCFG} ] &&
 			[ ! -e ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBUSBCFG} ]; then
-				debugmsg ${DEBUG_CRIT} "INFO: found grub hd configuration ${d}/${INSTALL_GRUBUSBCFG}"
+				debugmsg ${DEBUG_CRIT} "INFO: found grub usb configuration ${d}/${INSTALL_GRUBUSBCFG}"
 				cp ${d}/${INSTALL_GRUBUSBCFG} ${mnt_rootfs}${INSTALLER_TARGET_FILES_DIR}/${INSTALL_GRUBUSBCFG}
 			fi
 
@@ -883,11 +883,11 @@ case $TARGET_TYPE in
 		installer_main "$dev"
 	else
 
-		if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ];then
+		if [ -n "${PARTITION_LAYOUT_INPUT}" ];then
 		    debugmsg ${DEBUG_INFO} $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
-			    --config ${TARGET_CONFIG_FILE} --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
+			    --config ${TARGET_CONFIG_FILE} --partition_layout ${PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
 		    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
-			    --config ${TARGET_CONFIG_FILE} --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
+			    --config ${TARGET_CONFIG_FILE} --partition_layout ${PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
 		else
 		    debugmsg ${DEBUG_INFO} $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
 			    --config ${TARGET_CONFIG_FILE} ${INSTALL_ROOTFS} $device
@@ -959,11 +959,11 @@ case $TARGET_TYPE in
 		installer_main "$dev"
 	else
 
-		if [ -n "${FDISK_PARTITION_LAYOUT_INPUT}" ];then
+		if [ -n "${PARTITION_LAYOUT_INPUT}" ];then
 		    debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} \
-			    --config ${TARGET_CONFIG_FILE} $device --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT}"
+			    --config ${TARGET_CONFIG_FILE} $device --partition_layout ${PARTITION_LAYOUT_INPUT}"
 		    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
-			    --config ${TARGET_CONFIG_FILE} --partition_layout ${FDISK_PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
+			    --config ${TARGET_CONFIG_FILE} --partition_layout ${PARTITION_LAYOUT_INPUT} ${INSTALL_ROOTFS} $device
 		else
 		    debugmsg ${DEBUG_INFO} "$INSTALLERS_DIR/cubeit ${INSTALL_ROOTFS} --config ${TARGET_CONFIG_FILE} $device"
 		    $INSTALLERS_DIR/cubeit-installer -b --artifacts ${ARTIFACTS_DIR} \
