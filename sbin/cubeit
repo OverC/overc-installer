@@ -606,8 +606,8 @@ custom_install_rules()
 
 	# Copy partition_layout file to ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR} if it is specified,
 	# so that the partition file could be packaged into the installer image
-	if [ -n ${FDISK_PARTITION_LAYOUT_INPUT} ]; then
-		if [ ! -e ${FDISK_PARTITION_LAYOUT_INPUT} ]; then
+	if [ -n "${PARTITION_LAYOUT_INPUT}" ]; then
+		if [ ! -e ${PARTITION_LAYOUT_INPUT} ]; then
 			debugmsg ${DEBUG_CRIT} "ERROR: Failed to locate partition file"
 			return 1
 		fi
@@ -615,7 +615,7 @@ custom_install_rules()
 		recursive_mkdir ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}
 		assert_return $?
 		
-		cp -f "${FDISK_PARTITION_LAYOUT_INPUT}" ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}
+		cp -f "${PARTITION_LAYOUT_INPUT}" ${mnt_rootfs}${INSTALLER_TARGET_CONFIG_DIR}
 		if [ $? -ne 0 ]; then
 			debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy partition file"
 			return 1
