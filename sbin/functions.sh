@@ -678,8 +678,7 @@ install_grub()
 	chroot ${mountpoint} /bin/bash -c "mount -t proc proc /proc"
 	chroot ${mountpoint} /bin/bash -c "mount -t sysfs sys /sys"
 
-	grub_target=$(ls ${mountpoint}/usr/lib*/grub/)
-	echo "$grub_target" | grep -q "efi"
+	grub_target=`ls ${mountpoint}/usr/lib*/grub/ | grep "efi"`
 	if [ $? -eq 0 ]; then
 		efi=t
 		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force --removable --efi-directory=/mnt /dev/${device}"
