@@ -678,7 +678,30 @@ install_grub()
 	chroot ${mountpoint} /bin/bash -c "mount -t proc proc /proc"
 	chroot ${mountpoint} /bin/bash -c "mount -t sysfs sys /sys"
 
-	grub_target=$(ls ${mountpoint}/usr/lib*/grub/)
+	grub_target=$(ls ${mountpoint}/usr/lib*/grub/ | tr '\n' ' ')
+	num_grub_targets=$(echo $grub_target | wc -w)
+	if [ $num_grub_targets -eq 1 ]; then
+	    if [ "$grub_target" != "$GRUB_TARGET" ]; then
+		debugmsg ${DEBUG_INFO} "[INFO]: Ignoring GRUB_TARGET ($GRUB_TARGET not found). Using $grub_target."
+	    fi
+	else
+	    if [ -z "$GRUB_TARGET" ]; then
+		gt=$(echo $grub_target | awk '{print $1;}')
+		debugmsg ${DEBUG_INFO} "[INFO]: Multiple grub targets available ($grub_target). Using $gt."
+		debugmsg ${DEBUG_INFO} "[INFO]: Overwrite default selection by setting GRUB_TARGET."
+		grub_target=$gt
+	    else
+		$(echo $grub_target | grep -qE "(^| )$GRUB_TARGET( |$)")
+		if [ $? -ne 0 ]; then
+		    gt=$(echo $grub_target | awk '{print $1;}')
+		    debugmsg ${DEBUG_INFO} "[INFO]: Ignoring GRUB_TARGET ($GRUB_TARGET not found). Using $gt."
+		    debugmsg ${DEBUG_INFO} "[INFO]: Set GRUB_TARGET to one of ($grub_target) to overwrite."
+		    grub_target=$gt
+		else
+		    grub_target=$GRUB_TARGET
+		fi
+	    fi
+	fi
 	echo "$grub_target" | grep -q "efi"
 	if [ $? -eq 0 ]; then
 		efi=t
