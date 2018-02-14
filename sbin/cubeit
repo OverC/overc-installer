@@ -531,7 +531,7 @@ install_summary()
     echo "             $package_count packages available from: ${PACKAGES_DIR}"
     echo "   containers: "
     for i in ${HDINSTALL_CONTAINERS}; do
-        echo "             `basename ${i}`"
+        echo "             $(basename $(echo ${i} | cut -d':' -f1))"
     done
     echo ""
 
