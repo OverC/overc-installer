@@ -729,10 +729,11 @@ ln -sf /lib/systemd/system/getty@.service ${TMPMNT}/etc/systemd/system/getty.tar
 
 # Disable all unneeded services in essential
 if [ -z "${SERVICE_DISABLE_ESSENTIAL}" ]; then
-    SERVICE_DISABLE_ESSENTIAL="systemd-resolved.service systemd-networkd.service systemd-timesyncd.service xinetd.service dnf-makecache.service"
+    SERVICE_DISABLE_ESSENTIAL="systemd-resolved.service systemd-timesyncd.service xinetd.service dnf-makecache.service"
 fi
 if [ -n "${SERVICE_DISABLE_ESSENTIAL}" ]; then
     for s in ${SERVICE_DISABLE_ESSENTIAL}; do
+        echo "[INFO]: disabling $s for essential"
         service_disable ${s}
     done
 fi
