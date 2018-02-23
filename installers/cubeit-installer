@@ -660,6 +660,12 @@ if ${X86_ARCH}; then
 
     debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
 
+    if [ -f ${TMPMNT}/boot/efi/EFI/BOOT/boot*.efi ]; then
+        debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
+        mkdir -p ${TMPMNT}/mnt/EFI/BOOT
+	cp -a ${TMPMNT}/boot/efi/EFI ${TMPMNT}/mnt
+    fi
+
 else # arm architecture
     if [ -e "${INSTALL_DTB}" ]; then
         install_dtb "${TMPMNT}/mnt" "${INSTALL_DTB}"
