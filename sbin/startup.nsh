@@ -1,5 +1,5 @@
 set fs fs0
-set root LABEL=%ROOTLABEL%
+set root LABEL=%ROOTFS_LABEL%
 set args "initrd=%INITRD% rootwait"
 
 %fs%:

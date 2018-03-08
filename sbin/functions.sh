@@ -571,6 +571,7 @@ write_grub_cfg()
 	local base="$1"
 	local bootlabel=$2
 	local rootlabel=$3
+	mkdir -p "$(dirname $4)"
 	cat <<EOF >"$4"
 set default="0"
 
@@ -664,9 +665,11 @@ install_grub()
 	    p2="${device}2"
 	fi
 
-	# Create a mountpoint for bootpoint under mountpoint
-	mkdir -p ${mountpoint}/mnt
-	mount --bind ${bootpoint} ${mountpoint}/mnt
+	if [ -n "${bootpoint}" ] ; then
+	    # Create a mountpoint for bootpoint under mountpoint
+	    mkdir -p ${mountpoint}/mnt
+	    mount --bind ${bootpoint} ${mountpoint}/mnt
+	fi
 
 	debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
 
@@ -691,30 +694,40 @@ install_grub()
 		debugmsg ${DEBUG_INFO} "[INFO]: Overwrite default selection by setting GRUB_TARGET."
 		grub_target=$gt
 	    else
-		$(echo $grub_target | grep -qE "(^| )$GRUB_TARGET( |$)")
-		if [ $? -ne 0 ]; then
-		    gt=$(echo $grub_target | awk '{print $1;}')
-		    debugmsg ${DEBUG_INFO} "[INFO]: Ignoring GRUB_TARGET ($GRUB_TARGET not found). Using $gt."
-		    debugmsg ${DEBUG_INFO} "[INFO]: Set GRUB_TARGET to one of ($grub_target) to overwrite."
-		    grub_target=$gt
-		else
-		    grub_target=$GRUB_TARGET
+		orig_grub_target="$grub_target"
+		grub_target=""
+		for g_check in $GRUB_TARGET; do
+		    echo $orig_grub_target | grep -qE $g_check
+		    if [ $? -ne 0 ]; then
+			debugmsg ${DEBUG_INFO} "[INFO]: Ignoring GRUB_TARGET ($GRUB_TARGET not found)."
+			debugmsg ${DEBUG_INFO} "[INFO]: Set GRUB_TARGET to one of ($orig_grub_target) to overwrite."
+		    else
+			grub_target="$grub_target $g_check"
+		    fi
+		done
+		if [ -z "$grub_target" ] ; then
+		    debugmsg ${DEBUG_INFO} "[INFO]: Set GRUB_TARGET empty using ($orig_grub_target)."
+		    grub_target="$orig_grub_target"
 		fi
 	    fi
 	fi
-	echo "$grub_target" | grep -q "efi"
-	if [ $? -eq 0 ]; then
+	local g_efi
+	for g_check in $grub_target; do 
+	    echo "{$g_check}" | grep -q "efi"
+	    if [ $? -eq 0 ]; then
 		efi=t
-		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force --removable --efi-directory=/mnt /dev/${device}"
-	else
-		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force /dev/${device}"
-	fi
+		g_efi=${g_check}
+		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=${g_check} --boot-directory=/mnt --force --removable --efi-directory=/mnt /dev/${device}"
+	    else
+		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=${g_check} --boot-directory=/mnt --force /dev/${device}"
+	    fi
+	done
 
 	# NOTE: grub-install will install BOOTX64.EFI which will search for the grub.cfg
 	# in /boot/grub/grub.cfg. User supplied INSTALL_EFIBOOT firmware files may search
 	# for grub.cfg in /boot/EFI/BOOT/ (the current default if using bitbake artifacts)
 	debugmsg ${DEBUG_INFO} "[INFO]: setting grub up"
-	write_grub_cfg "/images" "OVERCBOOT" "OVERCINSTROOTFS" ${mountpoint}/mnt/grub/grub.cfg
+	write_grub_cfg "" "OVERCBOOT" "${ROOTFS_LABEL}" ${mountpoint}/mnt/grub/grub.cfg
 
 	if [ -n "$efi" ]; then
 		if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
@@ -722,7 +735,7 @@ install_grub()
 			cp -rf "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/grub/grub.cfg
 		else
 			debugmsg ${DEBUG_INFO} "[INFO]: Using 'hardcoded' config"
-			write_grub_efi_cfg "/images" "OVERCINSTROOTFS" ${mountpoint}/mnt/grub/grub.cfg
+			write_grub_efi_cfg "" "${ROOTFS_LABEL}" ${mountpoint}/mnt/EFI/BOOT/grub.cfg
 		fi
 		echo `basename ${mountpoint}/mnt/EFI/BOOT/boot*.efi` >${mountpoint}/mnt/startup.nsh
 		make_cfg_substitutions ${mountpoint}/mnt/grub/grub.cfg
@@ -734,16 +747,23 @@ install_grub()
 			# so install $INSTALL_EFIBOOT as BOOTX64.EFI to speed up the boot and to
 			# prevent the default BOOTX64.EFI installed by grub-install being used.
 			cp $INSTALL_EFIBOOT ${mountpoint}/mnt/EFI/BOOT/BOOTX64.EFI
-			mv ${mountpoint}/mnt/grub/grub.cfg ${mountpoint}/mnt/EFI/BOOT/
+			cp ${mountpoint}/mnt/grub/grub.cfg ${mountpoint}/mnt/EFI/BOOT/
 			selsign "${mountpoint}/mnt/EFI/BOOT/grub.cfg"
 			echo BOOTX64.EFI >${mountpoint}/mnt/startup.nsh
+			# Finally if the grub modules got installed earlier and they are not
+			# already in the image, move them now
+			if [ -e ${mountpoint}/mnt/grub/$g_efi -a ! -e ${mountpoint}/mnt/EFI/BOOT/$g_efi/ ] ; then
+			    cp -a ${mountpoint}/mnt/grub/$g_efi ${mountpoint}/mnt/EFI/BOOT/$g_efi
+			fi
 		fi
 		chmod +x ${mountpoint}/mnt/startup.nsh
 	fi
 
 	debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
 
-	umount ${mountpoint}/mnt
+	if [ -n "${bootpoint}" ] ; then
+	    umount ${mountpoint}/mnt
+	fi
 
 	chroot ${mountpoint} /bin/bash -c "umount /sys"
 	chroot ${mountpoint} /bin/bash -c "umount /proc"
@@ -762,15 +782,8 @@ install_kernel()
 
 	debugmsg ${DEBUG_INFO} "Installing new kernel image to boot partition"
 
-	mkdir -p ${boot_part}/images
-	if [ $? -ne 0 ]
-	then
-		debugmsg ${DEBUG_CRIT} "ERROR: Failed to create images directory on boot partition"
-		return 1
-	fi
-
-	debugmsg ${DEBUG_INFO} "Copying ${kernel_src} to <boot>/images"
-	cp ${kernel_src} ${boot_part}/images/
+	debugmsg ${DEBUG_INFO} "Copying ${kernel_src} to <boot>"
+	cp ${kernel_src} ${boot_part}/
 	if [ $? -ne 0 ]
 	then
 		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy kernel image to boot partition"
@@ -778,8 +791,8 @@ install_kernel()
 	fi
 
 	if [ -f "${kernel_src}.p7b" ]; then
-	    debugmsg ${DEBUG_INFO} "Copying ${kernel_src}.p7b to <boot>/images"
-	    cp "${kernel_src}.p7b" "${boot_part}/images"
+	    debugmsg ${DEBUG_INFO} "Copying ${kernel_src}.p7b to <boot>"
+	    cp "${kernel_src}.p7b" "${boot_part}"
 	    if [ $? -ne 0 ]
 	    then
 		debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy the signature of kernel image to boot partition"
@@ -788,8 +801,8 @@ install_kernel()
 	fi
 
 	if [ -n ${initramfs} ]; then
-	        debugmsg ${DEBUG_INFO} "Copying ${initramfs} to <boot>/images/${initramfs_dest}"
-		cp ${initramfs} ${boot_part}/images/${initramfs_dest}
+	        debugmsg ${DEBUG_INFO} "Copying ${initramfs} to <boot>/${initramfs_dest}"
+		cp ${initramfs} ${boot_part}/${initramfs_dest}
 		if [ $? -ne 0 ]
 		then
 			debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy initramfs image to boot partition"
@@ -798,9 +811,9 @@ install_kernel()
 
 		if [ -f "${initramfs}.p7b" ]; then
 		    if [ -n "${initramfs_repacked}" ]; then
-			selsign "${boot_part}/images/${initramfs_dest}"
+			selsign "${boot_part}/${initramfs_dest}"
 		    else
-			cp "${initramfs}.p7b" "${boot_part}/images/${initramfs_dest}.p7b"
+			cp "${initramfs}.p7b" "${boot_part}/${initramfs_dest}.p7b"
 			if [ $? -ne 0 ]
 			then
 			    debugmsg ${DEBUG_CRIT} "ERROR: Failed to copy the signature of initramfs image to boot partition"

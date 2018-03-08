@@ -26,6 +26,6 @@ else
 fi
 
 menuentry "Initramfs Installer" --unrestricted {
-	linux /images/%INSTALL_KERNEL% rootwait ima_appraise=off
-        initrd /images/%INSTALL_INITRAMFS%
+	linux /%INSTALL_KERNEL% rootwait ima_appraise=off
+        initrd /%INSTALL_INITRAMFS%
 }

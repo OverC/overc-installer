@@ -371,9 +371,9 @@ fi
 #  3: root
 #  4. containers
 
-BOOTLABEL="OVERCBOOT"
+BOOTPART_LABEL="OVERCBOOT"
 SWAPLABEL="SWAP"
-ROOTLABEL="OVERCROOTFS"
+ROOTFS_LABEL="OVERCROOTFS"
 CONTAINERLABEL="OVERCCN"
 
 # Ensure the parted application is available
@@ -440,7 +440,7 @@ mkswap -L $SWAPLABEL /dev/${fs_dev}2
 
 set -e
 debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
-mkfs.vfat -F32 -I -n $BOOTLABEL /dev/${fs_dev}1
+mkfs.vfat -F32 -I -n $BOOTPART_LABEL /dev/${fs_dev}1
 
 ## define the device file names for rootfs and container filesystem
 rootfs_dev=${fs_dev}3
@@ -453,22 +453,22 @@ fi
 
 if [ $do_encryption -eq 1 ]; then
     ## Evict all objects for the first creation.
-    cmd="luks-setup.sh -f -e -d /dev/${rootfs_dev} -n ${ROOTLABEL}_encrypted"
+    cmd="luks-setup.sh -f -e -d /dev/${rootfs_dev} -n ${ROOTFS_LABEL}_encrypted"
     [ $no_interaction -eq 1 ] && cmd="echo Y | $cmd"
     eval "$cmd"
-    rootfs_dev="mapper/${ROOTLABEL}_encrypted"
+    rootfs_dev="mapper/${ROOTFS_LABEL}_encrypted"
 fi
 
 if [ $btrfs -eq 0 ]; then
     debugmsg ${DEBUG_INFO} "[INFO]: creating / (ext4)"
-    mkfs.ext4 -v -L $ROOTLABEL /dev/${rootfs_dev}
+    mkfs.ext4 -v -L $ROOTFS_LABEL /dev/${rootfs_dev}
     mkfs.ext4 -v -L $CONTAINERLABEL /dev/${container_fs_dev}
 else
     debugmsg ${DEBUG_INFO} "[INFO]: creating / (btrfs)"
     set +e
     has_f=`mkfs.btrfs 2>&1 |grep -q '^.*\-f' && echo -f`
     set -e
-    mkfs.btrfs $has_f -L $ROOTLABEL /dev/${rootfs_dev}
+    mkfs.btrfs $has_f -L $ROOTFS_LABEL /dev/${rootfs_dev}
     mkfs.btrfs $has_f -L $CONTAINERLABEL /dev/${container_fs_dev}
 fi
 set +e
@@ -510,6 +510,7 @@ mkdir -p ${BOOTTMPMNT}/mnt
 mount /dev/${fs_dev}1 ${BOOTTMPMNT}/mnt
 
 ## Process kernel into /boot
+mkdir -p ${BOOTTMPMNT}/mnt/images
 if [ -e "${INSTALL_KERNEL}" ] ; then
 	inst_img=${INSTALL_KERNEL##*}
 	if [ "${inst_img/uImage/}" != "$inst_img" ] ; then
@@ -605,67 +606,7 @@ if [ -z ${final_dev} ]; then
 fi
 
 if ${X86_ARCH}; then
-    debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
-
-    chroot ${TMPMNT} /bin/bash -c "mount -t devtmpfs none /dev"
-    chroot ${TMPMNT} /bin/bash -c "mount -t proc proc /proc"
-    chroot ${TMPMNT} /bin/bash -c "mount -t sysfs sys /sys"
-
-    grub_target=$(ls ${TMPMNT}/usr/lib*/grub/ | tr '\n' ' ')
-    num_grub_targets=$(echo $grub_target | wc -w)
-    if [ $num_grub_targets -eq 1 ]; then
-	if [ "$grub_target" != "$GRUB_TARGET" ]; then
-	    debugmsg ${DEBUG_INFO} "[INFO]: Ignoring GRUB_TARGET ($GRUB_TARGET not found). Using $grub_target."
-	fi
-    else
-	if [ -z "$GRUB_TARGET" ]; then
-	    gt=$(echo $grub_target | awk '{print $1;}')
-	    debugmsg ${DEBUG_INFO} "[INFO]: Multiple grub targets available ($grub_target). Using $gt."
-	    debugmsg ${DEBUG_INFO} "[INFO]: Overwrite default selection by setting GRUB_TARGET."
-	    grub_target=$gt
-	else
-	    $(echo $grub_target | grep -qE "(^| )$GRUB_TARGET( |$)")
-	    if [ $? -ne 0 ]; then
-		gt=$(echo $grub_target | awk '{print $1;}')
-		debugmsg ${DEBUG_INFO} "[INFO]: Ignoring GRUB_TARGET ($GRUB_TARGET not found). Using $gt."
-		debugmsg ${DEBUG_INFO} "[INFO]: Set GRUB_TARGET to one of ($grub_target) to overwrite."
-		grub_target=$gt
-	    else
-		grub_target=$GRUB_TARGET
-	    fi
-	fi
-    fi
-    echo "$grub_target" | grep -q "efi"
-    if [ $? -eq 0 ]; then
-	efi=t
-	chroot ${TMPMNT} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force --removable --efi-directory=/mnt /dev/${raw_dev}"
-    else
-	chroot ${TMPMNT} /bin/bash -c "${CMD_GRUB_INSTALL} --target=$grub_target --boot-directory=/mnt --force /dev/${raw_dev}"
-    fi
-
-    debugmsg ${DEBUG_INFO} "[INFO]: setting grub up"
-    write_grub_cfg "" "OVERCBOOT" "OVERCROOTFS" ${TMPMNT}/mnt/grub/grub.cfg
-
-    if [ -n "$efi" ]; then
-	if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
-	    debugmsg ${DEBUG_INFO} "[INFO]: Using user supplied config '${INSTALL_GRUBEFI_CFG}'"
-	    cp "${INSTALL_GRUBEFI_CFG}" ${TMPMNT}/mnt/grub/grub.cfg
-	else
-	    debugmsg ${DEBUG_INFO} "[INFO]: Using 'hardcoded' config"
-	    write_grub_efi_cfg "" "OVERCROOTFS" ${TMPMNT}/mnt/grub/grub.cfg
-	fi
-	echo `basename ${TMPMNT}/mnt/EFI/BOOT/boot*.efi` >${TMPMNT}/mnt/startup.nsh
-	chmod +x ${TMPMNT}/mnt/startup.nsh
-    fi
-
-    debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
-
-    if [ -f ${TMPMNT}/boot/efi/EFI/BOOT/boot*.efi ]; then
-        debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
-        mkdir -p ${TMPMNT}/mnt/EFI/BOOT
-	cp -a ${TMPMNT}/boot/efi/EFI ${TMPMNT}/mnt
-    fi
-
+    install_grub ${raw_dev} "" ${TMPMNT}
 else # arm architecture
     if [ -e "${INSTALL_DTB}" ]; then
         install_dtb "${TMPMNT}/mnt" "${INSTALL_DTB}"
@@ -709,7 +650,7 @@ if [ "${SCREEN_GETTY_CONSOLE}" != "" ] ; then
 fi
 
 echo "LABEL=$SWAPLABEL none swap sw 0 0" >> ${TMPMNT}/etc/fstab
-echo "LABEL=$BOOTLABEL /boot auto defaults 0 0" >> ${TMPMNT}/etc/fstab
+echo "LABEL=$BOOTPART_LABEL /boot auto defaults 0 0" >> ${TMPMNT}/etc/fstab
 echo "LABEL=$CONTAINERLABEL /opt/container auto defaults 0 0" >> ${TMPMNT}/etc/fstab
 
 if [ -e /${IMAGESDIR}/config.smart ]; then
@@ -1218,7 +1159,7 @@ rmdir ${TMPMNT}
 if [ $do_encryption -eq 1 ]; then
     echo "INFO: Closing LUKS ..."
 
-    cryptsetup luksClose "${ROOTLABEL}_encrypted"
+    cryptsetup luksClose "${ROOTFS_LABEL}_encrypted"
 fi
 
 # don't run this on a host!!
