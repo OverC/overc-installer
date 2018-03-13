@@ -1,6 +1,5 @@
 set default=0
 set timeout=5
-set root=(hd0,1)
 
 serial --unit=0 --speed=9600
 
@@ -27,7 +26,6 @@ else
 fi
 
 menuentry "Initramfs Installer" --unrestricted {
-	set root=(hd0,1)
 	linux /images/%INSTALL_KERNEL% rootwait ima_appraise=off
         initrd /images/%INSTALL_INITRAMFS%
 }
