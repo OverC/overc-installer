@@ -757,6 +757,13 @@ install_grub()
 			fi
 		fi
 		chmod +x ${mountpoint}/mnt/startup.nsh
+
+                #install the secure boot related files such as shim and seloader files
+                if [ -f ${mountpoint}/boot/efi/EFI/BOOT/boot*.efi ]; then
+                    debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
+                    mkdir -p ${mountpoint}/mnt/EFI/BOOT
+	            cp -a ${mountpoint}/boot/efi/EFI ${mountpoint}/mnt
+                fi
 	fi
 
 	debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
