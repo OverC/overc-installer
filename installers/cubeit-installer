@@ -520,6 +520,10 @@ if [ -e "${INSTALL_KERNEL}" ] ; then
 	fi
 	cp ${INSTALL_KERNEL} ${BOOTTMPMNT}/mnt/${inst_kernel}
 	cp ${INSTALL_KERNEL} ${BOOTTMPMNT}/mnt/${inst_kernel}_bakup
+        if [ -f ${INSTALL_KERNEL}.p7b ]; then
+        	cp ${INSTALL_KERNEL}.p7b ${BOOTTMPMNT}/mnt/${inst_kernel}.p7b
+		cp ${INSTALL_KERNEL}.p7b ${BOOTTMPMNT}/mnt/${inst_kernel}_bakup.p7b
+        fi
 elif ls boot/uImage-* >/dev/null 2>&1; then
 	cp boot/uImage-* ${BOOTTMPMNT}/mnt/uImage
 	#create a backup kernel for recovery boot
