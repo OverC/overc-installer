@@ -654,6 +654,7 @@ install_grub()
 	local device="$1"
 	local bootpoint="$2"
 	local mountpoint="$3"
+	local keep_grub_cfg="$4"
 	local efi=""
 
 	# if we are installing to a nbd device, assume that we are working in
@@ -759,10 +760,21 @@ install_grub()
 		chmod +x ${mountpoint}/mnt/startup.nsh
 
                 #install the secure boot related files such as shim and seloader files
+		## Install the EFI grub from essential rootfs when enabled secure boot
                 if [ -f ${mountpoint}/boot/efi/EFI/BOOT/boot*.efi ]; then
-                    debugmsg ${DEBUG_INFO} "[INFO]: installing EFI artifacts"
-                    mkdir -p ${mountpoint}/mnt/EFI/BOOT
-	            cp -a ${mountpoint}/boot/efi/EFI ${mountpoint}/mnt
+                        debugmsg ${DEBUG_INFO} "[INFO]: installing secure boot EFI artifacts"
+                        #backup the original grub.cfg file if it exists and then reback it
+                        if [ -f ${mountpoint}/mnt/EFI/BOOT/grub.cfg -a "${keep_grub_cfg}" == "true" ]; then
+                                mv ${mountpoint}/mnt/EFI/BOOT/grub.cfg ${mountpoint}/mnt/EFI/BOOT/.grub.cfg
+                                [ -f "${mountpoint}/mnt/EFI/BOOT/grub.cfg.p7b" ] &&
+                                    mv "${mountpoint}/mnt/EFI/BOOT/grub.cfg.p7b" "${mountpoint}/mnt/EFI/BOOT/.grub.cfg.p7b"
+                        fi
+                        cp -a ${mountpoint}/boot/efi/EFI  ${mountpoint}/mnt/
+                        if [ -f ${mountpoint}/mnt/EFI/BOOT/.grub.cfg ]; then
+                                mv ${mountpoint}/mnt/EFI/BOOT/.grub.cfg ${mountpoint}/mnt/EFI/BOOT/grub.cfg
+                                [ -f "${mountpoint}/mnt/EFI/BOOT/.grub.cfg.p7b" ] &&
+                                    mv "${mountpoint}/mnt/EFI/BOOT/.grub.cfg.p7b" "${mountpoint}/mnt/EFI/BOOT/grub.cfg.p7b"
+                        fi
                 fi
 	fi
 
@@ -1248,7 +1260,7 @@ installer_main()
 
 	## Install Bootloader
 	if ${X86_ARCH}; then
-		install_grub "${device}" "${mnt1}" "${mnt2}"
+		install_grub "${device}" "${mnt1}" "${mnt2}" "true"
 		assert $?
 	else	# arm architecture
 		install_dtb "${mnt1}" "${INSTALL_DTB}"

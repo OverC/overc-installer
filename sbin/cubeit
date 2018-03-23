@@ -701,23 +701,6 @@ IFS=$OLDIFS
 			debugmsg ${DEBUG_CRIT} "INFO: copy efi boot grub"
 			cp "${INSTALL_EFIBOOT}" ${mnt_rootfs}${INSTALLER_TARGET_IMAGES_DIR}
 		fi
-
-		## Install the EFI grub from essential rootfs when enabled secure boot
-		if [ -f ${mnt_rootfs}/boot/efi/EFI/BOOT/boot*.efi ]; then
-			debugmsg ${DEBUG_INFO} "[INFO]: installing secure boot EFI artifacts"
-			#backup the original grub.cfg file if it exists and then reback it
-			if [ -f ${mnt_boot}/EFI/BOOT/grub.cfg ]; then
-				mv ${mnt_boot}/EFI/BOOT/grub.cfg ${mnt_boot}/EFI/BOOT/.grub.cfg
-				[ -f "${mnt_boot}/EFI/BOOT/grub.cfg.p7b" ] &&
-				    mv "${mnt_boot}/EFI/BOOT/grub.cfg.p7b" "${mnt_boot}/EFI/BOOT/.grub.cfg.p7b"
-			fi
-			cp -a ${mnt_rootfs}/boot/efi/EFI  ${mnt_boot}/
-			if [ -f ${mnt_boot}/EFI/BOOT/.grub.cfg ]; then
-				mv ${mnt_boot}/EFI/BOOT/.grub.cfg ${mnt_boot}/EFI/BOOT/grub.cfg
-				[ -f "${mnt_boot}/EFI/BOOT/.grub.cfg.p7b" ] &&
-				    mv "${mnt_boot}/EFI/BOOT/.grub.cfg.p7b" "${mnt_boot}/EFI/BOOT/grub.cfg.p7b"
-			fi
-		fi 
 	fi
 	if ! ${X86_ARCH}; then
 		if [ -e "${INSTALL_BOOTLOADER}" -a "X${BOARD_NAME}" != "X" ]; then

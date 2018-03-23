@@ -610,7 +610,7 @@ if [ -z ${final_dev} ]; then
 fi
 
 if ${X86_ARCH}; then
-    install_grub ${raw_dev} "" ${TMPMNT}
+    install_grub ${raw_dev} "" ${TMPMNT} "false"
 else # arm architecture
     if [ -e "${INSTALL_DTB}" ]; then
         install_dtb "${TMPMNT}/mnt" "${INSTALL_DTB}"
