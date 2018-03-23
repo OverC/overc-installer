@@ -26,6 +26,13 @@ cat << EOF
 
  commands:
 
+ ${0##*/} subvol <name>
+
+    Create a btrfs subvol to insert a container into.  Tracking can
+    be setup at a later point.
+
+      <name>: name of the container subvolume
+
  ${0##*/} track <name>
 
     start to track a container, take a snapshot of that container and create
@@ -295,6 +302,24 @@ switch_to_snapshot() {
 #
 # Command functions
 #
+subvol_container() {
+    # Check if it's already been tracked.
+    if btrfs subvolume show ${container_dir}/${container_name} >/dev/null 2>&1; then
+        log_error "Container ${container_name} has already been tracked."
+        return 1
+    fi
+
+    # Check if it's mounted on a btrfs partition.
+    local fstype=$(get_mount_fstype "${container_dir}")
+    if [ "${fstype}" != "btrfs" ]; then
+        log_error "Tracking mode only supports btrfs, the current fstype of ${container_dir} is: ${fstype}"
+        return 1
+    fi
+
+    mkdir -p ${container_dir}
+    btrfs_subvolume_create ${container_dir}/${container_name}
+}
+
 track_container() {
     # Check if it's already been tracked.
     if btrfs subvolume show ${container_dir}/${container_name} >/dev/null 2>&1; then
@@ -610,6 +635,9 @@ while [ ${#} -gt 0 ]; do
 done
 
 case "${subcmd}" in
+    subvol)
+        subvol_container
+        ;;
     track)
         track_container
         ;;
