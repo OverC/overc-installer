@@ -826,6 +826,10 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	container_src=`basename $c`
 	cname=`${SBINDIR}/cubename $CNAME_PREFIX $c`
 
+	cubeadmin=`get_prop_value_by_container ${cname} "cube.admin"`
+	if [ "${cubeadmin}" = "1" ] ; then
+		${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} hook-script prestart:/usr/libexec/cube/hooks.d/cube-admin up \$\(cat\)
+	fi
 	devicemgr=`get_prop_value_by_container ${cname} "cube.device.mgr"`
 	if [ "${devicemgr}" = "self" ]; then
 	    (
