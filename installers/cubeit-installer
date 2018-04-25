@@ -795,7 +795,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	mount --bind ${BINDMNTBASE} ${CONTAINERBASE}/${RUNBASE}
 
 	case $container_src in
-	    *-dom0-*)
+	    *-dom0-*|*-vrf-*)
 		${SBINDIR}/cube-ctl add --track --auto essential -n ${cname} -t cube -o ${CONTAINERBASE} ${c}
 		;;
 	    *)
@@ -929,8 +929,13 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		#       you can only install cubes via the installer.
 
 		# We need a veth so we can connect to the ovs bridge
-		${SBINDIR}/cube-cfg device network-virt:veth-${cname}:veth-${cname}
-		${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-network up
+		if [ "${cname}" != "cube-vrf" ]; then
+		    ${SBINDIR}/cube-cfg device network-virt:veth-${cname}:veth-${cname}
+		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-network up
+		else
+		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-network nslinkup
+		    ${SBINDIR}/cube-cfg hook-script poststop:/usr/libexec/cube/hooks.d/cube-network nslinkdown
+		fi
 
 		if [ "${cname}" = "dom0" ]; then
 		    ${SBINDIR}/cube-cfg device vt:/dev/loop-control:/dev/loop-control
