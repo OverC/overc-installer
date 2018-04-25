@@ -959,8 +959,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     if [ ! -v network_prime ]; then
 	# TODO: remove this case, it is no longer supported .. or fix it
 	# Fallback to using bridged networking (see overc_bridge_networking DISTRO_FEATURE)
-	sed -i "s/^configure_network_prime/#configure_network_prime/"  \
-	    ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
 	debugmsg ${DEBUG_INFO} "[INFO]: Using bridged networking."
     else
 	if [ ! -v NETWORK_DEVICE ]; then
