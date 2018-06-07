@@ -762,8 +762,10 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	# "network prime".
 	net_offset=`get_prop_value_by_container $cname "net"`
 	if [ -n "$net_offset" ]; then
-	    if [ $net_offset -eq 1 ]; then
+	    if [ "$net_offset" = "1" ] || [ "$net_offset" = "prime" ]; then
 		network_prime="$cname"
+	    elif [ "$net_offset" = "vrf" ]; then
+		network_vrf="$cname"
 	    else
 		network_offsets+=("'$net_offset'")
 		network_container+=("'$cname'")
@@ -929,14 +931,26 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		#       you can only install cubes via the installer.
 
 		# We need a veth so we can connect to the ovs bridge
-		if [ "${cname}" != "cube-vrf" ]; then
-		    ${SBINDIR}/cube-cfg device network-virt:veth-${cname}:veth-${cname}
-		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-network up
-		else
+
+		# TODO: remove these different hooks, and have the network 'up' and network 'down', just
+		#       trigger off the 'vrf' attribute and do the same work.
+		if [ "${cname}" = "${network_vrf}" ]; then
+		    ${SBINDIR}/cube-cfg device network-overlay:br-int:br-int
+		    ${SBINDIR}/cube-cfg set cube.network.type:static
+		    ${SBINDIR}/cube-cfg set cube.network.ip:192.168.42.4/24
+
+		    # nslinkup can handle br-int's setup
 		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-network nslinkup
 		    ${SBINDIR}/cube-cfg hook-script poststop:/usr/libexec/cube/hooks.d/cube-network nslinkdown
+
+		    ${SBINDIR}/cube-cfg attribute +vrf
+		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig vrf
+		else
+		    ${SBINDIR}/cube-cfg device network-virt:veth-${cname}:veth-${cname}
+		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-network up
 		fi
 
+		# TODO: this should also just be an attribute
 		if [ "${cname}" = "dom0" ]; then
 		    ${SBINDIR}/cube-cfg device vt:/dev/loop-control:/dev/loop-control
 		    ${SBINDIR}/cube-cfg device vt:/dev/loop0:/dev/loop0
@@ -945,8 +959,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 		    ${SBINDIR}/cube-cfg set cube.network.type:static
 		    ${SBINDIR}/cube-cfg set cube.network.ip:192.168.42.3/24
-		    ${SBINDIR}/cube-cfg attribute +vrf
-		    ${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig vrf
 
 		    service_disable systemd-resolved.service ${cname}
 		    service_disable systemd-networkd.service ${cname}
