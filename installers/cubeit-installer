@@ -1014,54 +1014,10 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		)
 	    fi
 
-	    # Enable configuring the network prime container by ansible on first boot
-	    sed -i "s/^\(network_prime_container:\).*$/\1 ${network_prime}/" \
-		${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
-
-	    # Set the network prime device for network prime container by ansible on first boot
-	    if [ ! -z "${NETWORK_DEVICE}" ]; then
-                sed -i "s/^\(network_device:\).*$/\1 ${NETWORK_DEVICE}/" \
-		    ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
-	    else
-                sed -i "s/^network_device/#network_device/"  \
-	            ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
-	    fi
-
-	    # TODO: These are no longer used and can likely be dropped. The static
-	    #       networking has moved to hooks and not ansible.
-	    if [ -v network_offsets ] && [ ${#network_offsets[@]} -gt 0 ]; then
-		network_offsets=$(IFS=,; echo "${network_offsets[*]}")
-		network_container=$(IFS=,; echo "${network_container[*]}")
-
-		sed -i "s/^\(cname\: \).*\]$/\1 \[$network_container\]/" \
-		    ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
-
-		sed -i "s/^\(coffset\: \).*\]$/\1 \[$network_offsets\]/" \
-		    ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
-	    fi
-
 	    debugmsg ${DEBUG_INFO} "[INFO]: Set ${network_prime} as the network prime."
 	else
 	    debugmsg ${DEBUG_WARN} "[WARNING]: Invalid network prime defined."
 	fi
-    fi
-
-    # setup timezone if it is configured
-    if [ ! -z "${TIMEZONE}" ]; then
-	debugmsg ${DEBUG_INFO} "[INFO]: Set ${TIMEZONE} as the timezone."
-	echo "timezone: ${TIMEZONE}" >> ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
-    fi
-
-    # setup initial user if it is configured
-    if [ ! -z "${INITIAL_USER}" ]; then
-	debugmsg ${DEBUG_INFO} "[INFO]: Set initial user."
-	sed -i "s/^\(initial_user:\).*$/\1 ${INITIAL_USER}/" \
-	    ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
-            if [ ! -z "${INITIAL_PASSWD}" ]; then
-	        debugmsg ${DEBUG_INFO} "[INFO]: Set initial password."
-	        echo "initial_passwd: ${INITIAL_PASSWD}" \
-	            >> ${TMPMNT}/etc/overc-conf/ansible/overc_config_vars.yml
-            fi
     fi
 
     if [ -n "${LOCAL_CUSTOM_HDD_POST_FUNCS}" ]; then
