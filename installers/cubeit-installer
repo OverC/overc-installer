@@ -755,20 +755,16 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	cp $c ${TMPMNT}/tmp/
 	cp ${SBINDIR}/cube-ctl ${TMPMNT}/tmp/
 
-	# If a net offset is specified for this container add
-	# it to the network_offsets list in the overc_config_vars.yml
-	# in order to have ansible configure the container.
-	# An offset of '1' will make that container the
-	# "network prime".
+	# Identify the Network Prime and VRF containers by their 'net'
+	# offset attribute. An offset of '1' will make that container
+	# the "network prime". The VRF container will have its 'net' offset
+	# set to 'vrf'.
 	net_offset=`get_prop_value_by_container $cname "net"`
 	if [ -n "$net_offset" ]; then
 	    if [ "$net_offset" = "1" ] || [ "$net_offset" = "prime" ]; then
 		network_prime="$cname"
 	    elif [ "$net_offset" = "vrf" ]; then
 		network_vrf="$cname"
-	    else
-		network_offsets+=("'$net_offset'")
-		network_container+=("'$cname'")
 	    fi
 	fi
 
@@ -846,6 +842,20 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    for mount in $(echo $mounts | tr '|' ':' | tr ';' '\n'); do
 		${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} mount $mount
 	    done
+	fi
+
+	# Configure network offset
+	net_offset=`get_prop_value_by_container $cname "net"`
+	if [ -n "$net_offset" ] && [ $net_offset -ne 1 ]; then
+	    case "$cname" in
+	    dom0|${network_vrf})
+		# Special handling (search this file for "static")
+		;;
+	    *)
+		${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} set cube.network.ip:192.168.42.${net_offset}/24
+		${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} set cube.network.type:static
+		;;
+	    esac
 	fi
 
 	# TTY/console processing
