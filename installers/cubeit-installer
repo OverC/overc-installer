@@ -591,7 +591,6 @@ if [ $btrfs -eq 1 ]; then
 
 	cd /
 	sync
-	umount ${TMPMNT}/rootfs/mnt
 	umount ${TMPMNT}/
 	mount -o subvolid=${subvol} /dev/${rootfs_dev} ${TMPMNT}
 	cd ${TMPMNT}/
