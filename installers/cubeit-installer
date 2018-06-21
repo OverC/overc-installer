@@ -972,6 +972,12 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	fi
     done
 
+    # Set some container start constraints
+    # TODO: just make this an install attribute, and we loop through and add
+    #       via cube-cfg
+    echo "${network_vrf}" > ${TMPMNT}/opt/container/dom0/depends
+    echo "${network_vrf}" > ${TMPMNT}/opt/container/${network_prime}/depends
+
     # Setup networking prime and static IPs, unless using bridged networking
     if [ ! -v network_prime ]; then
 	# TODO: remove this case, it is no longer supported .. or fix it
