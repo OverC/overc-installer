@@ -1224,6 +1224,8 @@ installer_main()
 		exit 1
 	fi
 
+	sleep 1
+
 	## Create new filesystems
 	debugmsg ${DEBUG_INFO} "Creating new filesystems "
 	if [ -z "$BOOTPART_LABEL" ]; then
