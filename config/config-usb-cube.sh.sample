@@ -4,7 +4,8 @@ HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/cube-essential-genericx86-64.tar.bz2"
 
 # Container attributes:
 #   mounts=type|src|dst;type|src|dst... (see 'c3 cfg mount')
-#   net=X (if X==1 the container will be the netprime, static IPs should us X>4)
+#   net=X (if X==1 the container will be the netprime, static IPs should us X>4
+#          use X==vrf for the cube-vrf)
 #   cube.device.mgr=self (allow container access devices directly)
 #   vty=X (where X>2) (place container console on specified virtual terminal)
 #   mergepath=<path>,<container,[container]>
@@ -12,6 +13,7 @@ HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/cube-essential-genericx86-64.tar.bz2"
 #   console (container gets a virtual console)
 #   hardconsole (container gets a physical console)
 HDINSTALL_CONTAINERS="${ARTIFACTS_DIR}/cube-dom0-genericx86-64.tar.bz2:vty=2:mergepath=/usr,essential \
+                      ${ARTIFACTS_DIR}/cube-vrf-genericx86-64.tar.bz2:net=vrf \
                       ${ARTIFACTS_DIR}/cube-desktop-genericx86-64.tar.bz2:vty=3:net=1:mergepath=/usr,essential,dom0 \
                       ${ARTIFACTS_DIR}/cube-server-genericx86-64.tar.bz2:subuid=800000"
 
