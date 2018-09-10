@@ -1024,11 +1024,11 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		    if [ -e "pflask.cmd" ]; then
 			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig netprime
 			${SBINDIR}/cube-cfg gen ${network_prime}:cube
-			service_disable systemd-resolved.service ${cname}
+			service_disable systemd-resolved.service ${network_prime}
 		    else
 			${SBINDIR}/cube-cfg hook-script poststart:/usr/libexec/cube/hooks.d/cube-netconfig netprime \$\(cat\)
 			${SBINDIR}/cube-cfg gen ${network_prime}:oci
-			service_disable systemd-resolved.service ${cname}
+			service_disable systemd-resolved.service ${network_prime}
 		    fi
 		)
 	    fi
