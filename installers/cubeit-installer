@@ -833,6 +833,14 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    )
 	fi
 
+	# Configure container 'app' (ie. process.args). By default this will
+	# be /sbin/init but at times we need to overwrite this, for example
+	# when we use tini 'init' as we do for the cube-vrf.
+	app=`get_prop_value_by_container $cname "app"`
+	if [ -n "$app" ]; then
+	    ${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} set app:$(echo $app | tr ',' ' ')
+	fi
+
 	# Configure container mounts
 	mounts=`get_prop_value_by_container $cname "mounts"`
 	if [ -n "$mounts" ]; then
