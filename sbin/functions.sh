@@ -682,6 +682,27 @@ install_grub()
 	chroot ${mountpoint} /bin/bash -c "mount -t proc proc /proc"
 	chroot ${mountpoint} /bin/bash -c "mount -t sysfs sys /sys"
 
+	# Search for grub targets in the file system and copy in from
+	# the grub-install lib directory as a fall back
+	if [ -n "$GRUB_TARGET" ]; then
+	    local try_target
+	    for g in $GRUB_TARGET; do
+		try_target=$(ls -1d ${mountpoint}/usr/lib*/grub/${g} 2> /dev/null)
+		if [ -z "$try_target" ] ; then
+		    try_target=$(dirname ${HOST_CMD_GRUB_INSTALL})
+		    if [ -e "${try_target}/../lib/grub/${g}" ] ; then
+			local cp_dest
+			cp_dest=$(ls -d ${mountpoint}/usr/lib*/grub |tail -1 2> /dev/null)
+			if [ -n "$cp_dest" ] ; then
+			    debugmsg ${DEBUG_INFO} "[INFO]: Copying GRUB_TARGET (${g}) from host."
+			    mkdir -p ${cp_dest}/${g}
+			    cp -r ${try_target}/../lib/grub/${g}/* ${cp_dest}/${g}/
+			fi
+		    fi
+		fi
+	    done
+	fi
+
 	grub_target=$(ls ${mountpoint}/usr/lib*/grub/ | tr '\n' ' ')
 	num_grub_targets=$(echo $grub_target | wc -w)
 	if [ $num_grub_targets -eq 1 ]; then
@@ -1300,15 +1321,16 @@ format_menuitems()
 
 verify_commands()
 {
-	if [ -z "$CMD_GRUB_INSTALL" ] || [ ! -e "$CMD_GRUB_INSTALL" ]; then
-		CMD_GRUB_INSTALL=$(which grub-install)
+	if [ -z "$HOST_CMD_GRUB_INSTALL" ] || [ ! -e "$HOST_CMD_GRUB_INSTALL" ]; then
+		HOST_CMD_GRUB_INSTALL=$(which grub-install)
 
-		if [ ! -e "$CMD_GRUB_INSTALL" ]; then
+		if [ ! -e "$HOST_CMD_GRUB_INSTALL" ]; then
 			debugmsg ${DEBUG_INFO} "ERROR: Could not find grub-install"
 			false
 			assert $?
 		fi
 	fi
+	export HOST_CMD_GRUB_INSTALL
 
 	if [ -z "$CMD_PARTED" ] || [ ! -e "$CMD_PARTED" ]; then
 		CMD_PARTED=$(which parted)
