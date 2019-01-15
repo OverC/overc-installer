@@ -833,6 +833,13 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    )
 	fi
 
+	container_type=`get_prop_value_by_container ${cname} "type"`
+	if [ "${container_type}" = "system" ]; then
+	    echo "[INFO]: setting container ${cname} to system (privileged)"
+	    ${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} set cube.container.system:true
+	    regen_container_config ${TMPMNT}/opt/container/ ${cname}
+	fi
+
 	# Configure container 'app' (ie. process.args). By default this will
 	# be /sbin/init but at times we need to overwrite this, for example
 	# when we use tini 'init' as we do for the cube-vrf.

@@ -13,6 +13,7 @@ HDINSTALL_ROOTFS="${ARTIFACTS_DIR}/cube-essential-genericx86-64.tar.bz2"
 #   subuid=XXXX (specify unprivileged subuid/subgid)
 #   console (container gets a virtual console)
 #   hardconsole (container gets a physical console)
+#   type=<system> (is the container privileged/system ?)
 HDINSTALL_CONTAINERS="${ARTIFACTS_DIR}/cube-dom0-genericx86-64.tar.bz2:vty=2:mergepath=/usr,essential \
                       ${ARTIFACTS_DIR}/cube-vrf-genericx86-64.tar.bz2:net=vrf:app=/usr/bin/docker-init,/sbin/vrf-init \
                       ${ARTIFACTS_DIR}/cube-desktop-genericx86-64.tar.bz2:vty=3:net=1:mergepath=/usr,essential,dom0 \
