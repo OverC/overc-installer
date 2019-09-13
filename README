@@ -22,10 +22,10 @@ cube-cfg/cube-ctl should be placed in the sbin/ directory of this repo
 and kept up to date with meta-overc development. To aid this, a github
 fetch script is provided. 
 
-To place these two scripts (Assuming the master-oci branch in this example):
+To place these two scripts (Assuming the master branch in this example):
 
- % ./lib/github-fetcher.py -b master-oci OverC meta-overc meta-cube/recipes-support/overc-utils/source/cube-cfg sbin/
- % ./lib/github-fetcher.py -b master-oci OverC meta-overc meta-cube/recipes-support/overc-utils/source/cube-ctl sbin/
+ % ./lib/github-fetcher.py -b master OverC meta-overc meta-cube/recipes-support/overc-utils/source/cube-cfg sbin/
+ % ./lib/github-fetcher.py -b master OverC meta-overc meta-cube/recipes-support/overc-utils/source/cube-ctl sbin/
  % chmod +x sbin/cube-ctl
  % chmod +x sbin/cube-cfg
 
