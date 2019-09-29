@@ -645,6 +645,10 @@ if [ "${SCREEN_GETTY_CONSOLE}" != "" ] ; then
     con=${SCREEN_GETTY_CONSOLE%,*}
     baud=${SCREEN_GETTY_CONSOLE#*,}
     systemd_getty=/lib/systemd/system/screen-getty@.service
+
+    # Prevent systemd-getty-generator from creating the serial getty
+    ln -sf /dev/null ${TMPMNT}/etc/systemd/system/serial-getty@$con.service
+
     if [ "${baud}" != "" -a "${baud}" != "115200" ] ; then
 	cp ${TMPMNT}/lib/systemd/system/screen-getty@.service ${TMPMNT}/lib/systemd/system/screen-getty-$baud@.service
 	perl -p -i -e "s/(screen-getty \%I) .*? /\$1 $baud /" ${TMPMNT}/lib/systemd/system/screen-getty@.service
