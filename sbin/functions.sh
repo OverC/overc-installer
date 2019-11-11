@@ -739,7 +739,7 @@ install_grub()
 	    if [ $? -eq 0 ]; then
 		efi=t
 		g_efi=${g_check}
-		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=${g_check} --boot-directory=/mnt --force --removable --efi-directory=/mnt /dev/${device}"
+		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=${g_check} --boot-directory=/mnt --force --removable --efi-directory=/mnt /dev/${device} --modules='boot linux ext2 fat serial part_msdos part_gpt normal                  efi_gop iso9660 configfile search loadenv test'"
 	    else
 		chroot ${mountpoint} /bin/bash -c "${CMD_GRUB_INSTALL} --target=${g_check} --boot-directory=/mnt --force /dev/${device}"
 	    fi
