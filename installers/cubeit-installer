@@ -543,6 +543,10 @@ elif ls boot/fitImage-* >/dev/null 2>&1; then
 	cp boot/fitImage-* ${BOOTTMPMNT}/mnt/fitImage
 	#create a backup kernel for recovery boot
 	cp boot/fitImage-* ${BOOTTMPMNT}/mnt/fitImage_bakup
+elif ls boot/zImage-* >/dev/null 2>&1; then
+	cp boot/zImage-* ${BOOTTMPMNT}/mnt/zImage
+	#create a backup kernel for recovery boot
+	cp boot/zImage-* ${BOOTTMPMNT}/mnt/zImage_bakup
 elif ls boot/Image-* >/dev/null 2>&1; then
 	cp boot/Image-* ${BOOTTMPMNT}/mnt/Image
 	#create a backup kernel for recovery boot
