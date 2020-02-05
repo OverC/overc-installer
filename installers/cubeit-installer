@@ -1015,8 +1015,12 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     # Set some container start constraints
     # TODO: just make this an install attribute, and we loop through and add
     #       via cube-cfg
-    echo "${network_vrf}" > ${TMPMNT}/opt/container/dom0/depends
-    echo "${network_vrf}" > ${TMPMNT}/opt/container/${network_prime}/depends
+    if [ -n "${network_vrf}" ]; then
+	echo "${network_vrf}" > ${TMPMNT}/opt/container/dom0/depends
+	if [ -n "${network_prime}" ]; then
+	    echo "${network_vrf}" > ${TMPMNT}/opt/container/${network_prime}/depends
+	fi
+    fi
 
     # Setup networking prime and static IPs, unless using bridged networking
     if [ ! -v network_prime ]; then
