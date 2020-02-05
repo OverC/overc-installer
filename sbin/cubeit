@@ -181,7 +181,7 @@ export CONFIG_DIRS
 
 if [ -n "$ARTIFACTS_DIR" ]; then
     if [ ! -d "$ARTIFACTS_DIR" ]; then
-	echo "[INFO]: Artifacts dir $ARTIFACTS_DIR does not exist"
+	echo "[INFO] Artifacts dir $ARTIFACTS_DIR does not exist"
     fi
 fi
 export ARTIFACTS_DIR
@@ -241,7 +241,7 @@ if [ ${DO_IMA_SIGN} -eq 1 ]; then
     fi
 
     if ! check_fs_for_ima; then
-        debugmsg ${DEBUG_CRIT} "[ERROR]: Current file system does not support to set xattr"
+        debugmsg ${DEBUG_CRIT} "[ERROR] Current file system does not support to set xattr"
         exit 1
     fi
 
@@ -250,7 +250,7 @@ if [ ${DO_IMA_SIGN} -eq 1 ]; then
     fi
 
     if [ -z "${IMA_KEY_PASS}" ]; then
-        debugmsg ${DEBUG_CRIT} "[ERROR]: The private key for IMA signing must be protected by a password"
+        debugmsg ${DEBUG_CRIT} "[ERROR] The private key for IMA signing must be protected by a password"
         exit 1
     fi
 fi
@@ -263,8 +263,8 @@ ima_sign()
     # so we convert KEYS_DIR into abs path
     local realpath_bin=$(which realpath)
     if [ -z "${realpath_bin}" ]; then
-	debugmsg ${DEBUG_CRIT} "[ERROR]: Unable to find 'realpath'."
-	debugmsg ${DEBUG_CRIT} "[ERROR]: Please ensure 'realpath' is installed and in your PATH."
+	debugmsg ${DEBUG_CRIT} "[ERROR] Unable to find 'realpath'."
+	debugmsg ${DEBUG_CRIT} "[ERROR] Please ensure 'realpath' is installed and in your PATH."
 	exit 1
     fi
 
@@ -285,7 +285,7 @@ repack_image_for_ima()
     local repack_dir="$(mktemp -d repack_tarball.XXXXXX)"
     local repack_image="$(basename ${tarball})"
 
-    debugmsg ${DEBUG_INFO} "[INFO]: Preparing to repack image ${repack_image} for IMA signing ..."
+    debugmsg ${DEBUG_INFO} "[INFO] Preparing to repack image ${repack_image} for IMA signing ..."
 
     repack_dir="`pwd`/${repack_dir}"
 
@@ -295,16 +295,16 @@ repack_image_for_ima()
         return 1
     fi
 
-    debugmsg ${DEBUG_INFO} "[INFO]: Finished extracting image ${repack_image}"
+    debugmsg ${DEBUG_INFO} "[INFO] Finished extracting image ${repack_image}"
 
     ima_sign "${repack_dir}"
     if [ $? -ne 0 ]; then
         rm -rf "${repack_dir}"
-        debugmsg ${DEBUG_INFO} "[ERROR]: IMA signing generated an error"
+        debugmsg ${DEBUG_INFO} "[ERROR] IMA signing generated an error"
         return 1
     fi
 
-    debugmsg ${DEBUG_INFO} "[INFO]: IMA signing complete for ${repack_image}"
+    debugmsg ${DEBUG_INFO} "[INFO] IMA signing complete for ${repack_image}"
 
     pack_tarball "${repack_dir}" "`pwd`/${repack_image}"
     if [ $? -ne 0 ]; then
@@ -316,7 +316,7 @@ repack_image_for_ima()
 
     eval "${tarball_dst}=${repack_image}"
 
-    debugmsg ${DEBUG_INFO} "[INFO]: ${tarball} is repacked as ${repack_image}"
+    debugmsg ${DEBUG_INFO} "[INFO] ${tarball} is repacked as ${repack_image}"
 
     return 0
 }
@@ -836,13 +836,13 @@ disable_automounter()
 {
 	if [ "${DESKTOP_SESSION}" = "gnome" ]; then
 		if [ ${HAVE_GSETTING} -eq 0 ]; then
-		        debugmsg ${DEBUG_INFO} "[INFO]: Disable automounter during install with gsetting."
+		        debugmsg ${DEBUG_INFO} "[INFO] Disable automounter during install with gsetting."
 			AUTOMOUNT_BACK=`${RUN_LOGNAME} gsettings get ${MEDIA_HANDLING} automount`
 			AUTOMOUNT_OPEN_BACK=`${RUN_LOGNAME} gsettings get ${MEDIA_HANDLING} automount-open`
 			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount "false" 2>/dev/null
 			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount-open "false" 2>/dev/null
 		elif [ ${HAVE_DCONF} -eq 0 ]; then
-		        debugmsg ${DEBUG_INFO} "[INFO]: Disable automounter during install with dconf."
+		        debugmsg ${DEBUG_INFO} "[INFO] Disable automounter during install with dconf."
 			AUTOMOUNT_BACK=`${RUN_LOGNAME} dconf read ${MEDIA_HANDLING_PATH}/automount`
 			AUTOMOUNT_OPEN_BACK=`${RUN_LOGNAME} dconf read ${MEDIA_HANDLING_PATH}/automount-open`
 			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount "false" 2>/dev/null
@@ -855,11 +855,11 @@ restore_automounter()
 {
 	if [ "${DESKTOP_SESSION}" = "gnome" ]; then
 		if [ ${HAVE_GSETTING} -eq 0 ]; then
-		        debugmsg ${DEBUG_INFO} "[INFO]: Restore previous automounter settings with gsetting."
+		        debugmsg ${DEBUG_INFO} "[INFO] Restore previous automounter settings with gsetting."
 			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount "${AUTOMOUNT_BACK}" 2>/dev/null
 			${RUN_LOGNAME} gsettings set ${MEDIA_HANDLING} automount-open "${AUTOMOUNT_OPEN_BACK}" 2>/dev/null
 		elif [ ${HAVE_DCONF} -eq 0 ]; then
-		        debugmsg ${DEBUG_INFO} "[INFO]: Restore previous automounter settings with gconf."
+		        debugmsg ${DEBUG_INFO} "[INFO] Restore previous automounter settings with gconf."
 			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount "${AUTOMOUNT_BACK}" 2>/dev/null
 			${RUN_LOGNAME} dconf write ${MEDIA_HANDLING_PATH}/automount-open "${AUTOMOUNT_OPEN_BACK}" 2>/dev/null
 		fi
@@ -940,7 +940,7 @@ case $TARGET_TYPE in
 	         device=`losetup -f --show $target`
             fi
 	    if [ -z "$device" ]; then
-		debugmsg ${DEBUG_CRIT} "[ERROR]: No free loop devices, try nbd ?"
+		debugmsg ${DEBUG_CRIT} "[ERROR] No free loop devices, try nbd ?"
 		false
 		assert $?
 	    fi

@@ -672,7 +672,7 @@ install_grub()
 	    mount --bind ${bootpoint} ${mountpoint}/mnt
 	fi
 
-	debugmsg ${DEBUG_INFO} "[INFO]: installing grub"
+	debugmsg ${DEBUG_INFO} "[INFO] installing grub"
 
 	if ! [ -n "$DISTRIBUTION" ]; then
 	    DISTRIBUTION="OverC"
@@ -694,7 +694,7 @@ install_grub()
 			local cp_dest
 			cp_dest=$(ls -d ${mountpoint}/usr/lib*/grub |tail -1 2> /dev/null)
 			if [ -n "$cp_dest" ] ; then
-			    debugmsg ${DEBUG_INFO} "[INFO]: Copying GRUB_TARGET (${g}) from host."
+			    debugmsg ${DEBUG_INFO} "[INFO] Copying GRUB_TARGET (${g}) from host."
 			    mkdir -p ${cp_dest}/${g}
 			    cp -r ${try_target}/../lib/grub/${g}/* ${cp_dest}/${g}/
 			fi
@@ -707,13 +707,13 @@ install_grub()
 	num_grub_targets=$(echo $grub_target | wc -w)
 	if [ $num_grub_targets -eq 1 ]; then
 	    if [ "$grub_target" != "$GRUB_TARGET" ]; then
-		debugmsg ${DEBUG_INFO} "[INFO]: Ignoring GRUB_TARGET ($GRUB_TARGET not found). Using $grub_target."
+		debugmsg ${DEBUG_INFO} "[INFO] Ignoring GRUB_TARGET ($GRUB_TARGET not found). Using $grub_target."
 	    fi
 	else
 	    if [ -z "$GRUB_TARGET" ]; then
 		gt=$(echo $grub_target | awk '{print $1;}')
-		debugmsg ${DEBUG_INFO} "[INFO]: Multiple grub targets available ($grub_target). Using $gt."
-		debugmsg ${DEBUG_INFO} "[INFO]: Overwrite default selection by setting GRUB_TARGET."
+		debugmsg ${DEBUG_INFO} "[INFO] Multiple grub targets available ($grub_target). Using $gt."
+		debugmsg ${DEBUG_INFO} "[INFO] Overwrite default selection by setting GRUB_TARGET."
 		grub_target=$gt
 	    else
 		orig_grub_target="$grub_target"
@@ -721,14 +721,14 @@ install_grub()
 		for g_check in $GRUB_TARGET; do
 		    echo $orig_grub_target | grep -qE $g_check
 		    if [ $? -ne 0 ]; then
-			debugmsg ${DEBUG_INFO} "[INFO]: Ignoring GRUB_TARGET ($GRUB_TARGET not found)."
-			debugmsg ${DEBUG_INFO} "[INFO]: Set GRUB_TARGET to one of ($orig_grub_target) to overwrite."
+			debugmsg ${DEBUG_INFO} "[INFO] Ignoring GRUB_TARGET ($GRUB_TARGET not found)."
+			debugmsg ${DEBUG_INFO} "[INFO] Set GRUB_TARGET to one of ($orig_grub_target) to overwrite."
 		    else
 			grub_target="$grub_target $g_check"
 		    fi
 		done
 		if [ -z "$grub_target" ] ; then
-		    debugmsg ${DEBUG_INFO} "[INFO]: Set GRUB_TARGET empty using ($orig_grub_target)."
+		    debugmsg ${DEBUG_INFO} "[INFO] Set GRUB_TARGET empty using ($orig_grub_target)."
 		    grub_target="$orig_grub_target"
 		fi
 	    fi
@@ -748,15 +748,15 @@ install_grub()
 	# NOTE: grub-install will install BOOTX64.EFI which will search for the grub.cfg
 	# in /boot/grub/grub.cfg. User supplied INSTALL_EFIBOOT firmware files may search
 	# for grub.cfg in /boot/EFI/BOOT/ (the current default if using bitbake artifacts)
-	debugmsg ${DEBUG_INFO} "[INFO]: setting grub up"
+	debugmsg ${DEBUG_INFO} "[INFO] setting grub up"
 	write_grub_cfg "" "OVERCBOOT" "${ROOTFS_LABEL}" ${mountpoint}/mnt/grub/grub.cfg
 
 	if [ -n "$efi" ]; then
 		if [ -n "${INSTALL_GRUBEFI_CFG}" -a -f "${INSTALL_GRUBEFI_CFG}" ]; then
-			debugmsg ${DEBUG_INFO} "[INFO]: Using user supplied config '${INSTALL_GRUBEFI_CFG}'"
+			debugmsg ${DEBUG_INFO} "[INFO] Using user supplied config '${INSTALL_GRUBEFI_CFG}'"
 			cp -rf "${INSTALL_GRUBEFI_CFG}" ${mountpoint}/mnt/grub/grub.cfg
 		else
-			debugmsg ${DEBUG_INFO} "[INFO]: Using 'hardcoded' config"
+			debugmsg ${DEBUG_INFO} "[INFO] Using 'hardcoded' config"
 			write_grub_efi_cfg "" "${ROOTFS_LABEL}" ${mountpoint}/mnt/EFI/BOOT/grub.cfg
 		fi
 		echo `basename ${mountpoint}/mnt/EFI/BOOT/boot*.efi` >${mountpoint}/mnt/startup.nsh
@@ -764,7 +764,7 @@ install_grub()
 		assert $?
 
 		if [ -n "${INSTALL_EFIBOOT}" ] && [ -e "${INSTALL_EFIBOOT}" ]; then
-			debugmsg ${DEBUG_INFO} "[INFO]: Installing user supplied EFI '${INSTALL_EFIBOOT}'"
+			debugmsg ${DEBUG_INFO} "[INFO] Installing user supplied EFI '${INSTALL_EFIBOOT}'"
 			# Most UEFI will search for BOOTX64.EFI before resorting to startup.nsh
 			# so install $INSTALL_EFIBOOT as BOOTX64.EFI to speed up the boot and to
 			# prevent the default BOOTX64.EFI installed by grub-install being used.
@@ -783,7 +783,7 @@ install_grub()
                 #install the secure boot related files such as shim and seloader files
 		## Install the EFI grub from essential rootfs when enabled secure boot
                 if [ -f ${mountpoint}/boot/efi/EFI/BOOT/boot*.efi ]; then
-                        debugmsg ${DEBUG_INFO} "[INFO]: installing secure boot EFI artifacts"
+                        debugmsg ${DEBUG_INFO} "[INFO] installing secure boot EFI artifacts"
                         #backup the original grub.cfg file if it exists and then reback it
                         if [ -f ${mountpoint}/mnt/EFI/BOOT/grub.cfg -a "${keep_grub_cfg}" == "true" ]; then
                                 mv ${mountpoint}/mnt/EFI/BOOT/grub.cfg ${mountpoint}/mnt/EFI/BOOT/.grub.cfg
@@ -799,7 +799,7 @@ install_grub()
                 fi
 	fi
 
-	debugmsg ${DEBUG_INFO} "[INFO]: grub installed"
+	debugmsg ${DEBUG_INFO} "[INFO] grub installed"
 
 	if [ -n "${bootpoint}" ] ; then
 	    umount ${mountpoint}/mnt
@@ -1065,7 +1065,7 @@ service_disable()
     services="${services%.service}.service"
     sockets=$(basename --suffix .service ${services})
     sockets="${sockets}.socket"
-    local debug_msg="[INFO]: Can not find the service ${services} to disable"
+    local debug_msg="[INFO] Can not find the service ${services} to disable"
 
     if [ -z "${cname}" ]; then
         # For essential
@@ -1103,7 +1103,7 @@ service_add_condition_for_container()
                        -name ${services} 2>/dev/null`
 
     if [ -z "${spaths}" ]; then
-        debugmsg ${DEBUG_INFO} "[INFO]: Can not find the service ${services} in ${cname}."
+        debugmsg ${DEBUG_INFO} "[INFO] Can not find the service ${services} in ${cname}."
         return 1
     fi
 

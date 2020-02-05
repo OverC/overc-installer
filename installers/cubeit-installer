@@ -63,7 +63,7 @@ fi
 
 ## Load function file(s)
 if ! [ -e $FUNCTIONS_FILE ]; then
-    debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find function definitions (${FUNCTIONS_FILE})"
+    debugmsg ${DEBUG_CRIT} "[ERROR] Could not find function definitions (${FUNCTIONS_FILE})"
     exit 1
 fi
 source $FUNCTIONS_FILE
@@ -183,7 +183,7 @@ IFS='
 '
 #source the board specific functions
 if [ -e $SBINDIR/functions-${BOARD_NAME}.sh ]; then
-    debugmsg ${DEBUG_CRIT} "[INFO]: load board ${BOARD_NAME} specific functions"
+    debugmsg ${DEBUG_CRIT} "[INFO] load board ${BOARD_NAME} specific functions"
     source $SBINDIR/functions-${BOARD_NAME}.sh
 fi
 
@@ -202,7 +202,7 @@ if [ -e "$rootfs" ]; then
     rootfs=`readlink -f $rootfs`
 else
     if [ ! -f "${IMAGESDIR}/$rootfs" ]; then
-	debugmsg ${DEBUG_CRIT} "[ERROR]: install rootfs ($rootfs) not found"
+	debugmsg ${DEBUG_CRIT} "[ERROR] install rootfs ($rootfs) not found"
 	exit 1
     fi
     rootfs="${IMAGESDIR}/$rootfs"
@@ -243,7 +243,7 @@ if [ ! -d "${IMAGESDIR}" ]; then
     if [ -n "${ARTIFACTS_DIR}" ]; then
 	IMAGESDIR=${ARTIFACTS_DIR}
     else
-	debugmsg ${DEBUG_CRIT} "[ERROR]: images dir (${IMAGESDIR}) not found"
+	debugmsg ${DEBUG_CRIT} "[ERROR] images dir (${IMAGESDIR}) not found"
 	exit 1
     fi
 fi
@@ -277,7 +277,7 @@ check_required()
     if [ ! -e "${1}" ]; then
 	x=$(which "${1}")
 	if [ -z "${x}" ]; then
-	    echo "[ERROR]: required command ${1} not found, exiting"
+	    echo "[ERROR] required command ${1} not found, exiting"
 	    exit 1
 	fi
     fi
@@ -380,8 +380,8 @@ CONTAINERLABEL="OVERCCN"
 
 # Ensure the parted application is available
 if test ! $(which parted); then
-	debugmsg ${DEBUG_CRIT} "[ERROR]: Unable to find 'parted'."
-	debugmsg ${DEBUG_CRIT} "[ERROR]: Please ensure parted is installed and in your PATH."
+	debugmsg ${DEBUG_CRIT} "[ERROR] Unable to find 'parted'."
+	debugmsg ${DEBUG_CRIT} "[ERROR] Please ensure parted is installed and in your PATH."
 	exit 1
 fi
 
@@ -391,7 +391,7 @@ elif [ -z "${PARTITION_LAYOUT}" ]; then
         PARTITION_LAYOUT="${SBINDIR}/4-partition-layout.txt"
 fi
 
-debugmsg ${DEBUG_INFO} "[INFO]: creating partitions using (${PARTITION_LAYOUT})"
+debugmsg ${DEBUG_INFO} "[INFO] creating partitions using (${PARTITION_LAYOUT})"
 
 # We partition the raw device as passed to the script. This is
 # nuke and pave .. so be careful!
@@ -405,11 +405,11 @@ if [ -f ${PARTITION_LAYOUT} ]; then
 	done < ${PARTITION_LAYOUT}
 	parted --script /dev/${raw_dev} $parted_cmds >/dev/null 2>&1
 	if [ $? -ne 0 ]; then
-	    debugmsg ${DEBUG_CRIT} "[ERROR]: Failed to partition disk"
+	    debugmsg ${DEBUG_CRIT} "[ERROR] Failed to partition disk"
 	    exit 1
 	fi
 else
-        debugmsg ${DEBUG_CRIT} "[ERROR]: Could not find the partition script file ${PARTITION_LAYOUT}"
+        debugmsg ${DEBUG_CRIT} "[ERROR] Could not find the partition script file ${PARTITION_LAYOUT}"
         exit 1
 fi
 
@@ -436,12 +436,12 @@ if [ $(echo $raw_dev | grep -c 'loop') ==  "1" ]; then
 fi
 
 ## create filesystems
-debugmsg ${DEBUG_INFO} "[INFO]: creating filesystems"
-debugmsg ${DEBUG_INFO} "[INFO]: creating swap"
+debugmsg ${DEBUG_INFO} "[INFO] creating filesystems"
+debugmsg ${DEBUG_INFO} "[INFO] creating swap"
 mkswap -L $SWAPLABEL /dev/${fs_dev}2
 
 set -e
-debugmsg ${DEBUG_INFO} "[INFO]: creating /boot (vfat)"
+debugmsg ${DEBUG_INFO} "[INFO] creating /boot (vfat)"
 mkfs.vfat -F32 -I -n $BOOTPART_LABEL /dev/${fs_dev}1
 
 ## define the device file names for rootfs and container filesystem
@@ -462,11 +462,11 @@ if [ $do_encryption -eq 1 ]; then
 fi
 
 if [ $btrfs -eq 0 ]; then
-    debugmsg ${DEBUG_INFO} "[INFO]: creating / (ext4)"
+    debugmsg ${DEBUG_INFO} "[INFO] creating / (ext4)"
     mkfs.ext4 -v -L $ROOTFS_LABEL /dev/${rootfs_dev}
     mkfs.ext4 -v -L $CONTAINERLABEL /dev/${container_fs_dev}
 else
-    debugmsg ${DEBUG_INFO} "[INFO]: creating / (btrfs)"
+    debugmsg ${DEBUG_INFO} "[INFO] creating / (btrfs)"
     set +e
     has_f=`mkfs.btrfs 2>&1 |grep -q '^.*\-f' && echo -f`
     set -e
@@ -499,7 +499,7 @@ fi
 ## then copy kernel image to boot partition
 
 # we are either in ${TMPMNT} or ${TMPMNT}/rootfs
-debugmsg ${DEBUG_INFO} "[INFO]: installing rootfs ($rootfs)"
+debugmsg ${DEBUG_INFO} "[INFO] installing rootfs ($rootfs)"
 tar --warning=no-timestamp --numeric-owner \
     --xattrs --xattrs-include=security\\.ima -xpf "${rootfs}"
 
@@ -564,7 +564,7 @@ if [ -e "$INSTALL_INITRAMFS" ]; then
 	    cp -f "${INSTALL_INITRAMFS}.p7b" ${BOOTTMPMNT}/mnt/initrd.p7b
 	fi
 elif [ -n "$img" ] ; then
-	debugmsg ${DEBUG_INFO} "[INFO]: installing initramfs ($INSTALL_INITRAMFS)"
+	debugmsg ${DEBUG_INFO} "[INFO] installing initramfs ($INSTALL_INITRAMFS)"
 	kernel=`basename boot/*Image-*`
 	kernel_version=`echo $kernel | sed 's/^[^0-9]*-//g'`
 	initrd="initrd-${kernel_version}.gz"
@@ -583,7 +583,7 @@ fi
 
 ## Deploy kernel modules to overwrite what was there if INSTALL_MODULES is set
 if [ -n "${INSTALL_MODULES}" ]; then
-	debugmsg ${DEBUG_INFO} "[INFO]: installing kernel modules (${INSTALL_MODULES##*/})"
+	debugmsg ${DEBUG_INFO} "[INFO] installing kernel modules (${INSTALL_MODULES##*/})"
 	tar --numeric-owner -xpf ${INSTALL_MODULES}
 fi
 
@@ -697,7 +697,7 @@ if [ -z "${SERVICE_DISABLE_ESSENTIAL}" ]; then
 fi
 if [ -n "${SERVICE_DISABLE_ESSENTIAL}" ]; then
     for s in ${SERVICE_DISABLE_ESSENTIAL}; do
-        echo "[INFO]: disabling $s for essential"
+        echo "[INFO] disabling $s for essential"
         service_disable ${s}
     done
 fi
@@ -859,7 +859,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
 	container_type=`get_prop_value_by_container ${cname} "type"`
 	if [ "${container_type}" = "system" ]; then
-	    echo "[INFO]: setting container ${cname} to system (privileged)"
+	    echo "[INFO] setting container ${cname} to system (privileged)"
 	    ${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} set cube.container.system:true
 	    regen_container_config ${TMPMNT}/opt/container/ ${cname}
 	fi
@@ -889,10 +889,10 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		;;
 	    *)
 		if [ ${net_offset} -lt ${NET_OFFSET_MIN} ] || [ ${net_offset} -gt ${NET_OFFSET_MAX} ]; then
-		    debugmsg ${DEBUG_CRIT} "[ERROR]: Ignoring network offset of ${net_offset} for ${cname}. " \
+		    debugmsg ${DEBUG_CRIT} "[ERROR] Ignoring network offset of ${net_offset} for ${cname}. " \
 						"Must be >=${NET_OFFSET_MIN} and <=${NET_OFFSET_MAX}."
 		else
-		    echo "[INFO]: Setting a static network offset of ${net_offset} for ${cname}"
+		    echo "[INFO] Setting a static network offset of ${net_offset} for ${cname}"
 		    ${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} set cube.network.ip:192.168.42.${net_offset}/24
 		    ${SBINDIR}/cube-cfg -o ${TMPMNT}/opt/container/${cname} set cube.network.type:static
 		fi
@@ -977,7 +977,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	if [ -e "${TMPMNT}/opt/container/${cname}/pflask.cmd" ]; then
 	    (
 		cd ${TMPMNT}/opt/container/${cname}
-		echo "[INFO]: setting up basic networking for cube ${cname}"
+		echo "[INFO] setting up basic networking for cube ${cname}"
 
 		# TODO: this should move into cube-ctl as hook calls, since without that
 		#       you can only install cubes via the installer.
@@ -1038,7 +1038,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
     if [ ! -v network_prime ]; then
 	# TODO: remove this case, it is no longer supported .. or fix it
 	# Fallback to using bridged networking (see overc_bridge_networking DISTRO_FEATURE)
-	debugmsg ${DEBUG_INFO} "[INFO]: Using bridged networking."
+	debugmsg ${DEBUG_INFO} "[INFO] Using bridged networking."
     else
 	if [ ! -v NETWORK_DEVICE ]; then
 	    NETWORK_DEVICE=""
@@ -1048,7 +1048,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	if [ -e "${pathtocontainer}/config.json" ]; then
 	    # Pass the network device through to the designated network prime container
 	    if [ -n "${NETWORK_DEVICE}" ]; then
-		echo "[INFO]: adding ${NETWORK_DEVICE} to network prime"
+		echo "[INFO] adding ${NETWORK_DEVICE} to network prime"
 		(
 		    cd ${TMPMNT}/opt/container/${network_prime}
 
@@ -1076,7 +1076,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 		)
 	    fi
 
-	    debugmsg ${DEBUG_INFO} "[INFO]: Set ${network_prime} as the network prime."
+	    debugmsg ${DEBUG_INFO} "[INFO] Set ${network_prime} as the network prime."
 	fi
     fi
 
@@ -1115,7 +1115,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 
     if [ $btrfs -eq 1 ]; then
         if [ -z "$subvol" ]; then
-            debugmsg ${DEBUG_WARN} "[WARNING]: Could not get subvolume id, thus cannot create factory reset snapshot"
+            debugmsg ${DEBUG_WARN} "[WARNING] Could not get subvolume id, thus cannot create factory reset snapshot"
         else
             mount /dev/${container_fs_dev} ${TMPMNT}/opt/container
             btrfs subvolume set-default $subvol ${TMPMNT}/opt/container
@@ -1136,7 +1136,7 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 fi
 
 if [ -d "${PACKAGESDIR}" ]; then
-    debugmsg ${DEBUG_INFO} "[INFO]: Copying packages to installation as /opt/packages"
+    debugmsg ${DEBUG_INFO} "[INFO] Copying packages to installation as /opt/packages"
     mkdir -p opt/
     cp -r ${PACKAGESDIR} opt/
 
@@ -1149,7 +1149,7 @@ smart update"
 
 fi
 
-debugmsg ${DEBUG_INFO} "[INFO]: performing cleanup"
+debugmsg ${DEBUG_INFO} "[INFO] performing cleanup"
 # cleanup
 cd /
 sync
@@ -1178,7 +1178,7 @@ fi
 if [ $btrfs -eq 0 ]; then
 	:
 else
-	debugmsg ${DEBUG_INFO} "[INFO]: Creating a snapshot of rootfs for recovery."
+	debugmsg ${DEBUG_INFO} "[INFO] Creating a snapshot of rootfs for recovery."
 	#mount the root subvolume
 	mount -o subvolid=5 /dev/${rootfs_dev} ${TMPMNT}
 	if [ -e "${TMPMNT}/rootfs" ]; then
