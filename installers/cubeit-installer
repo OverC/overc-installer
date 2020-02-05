@@ -825,6 +825,18 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	rm ${TMPMNT}/tmp/$(basename $c)
     done
 
+    # Networking will be impacted by the lack of either a VRF or a network prime,
+    # warn the user that there is impact in not defining a VRF or network prime.
+    # TODO: remove or change the msg if/when we get bridged networking working again
+    if [ -z "${network_prime}" ]; then
+	debugmsg ${DEBUG_WARN} "[WARNING] No network prime defined (net=1). Network functions will be limited."
+    fi
+    if [ -n "${network_vrf}" ]; then
+	debugmsg ${DEBUG_INFO} "[INFO] Using ${network_vrf} as the VRF."
+    else
+	debugmsg ${DEBUG_WARN} "[WARNING] No VRF container defined (net=vrf). Network functions will be limited."
+    fi
+
     #cleanup temp files
     rm ${CNRECORD}
 
@@ -1065,8 +1077,6 @@ if [ -n "${HDINSTALL_CONTAINERS}" ]; then
 	    fi
 
 	    debugmsg ${DEBUG_INFO} "[INFO]: Set ${network_prime} as the network prime."
-	else
-	    debugmsg ${DEBUG_WARN} "[WARNING]: Invalid network prime defined."
 	fi
     fi
 
